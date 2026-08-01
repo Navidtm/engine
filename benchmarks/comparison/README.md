@@ -16,3 +16,8 @@ entities. Each page exposes its raw JSON as
 the current public command transport; internal transform-only performance is
 reported separately by the zero-allocation Rust benchmark. This avoids hiding a
 known architectural cost.
+
+For the rendering milestone, capture both implementations at 1k, 10k, 50k,
+and 100k objects in the same browser session. Store the returned objects without
+post-processing so the repository contains raw measurements rather than a
+performance conclusion.

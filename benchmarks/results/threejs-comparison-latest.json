@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-01",
+  "status": "not-run",
+  "rawMeasurements": null,
+  "reason": "No in-app Browser or Chrome backend was connected to this Codex session.",
+  "harness": {
+    "buildValidated": true,
+    "threeVersion": "0.185.1",
+    "resolution": [1280, 720],
+    "warmupFrames": 60,
+    "sampleFrames": 180,
+    "implementations": ["lume", "three"],
+    "objectCounts": [1000, 10000, 50000, 100000]
+  }
+}

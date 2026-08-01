@@ -7,9 +7,10 @@ use std::process::Command;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
-use lume_core::math::Color;
+use lume_core::math::{Color, Vec3};
 use lume_core::{
-    Material, MaterialHandle, MeshRenderer, RenderWorld, Transform, World, WorldCapacity,
+    Bounds, Camera, Material, MaterialHandle, MeshRenderer, RenderWorld, Transform,
+    VisibleRenderBuffer, World, WorldCapacity,
 };
 
 struct CountingAllocator;
@@ -63,6 +64,8 @@ struct ResultRecord {
     allocations: usize,
     allocated_bytes: usize,
     estimated_memory_bytes: usize,
+    visible_count: Option<usize>,
+    frame_preparation_samples_ms: Vec<f64>,
 }
 
 fn main() {
@@ -78,8 +81,16 @@ fn main() {
     for count in [10_000, 100_000] {
         results.push(benchmark_transform_system(count));
     }
-    for count in [1, 1_000, 10_000, 100_000] {
+    for count in [1_000, 10_000, 50_000, 100_000] {
         results.push(benchmark_render_extraction(count));
+    }
+    for (scenario, visible_percent) in [
+        ("frustum_culling_100_percent", 100),
+        ("frustum_culling_50_percent", 50),
+        ("frustum_culling_10_percent", 10),
+        ("frustum_culling_1_percent", 1),
+    ] {
+        results.push(benchmark_frustum_culling(scenario, visible_percent));
     }
 
     let report = render_json(&results);
@@ -149,6 +160,8 @@ fn benchmark_entity_creation(count: usize) -> ResultRecord {
         allocations: sample.allocations,
         allocated_bytes: sample.allocated_bytes,
         estimated_memory_bytes: sample.allocated_bytes,
+        visible_count: None,
+        frame_preparation_samples_ms: Vec::new(),
     }
 }
 
@@ -217,6 +230,8 @@ fn benchmark_transform_system(count: usize) -> ResultRecord {
         allocations: max_allocations,
         allocated_bytes,
         estimated_memory_bytes: count * std::mem::size_of::<Transform>(),
+        visible_count: None,
+        frame_preparation_samples_ms: Vec::new(),
     }
 }
 
@@ -261,6 +276,98 @@ fn benchmark_render_extraction(count: usize) -> ResultRecord {
         allocations: max_allocations,
         allocated_bytes,
         estimated_memory_bytes: count * (std::mem::size_of::<lume_core::GpuInstance>() + 8),
+        visible_count: None,
+        frame_preparation_samples_ms: Vec::new(),
+    }
+}
+
+fn benchmark_frustum_culling(scenario: &'static str, visible_percent: usize) -> ResultRecord {
+    const COUNT: usize = 100_000;
+    let mut world = World::with_capacity(capacity(COUNT + 2));
+    let material_entity = world.spawn().expect("material entity");
+    world.add_material(material_entity, Material::default());
+    let camera_entity = world.spawn().expect("camera entity");
+    world.add_transform(camera_entity, Transform::default());
+    world.add_camera(
+        camera_entity,
+        Camera {
+            vertical_fov_radians: 60.0_f32.to_radians(),
+            near: 0.1,
+            far: 100.0,
+            aspect: 1.0,
+            ..Camera::default()
+        },
+    );
+    let expected_visible = COUNT * visible_percent / 100;
+    for index in 0..COUNT {
+        let entity = world.spawn().expect("mesh entity");
+        let x = if index < expected_visible {
+            0.0
+        } else {
+            10_000.0
+        };
+        world.add_transform(
+            entity,
+            Transform {
+                local_position: Vec3::new([x, 0.0, -10.0]),
+                ..Transform::default()
+            },
+        );
+        world.add_mesh_renderer(
+            entity,
+            MeshRenderer {
+                geometry: 2,
+                material: MaterialHandle::from_entity(material_entity),
+            },
+        );
+        world.add_bounds(
+            entity,
+            Bounds {
+                center: Vec3::default(),
+                radius: 0.5,
+            },
+        );
+    }
+    world.update();
+    let mut render_world = RenderWorld::with_capacity(COUNT, 1);
+    render_world.extract(&world).expect("render capacity");
+    let mut visible = VisibleRenderBuffer::with_capacity(COUNT);
+    visible.cull(&render_world).expect("visible capacity");
+    assert_eq!(visible.len(), expected_visible);
+
+    let mut samples = Vec::with_capacity(30);
+    let mut frame_preparation_samples = Vec::with_capacity(30);
+    let mut max_allocations = 0;
+    let mut allocated_bytes = 0;
+    for _ in 0..30 {
+        let (_, culling) = measure(|| {
+            black_box(visible.cull(&render_world).expect("visible capacity"));
+        });
+        samples.push(culling.duration_ms);
+        max_allocations = max_allocations.max(culling.allocations);
+        allocated_bytes = allocated_bytes.max(culling.allocated_bytes);
+
+        let (_, preparation) = measure(|| {
+            world.update();
+            render_world.extract(&world).expect("render capacity");
+            black_box(visible.cull(&render_world).expect("visible capacity"));
+        });
+        frame_preparation_samples.push(preparation.duration_ms);
+        max_allocations = max_allocations.max(preparation.allocations);
+        allocated_bytes = allocated_bytes.max(preparation.allocated_bytes);
+    }
+    ResultRecord {
+        scenario,
+        entities: COUNT,
+        samples_ms: samples,
+        allocations: max_allocations,
+        allocated_bytes,
+        estimated_memory_bytes: COUNT
+            * (std::mem::size_of::<lume_core::GpuInstance>()
+                + std::mem::size_of::<lume_core::GpuBounds>()
+                + 4 * std::mem::size_of::<u32>()),
+        visible_count: Some(expected_visible),
+        frame_preparation_samples_ms: frame_preparation_samples,
     }
 }
 
@@ -277,6 +384,8 @@ fn record(
         allocations: sample.allocations,
         allocated_bytes: sample.allocated_bytes,
         estimated_memory_bytes,
+        visible_count: None,
+        frame_preparation_samples_ms: Vec::new(),
     }
 }
 
@@ -301,9 +410,10 @@ fn render_json(results: &[ResultRecord]) -> String {
         };
         write!(
             output,
-            "    {{ \"scenario\": \"{}\", \"entities\": {}, \"meanMs\": {:.6}, \"throughputPerSecond\": {:.3}, \"allocations\": {}, \"allocatedBytes\": {}, \"estimatedMemoryBytes\": {}, \"samplesMs\": [",
+            "    {{ \"scenario\": \"{}\", \"entities\": {}, \"visibleCount\": {}, \"meanMs\": {:.6}, \"throughputPerSecond\": {:.3}, \"allocations\": {}, \"allocatedBytes\": {}, \"estimatedMemoryBytes\": {}, \"samplesMs\": [",
             result.scenario,
             result.entities,
+            result.visible_count.map_or_else(|| "null".to_owned(), |value| value.to_string()),
             mean,
             throughput,
             result.allocations,
@@ -316,6 +426,13 @@ fn render_json(results: &[ResultRecord]) -> String {
                 output.push_str(", ");
             }
             write!(output, "{sample:.6}").expect("write sample");
+        }
+        output.push_str("], \"framePreparationSamplesMs\": [");
+        for (sample_index, sample) in result.frame_preparation_samples_ms.iter().enumerate() {
+            if sample_index > 0 {
+                output.push_str(", ");
+            }
+            write!(output, "{sample:.6}").expect("write preparation sample");
         }
         output.push_str("] }");
         if index + 1 != results.len() {
