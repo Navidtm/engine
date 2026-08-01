@@ -55,6 +55,13 @@ ring into preallocated WebAssembly staging arrays and crosses the WASM boundary
 once per batch. See [milestone-4.md](milestone-4.md) for ownership and
 synchronization invariants.
 
+Milestone 5 hardens that boundary with partial-field updates, adjacent dirty
+ranges, a bounded shared structural-command ring, and generational handles on
+every side of the worker boundary. The SharedArrayBuffer remains transport
+memory while Rust retains canonical ECS ownership. See
+[milestone-5.md](milestone-5.md) for the copy, lifetime, overflow, and stale
+handle contracts.
+
 Detailed byte layout and browser-thread responsibilities are documented in
 [memory-model.md](memory-model.md) and [threading-model.md](threading-model.md).
 
@@ -79,10 +86,11 @@ singleton is exposed. The `world` surface and `@lume/api/advanced` component
 helpers remain an explicit advanced compatibility layer; `world.add` converts
 their serializable descriptions into versioned worker commands.
 
-Entity IDs are allocated synchronously on the main thread so authoring remains
-ergonomic. The worker validates every ID before inserting it into the canonical
-Rust world. Destroyed IDs are not reused in Phase 1; a worker-acknowledged
-generational free list is planned before high-churn entity workloads.
+Entity handles are allocated synchronously on the main thread so authoring
+remains ergonomic. Each handle carries an index and generation and is packed to
+the same representation used by Rust when crossing the transport boundary.
+Destroyed slots return to a fixed free list; reuse increments the generation so
+stale references fail validation.
 
 ## Failure model
 
