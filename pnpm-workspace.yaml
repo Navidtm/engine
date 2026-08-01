@@ -10,9 +10,9 @@ allowBuilds:
   esbuild: true
 confirmModulesPurge: false
 catalog:
-  "@webgpu/types": "^0.1.64"
-  typescript: "^5.9.2"
-  vite: "^7.0.6"
-  vitest: "^3.2.4"
+  "@webgpu/types": "^0.1.71"
+  typescript: "^5.9.3"
+  vite: "^7.3.6"
+  vitest: "^3.2.7"
   three: "0.185.1"
   "@types/three": "0.185.1"

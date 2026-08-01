@@ -13,9 +13,9 @@
     "test": "cargo test --workspace && pnpm -r --filter './packages/**' test"
   },
   "devDependencies": {
-    "@webgpu/types": "^0.1.64",
-    "typescript": "^5.9.2",
-    "vite": "^7.0.6",
-    "vitest": "^3.2.4"
+    "@webgpu/types": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vitest": "^catalog:"
   }
 }
