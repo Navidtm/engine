@@ -1,0 +1,19 @@
+[workspace]
+resolver = "2"
+members = [
+  "packages/core",
+  "packages/runtime/wasm",
+  "benchmarks/runner",
+]
+
+[workspace.package]
+edition = "2024"
+license = "MIT OR Apache-2.0"
+rust-version = "1.85"
+
+[profile.release]
+codegen-units = 1
+lto = "fat"
+opt-level = "s"
+panic = "abort"
+strip = true

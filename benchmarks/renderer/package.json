@@ -1,0 +1,17 @@
+{
+  "name": "@lume/benchmark-renderer",
+  "private": true,
+  "version": "0.2.0",
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": { "@lume/api": "workspace:*" },
+  "devDependencies": {
+    "@webgpu/types": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:"
+  }
+}
