@@ -1,4 +1,13 @@
 import { BUILTIN_MESHES } from "./geometry/mesh-data.js";
+import {
+  addFramePass,
+  addFrameResource,
+  compileFrameGraph,
+  createFrameGraph,
+  executeFrameGraph,
+  type CompiledFrameGraph,
+} from "./framegraph/graph.js";
+import { defineFramePass } from "./framegraph/pass.js";
 import { createPipelineCache, type PipelineCache } from "./pipeline/cache.js";
 import { getMeshPipeline } from "./pipeline/mesh.js";
 import { requestAdapter } from "./webgpu/adapter.js";
@@ -55,7 +64,7 @@ export interface RendererStats {
 
 export interface MeshRenderer {
   readonly device: GPUDevice;
-  render(frame: RenderFrame): void;
+  execute(frame: RenderFrame): void;
   resize(size: SurfaceSize): void;
   stats(): RendererStats;
   dispose(): void;
@@ -79,6 +88,12 @@ interface RendererState {
   bufferUploadCpuTimeMs: number;
   framePreparationCpuTimeMs: number;
   disposed: boolean;
+}
+
+interface RendererFrameContext {
+  readonly state: RendererState;
+  frame: RenderFrame;
+  preparationStart: number;
 }
 
 export async function createMeshRenderer(
@@ -164,10 +179,21 @@ export async function createMeshRenderer(
     framePreparationCpuTimeMs: 0,
     disposed: false,
   };
+  const frameGraph = createRendererFrameGraph();
+  const frameContext: RendererFrameContext = {
+    state,
+    frame: undefined as unknown as RenderFrame,
+    preparationStart: 0,
+  };
 
   const renderer: MeshRenderer = {
     device,
-    render: (frame) => render(state, frame),
+    execute(frame) {
+      if (state.disposed) return;
+      frameContext.frame = frame;
+      frameContext.preparationStart = performance.now();
+      executeFrameGraph(frameGraph, frameContext);
+    },
     resize: (nextSize) => resize(state, nextSize),
     stats: () => ({
       gpuBufferBytes:
@@ -182,10 +208,30 @@ export async function createMeshRenderer(
   return Object.freeze(renderer);
 }
 
-function render(state: RendererState, frame: RenderFrame): void {
-  if (state.disposed) return;
-  const preparationStart = performance.now();
-  const uploadStart = preparationStart;
+function createRendererFrameGraph(): CompiledFrameGraph<RendererFrameContext> {
+  const graph = createFrameGraph<RendererFrameContext>();
+  const extractedFrame = addFrameResource(graph, "visible-render-items");
+  const uploadedFrame = addFrameResource(graph, "gpu-frame-data");
+  const colorTarget = addFrameResource(graph, "surface-color");
+  const depthTarget = addFrameResource(graph, "surface-depth");
+  addFramePass(graph, defineFramePass({
+    name: "upload",
+    reads: [extractedFrame],
+    writes: [uploadedFrame],
+    execute: uploadFrame,
+  }));
+  addFramePass(graph, defineFramePass({
+    name: "main-render",
+    reads: [uploadedFrame],
+    writes: [colorTarget, depthTarget],
+    execute: encodeMainPass,
+  }));
+  return compileFrameGraph(graph);
+}
+
+function uploadFrame(context: RendererFrameContext): void {
+  const { state, frame } = context;
+  const uploadStart = performance.now();
   const instanceCount = frame.instanceCount;
   if (instanceCount > 0) {
     state.device.queue.writeBuffer(
@@ -206,7 +252,11 @@ function render(state: RendererState, frame: RenderFrame): void {
     );
   }
   state.bufferUploadCpuTimeMs = performance.now() - uploadStart;
+}
 
+function encodeMainPass(context: RendererFrameContext): void {
+  const { state, frame } = context;
+  const instanceCount = frame.instanceCount;
   state.colorAttachment.view = state.surface.context.getCurrentTexture().createView();
   state.depthAttachment.view = state.surface.depthView;
   const encoder = state.device.createCommandEncoder({ label: "Lume frame commands" });
@@ -243,7 +293,7 @@ function render(state: RendererState, frame: RenderFrame): void {
   state.device.queue.submit(state.submissions);
   state.drawCalls = drawCalls;
   state.submittedInstances = instanceCount;
-  state.framePreparationCpuTimeMs = performance.now() - preparationStart;
+  state.framePreparationCpuTimeMs = performance.now() - context.preparationStart;
 }
 
 function resize(state: RendererState, size: SurfaceSize): void {

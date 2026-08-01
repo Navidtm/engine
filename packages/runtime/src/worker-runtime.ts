@@ -51,7 +51,7 @@ export function createWorkerRuntime(host: WorkerHost): (message: MainToWorkerMes
     try {
       const frameStart = performance.now();
       const renderFrame = state.core?.update();
-      if (renderFrame !== undefined) state.renderer?.render(renderFrame);
+      if (renderFrame !== undefined) state.renderer?.execute(renderFrame);
       const frameEnd = performance.now();
       state.lastCpuTimeMs = frameEnd - frameStart;
       state.lastFrameTimeMs = state.previousFrameStart === 0 ? 0 : frameStart - state.previousFrameStart;
