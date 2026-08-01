@@ -70,18 +70,19 @@ struct ResultRecord {
 
 fn main() {
     let output = output_path();
-    let mut results = Vec::with_capacity(32);
+    let mut results = Vec::with_capacity(64);
+    const SCALE_COUNTS: [usize; 6] = [1_000, 10_000, 50_000, 100_000, 500_000, 1_000_000];
 
-    for count in [1_000, 10_000, 100_000] {
+    for count in SCALE_COUNTS {
         results.push(benchmark_entity_creation(count));
     }
-    for count in [10_000, 100_000, 1_000_000] {
+    for count in SCALE_COUNTS {
         results.extend(benchmark_component_storage(count));
     }
-    for count in [10_000, 100_000] {
+    for count in SCALE_COUNTS {
         results.push(benchmark_transform_system(count));
     }
-    for count in [1_000, 10_000, 50_000, 100_000] {
+    for count in SCALE_COUNTS {
         results.push(benchmark_render_extraction(count));
     }
     for (scenario, visible_percent) in [

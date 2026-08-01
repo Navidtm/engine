@@ -80,6 +80,22 @@ importers:
         specifier: 'catalog:'
         version: 7.3.6
 
+  benchmarks/transport:
+    dependencies:
+      '@lume/runtime':
+        specifier: workspace:*
+        version: link:../../packages/runtime
+    devDependencies:
+      '@webgpu/types':
+        specifier: 'catalog:'
+        version: 0.1.71
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+      vite:
+        specifier: 'catalog:'
+        version: 7.3.6
+
   examples/cube:
     dependencies:
       '@lume/api':

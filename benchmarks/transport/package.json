@@ -1,0 +1,19 @@
+{
+  "name": "@lume/benchmark-transport",
+  "private": true,
+  "version": "0.4.0",
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@lume/runtime": "workspace:*"
+  },
+  "devDependencies": {
+    "@webgpu/types": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:"
+  }
+}

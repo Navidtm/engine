@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-01",
+  "benchmark": "transport-overhead",
+  "status": "not-run",
+  "rawMeasurements": null,
+  "reason": "No in-app Browser or Chrome backend was connected to this Codex session.",
+  "harness": {
+    "buildValidated": true,
+    "crossOriginIsolationConfigured": true,
+    "transports": ["command-buffer", "shared-memory"],
+    "entityCounts": [10000, 50000, 100000, 500000]
+  }
+}
