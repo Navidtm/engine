@@ -14,6 +14,8 @@ export type {
   PerspectiveCameraOptions,
   SceneHandle,
   SetApi,
+  QuaternionControl,
+  Vector3Control,
   WorldApi,
 } from "./engine.js";
 export type { EngineStats } from "@lume/runtime";

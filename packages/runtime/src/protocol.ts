@@ -1,6 +1,6 @@
 import type { RendererOptions, SurfaceSize } from "@lume/renderer";
 
-export const RUNTIME_PROTOCOL_VERSION = 3;
+export const RUNTIME_PROTOCOL_VERSION = 4;
 
 export interface EngineStats {
   readonly frameTime: number;
@@ -20,6 +20,14 @@ export interface EngineStats {
   readonly timings: {
     readonly bufferUploadCpuTime: number;
     readonly framePreparationCpuTime: number;
+  };
+  readonly transport: {
+    readonly kind: "shared-memory" | "commands";
+    readonly appliedTransforms: number;
+    readonly pendingTransforms: number;
+    readonly writeEpoch: number;
+    readonly readEpoch: number;
+    readonly overflows: number;
   };
 }
 
@@ -65,6 +73,7 @@ export interface RuntimeInit {
   readonly entityCapacity: number;
   readonly size: SurfaceSize;
   readonly renderer: RendererOptions;
+  readonly sharedMemory?: SharedArrayBuffer;
 }
 
 export type MainToWorkerMessage =

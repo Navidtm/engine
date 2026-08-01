@@ -25,6 +25,7 @@ describe("high-level engine API", () => {
     } as HTMLCanvasElement;
     vi.stubGlobal("document", { baseURI: "https://example.test/" });
     vi.stubGlobal("window", { devicePixelRatio: 2 });
+    vi.stubGlobal("crossOriginIsolated", true);
 
     const engine = createEngine(canvas, {
       autoResize: false,
@@ -55,5 +56,15 @@ describe("high-level engine API", () => {
         "add-camera",
       ]);
     }
+    const messagesBeforeTransform = posted.length;
+    cube.position.set(1, 2, -6);
+    expect(cube.position.z).toBe(-6);
+    expect(posted).toHaveLength(messagesBeforeTransform);
+    const initializationMessage = posted[0];
+    expect(
+      initializationMessage?.type === "init"
+        ? initializationMessage.value.sharedMemory
+        : undefined,
+    ).toBeInstanceOf(SharedArrayBuffer);
   });
 });

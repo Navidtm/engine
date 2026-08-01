@@ -1,7 +1,10 @@
 import type { RuntimeCommand } from "./protocol.js";
 import type { RenderFrame } from "@lume/renderer";
+import { drainSharedTransforms } from "./shared-memory/synchronization.js";
+import { SHARED_TRANSFORM_FLOATS } from "./shared-memory/layout.js";
+import { openSharedRuntimeViews } from "./shared-memory/views.js";
 
-const EXPECTED_ABI_VERSION = 3;
+const EXPECTED_ABI_VERSION = 4;
 const INSTANCE_FLOATS = 20;
 const CAMERA_FLOATS = 32;
 
@@ -26,6 +29,10 @@ interface LumeWasmExports extends WebAssembly.Exports {
     sy: number,
     sz: number,
   ): number;
+  lume_transform_update_capacity(engine: number): number;
+  lume_transform_update_entities_ptr(engine: number): number;
+  lume_transform_update_values_ptr(engine: number): number;
+  lume_engine_apply_transform_updates(engine: number, updateCount: number): number;
   lume_engine_add_material(
     engine: number,
     entity: number,
@@ -79,6 +86,7 @@ export interface WasmStats {
   readonly entities: number;
   readonly renderInstances: number;
   readonly visibleObjects: number;
+  readonly sharedTransformUpdates: number;
   readonly wasmHeapBytes: number;
 }
 
@@ -90,7 +98,11 @@ export interface WasmCore {
   dispose(): void;
 }
 
-export async function createWasmCore(url: string, entityCapacity: number): Promise<WasmCore> {
+export async function createWasmCore(
+  url: string,
+  entityCapacity: number,
+  sharedMemory?: SharedArrayBuffer,
+): Promise<WasmCore> {
   const response = await fetch(url);
   if (!response.ok) {
     throw new Error(`Failed to load Lume WASM (${response.status} ${response.statusText}).`);
@@ -109,6 +121,16 @@ export async function createWasmCore(url: string, entityCapacity: number): Promi
   const materialsPointer = exports.lume_visible_materials_ptr(handle);
   const instancesPointer = exports.lume_visible_instances_ptr(handle);
   const camerasPointer = exports.lume_render_cameras_ptr(handle);
+  const transformUpdateCapacity = exports.lume_transform_update_capacity(handle);
+  const transformUpdateEntitiesPointer = exports.lume_transform_update_entities_ptr(handle);
+  const transformUpdateValuesPointer = exports.lume_transform_update_values_ptr(handle);
+  const sharedViews = sharedMemory === undefined
+    ? undefined
+    : openSharedRuntimeViews(sharedMemory);
+  if (sharedViews !== undefined && sharedViews.layout.capacity > transformUpdateCapacity) {
+    exports.lume_engine_destroy(handle);
+    throw new Error("Shared transform capacity exceeds WASM staging capacity.");
+  }
   let observedMemory = exports.memory.buffer;
   const frame: RenderFrame = createFrameViews(
     observedMemory,
@@ -120,6 +142,24 @@ export async function createWasmCore(url: string, entityCapacity: number): Promi
     instancesPointer,
     camerasPointer,
   );
+  let transformUpdateEntities = new Uint32Array(
+    observedMemory,
+    transformUpdateEntitiesPointer,
+    transformUpdateCapacity,
+  );
+  let transformUpdateValues = new Float32Array(
+    observedMemory,
+    transformUpdateValuesPointer,
+    transformUpdateCapacity * SHARED_TRANSFORM_FLOATS,
+  );
+  const transformScratch = new Float32Array(SHARED_TRANSFORM_FLOATS);
+  let stagedTransformCount = 0;
+  let lastSharedTransformUpdates = 0;
+  const stageTransform = (entity: number, values: Float32Array<ArrayBuffer>): void => {
+    transformUpdateEntities[stagedTransformCount] = entity;
+    transformUpdateValues.set(values, stagedTransformCount * SHARED_TRANSFORM_FLOATS);
+    stagedTransformCount += 1;
+  };
   let disposed = false;
 
   const core: WasmCore = {
@@ -131,9 +171,6 @@ export async function createWasmCore(url: string, entityCapacity: number): Promi
       }
     },
     update() {
-      if (!disposed && exports.lume_engine_update(handle) === 0) {
-        throw new Error("WASM world update failed.");
-      }
       if (exports.memory.buffer !== observedMemory) {
         observedMemory = exports.memory.buffer;
         const refreshed = createFrameViews(
@@ -151,6 +188,31 @@ export async function createWasmCore(url: string, entityCapacity: number): Promi
         frame.materials = refreshed.materials;
         frame.instanceData = refreshed.instanceData;
         frame.cameraData = refreshed.cameraData;
+        transformUpdateEntities = new Uint32Array(
+          observedMemory,
+          transformUpdateEntitiesPointer,
+          transformUpdateCapacity,
+        );
+        transformUpdateValues = new Float32Array(
+          observedMemory,
+          transformUpdateValuesPointer,
+          transformUpdateCapacity * SHARED_TRANSFORM_FLOATS,
+        );
+      }
+      if (sharedViews !== undefined) {
+        stagedTransformCount = 0;
+        drainSharedTransforms(sharedViews, transformScratch, stageTransform);
+        if (
+          stagedTransformCount > 0 &&
+          exports.lume_engine_apply_transform_updates(handle, stagedTransformCount) !==
+            stagedTransformCount
+        ) {
+          throw new Error("WASM rejected one or more shared transform updates.");
+        }
+        lastSharedTransformUpdates = stagedTransformCount;
+      }
+      if (!disposed && exports.lume_engine_update(handle) === 0) {
+        throw new Error("WASM world update failed.");
       }
       frame.instanceCount = exports.lume_visible_count(handle);
       frame.cameraCount = exports.lume_render_camera_count(handle);
@@ -166,6 +228,7 @@ export async function createWasmCore(url: string, entityCapacity: number): Promi
         entities: exports.lume_engine_entity_count(handle),
         renderInstances: exports.lume_render_instance_count(handle),
         visibleObjects: exports.lume_visible_count(handle),
+        sharedTransformUpdates: lastSharedTransformUpdates,
         wasmHeapBytes: exports.memory.buffer.byteLength,
       };
     },

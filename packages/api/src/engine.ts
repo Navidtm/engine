@@ -1,9 +1,13 @@
 import {
+  allocateSharedRuntimeMemory,
   createDefaultWorker,
   RUNTIME_PROTOCOL_VERSION,
+  supportsSharedRuntimeMemory,
+  writeSharedTransform,
   type MainToWorkerMessage,
   type EngineStats,
   type RuntimeCommand,
+  type SharedRuntimeViews,
   type WorkerToMainMessage,
 } from "@lume/runtime";
 import {
@@ -47,11 +51,32 @@ export interface BasicMaterialHandle {
 export interface MeshHandle {
   readonly kind: "mesh";
   readonly id: number;
+  readonly position: Vector3Control;
+  readonly rotation: QuaternionControl;
+  readonly scale: Vector3Control;
 }
 
 export interface CameraHandle {
   readonly kind: "camera";
   readonly id: number;
+  readonly position: Vector3Control;
+  readonly rotation: QuaternionControl;
+  readonly scale: Vector3Control;
+}
+
+export interface Vector3Control {
+  readonly x: number;
+  readonly y: number;
+  readonly z: number;
+  set(x: number, y: number, z: number): void;
+}
+
+export interface QuaternionControl {
+  readonly x: number;
+  readonly y: number;
+  readonly z: number;
+  readonly w: number;
+  set(x: number, y: number, z: number, w: number): void;
 }
 
 export type EngineHandle = BasicMaterialHandle | MeshHandle | CameraHandle;
@@ -116,6 +141,7 @@ interface EngineState {
   readonly config: EngineConfig;
   readonly worker: Worker;
   readonly pendingCommands: RuntimeCommand[];
+  readonly sharedMemory: SharedRuntimeViews | undefined;
   status: EngineStatus;
   nextEntity: number;
   initPromise: Promise<void> | undefined;
@@ -138,10 +164,14 @@ export function createEngine(
   const config: EngineConfig = "canvas" in canvasOrConfig
     ? canvasOrConfig
     : { ...options, canvas: canvasOrConfig };
+  const entityCapacity = config.entityCapacity ?? 4_096;
   const state: EngineState = {
     config,
     worker: (config.workerFactory ?? createDefaultWorker)(),
     pendingCommands: [],
+    sharedMemory: supportsSharedRuntimeMemory()
+      ? allocateSharedRuntimeMemory(entityCapacity)
+      : undefined,
     status: "new",
     nextEntity: 0,
     initPromise: undefined,
@@ -152,7 +182,7 @@ export function createEngine(
     nextStatsRequest: 1,
   };
   const world = createWorldApi(state);
-  const highLevel = createHighLevelApi(world);
+  const highLevel = createHighLevelApi(state, world);
 
   state.worker.addEventListener("message", (event: MessageEvent<WorkerToMainMessage>) => {
     handleWorkerMessage(state, event.data);
@@ -187,12 +217,19 @@ export function createEngine(
   return Object.freeze(engine);
 }
 
-function createHighLevelApi(world: WorldApi): {
+interface MutableTransformValue {
+  readonly position: [number, number, number];
+  readonly rotation: [number, number, number, number];
+  readonly scale: [number, number, number];
+}
+
+function createHighLevelApi(state: EngineState, world: WorldApi): {
   readonly create: CreateApi;
   readonly set: SetApi;
   readonly destroy: (handle: EngineHandle) => void;
 } {
   let defaultMaterial: BasicMaterialHandle | undefined;
+  const transforms = new WeakMap<SceneHandle, MutableTransformValue>();
   const createBasicMaterial = (options: BasicMaterialOptions = {}): BasicMaterialHandle => {
     const entity = world.createEntity();
     world.add(entity, material(options));
@@ -209,6 +246,7 @@ function createHighLevelApi(world: WorldApi): {
         ? defaultBasicMaterial()
         : options.material;
       const entity = world.createEntity();
+      const initialTransform = mutableTransform(options);
       world.add(entity, transform({
         ...(options.position === undefined ? {} : { position: options.position }),
         ...(options.rotation === undefined ? {} : { rotation: options.rotation }),
@@ -217,10 +255,13 @@ function createHighLevelApi(world: WorldApi): {
       const geometry = options.geometry === "cube" ? boxGeometry() : triangleGeometry();
       world.add(entity, mesh(geometry, materialHandle.id as Entity));
       if (options.bounds !== undefined) world.add(entity, bounds(options.bounds));
-      return Object.freeze({ kind: "mesh", id: entity });
+      const handle = createSceneHandle(state, "mesh", entity, initialTransform);
+      transforms.set(handle, initialTransform);
+      return handle;
     },
     perspectiveCamera(options: PerspectiveCameraOptions = {}) {
       const entity = world.createEntity();
+      const initialTransform = mutableTransform(options);
       world.add(entity, transform({
         ...(options.position === undefined ? {} : { position: options.position }),
         ...(options.rotation === undefined ? {} : { rotation: options.rotation }),
@@ -230,7 +271,9 @@ function createHighLevelApi(world: WorldApi): {
         ...(options.near === undefined ? {} : { near: options.near }),
         ...(options.far === undefined ? {} : { far: options.far }),
       }));
-      return Object.freeze({ kind: "camera", id: entity });
+      const handle = createSceneHandle(state, "camera", entity, initialTransform);
+      transforms.set(handle, initialTransform);
+      return handle;
     },
   });
   const set: SetApi = Object.freeze({
@@ -239,7 +282,12 @@ function createHighLevelApi(world: WorldApi): {
       readonly rotation?: Quat;
       readonly scale?: Vec3;
     }) {
-      world.add(handle.id as Entity, transform(options));
+      const value = transforms.get(handle);
+      if (value === undefined) throw new Error("Scene handle does not belong to this engine.");
+      if (options.position !== undefined) copyVec3(value.position, options.position);
+      if (options.rotation !== undefined) copyQuat(value.rotation, options.rotation);
+      if (options.scale !== undefined) copyVec3(value.scale, options.scale);
+      publishTransform(state, handle.id, value);
     },
   });
   return Object.freeze({
@@ -250,6 +298,105 @@ function createHighLevelApi(world: WorldApi): {
       if (handle === defaultMaterial) defaultMaterial = undefined;
     },
   });
+}
+
+function mutableTransform(options: {
+  readonly position?: Vec3;
+  readonly rotation?: Quat;
+  readonly scale?: Vec3;
+}): MutableTransformValue {
+  const position = options.position ?? [0, 0, 0];
+  const rotation = options.rotation ?? [0, 0, 0, 1];
+  const scale = options.scale ?? [1, 1, 1];
+  return {
+    position: [position[0], position[1], position[2]],
+    rotation: [rotation[0], rotation[1], rotation[2], rotation[3]],
+    scale: [scale[0], scale[1], scale[2]],
+  };
+}
+
+function createSceneHandle<Kind extends "mesh" | "camera">(
+  state: EngineState,
+  kind: Kind,
+  entity: Entity,
+  value: MutableTransformValue,
+): Kind extends "mesh" ? MeshHandle : CameraHandle {
+  const publish = (): void => publishTransform(state, entity, value);
+  const position = createVector3Control(value.position, publish);
+  const rotation = createQuaternionControl(value.rotation, publish);
+  const scale = createVector3Control(value.scale, publish);
+  return Object.freeze({ kind, id: entity, position, rotation, scale }) as unknown as
+    Kind extends "mesh" ? MeshHandle : CameraHandle;
+}
+
+function createVector3Control(
+  value: [number, number, number],
+  publish: () => void,
+): Vector3Control {
+  return Object.freeze({
+    get x() { return value[0]; },
+    get y() { return value[1]; },
+    get z() { return value[2]; },
+    set(x: number, y: number, z: number) {
+      value[0] = x;
+      value[1] = y;
+      value[2] = z;
+      publish();
+    },
+  });
+}
+
+function createQuaternionControl(
+  value: [number, number, number, number],
+  publish: () => void,
+): QuaternionControl {
+  return Object.freeze({
+    get x() { return value[0]; },
+    get y() { return value[1]; },
+    get z() { return value[2]; },
+    get w() { return value[3]; },
+    set(x: number, y: number, z: number, w: number) {
+      value[0] = x;
+      value[1] = y;
+      value[2] = z;
+      value[3] = w;
+      publish();
+    },
+  });
+}
+
+function publishTransform(
+  state: EngineState,
+  entity: number,
+  value: MutableTransformValue,
+): void {
+  if (state.status === "disposed" || state.status === "failed") {
+    throw new Error(`Cannot update a ${state.status} engine.`);
+  }
+  if (state.sharedMemory !== undefined) {
+    writeSharedTransform(state.sharedMemory, entity, value);
+    return;
+  }
+  dispatchCommand(state, {
+    type: "add-transform",
+    entity,
+    position: value.position,
+    rotation: value.rotation,
+    scale: value.scale,
+  });
+}
+
+function copyVec3(target: [number, number, number], source: Vec3): void {
+  target[0] = source[0];
+  target[1] = source[1];
+  target[2] = source[2];
+}
+
+function copyQuat(target: [number, number, number, number], source: Quat): void {
+  target[0] = source[0];
+  target[1] = source[1];
+  target[2] = source[2];
+  target[3] = source[3];
 }
 
 function createWorldApi(state: EngineState): WorldApi {
@@ -340,6 +487,9 @@ function initialize(state: EngineState): Promise<void> {
         devicePixelRatio: window.devicePixelRatio,
       },
       renderer,
+      ...(state.sharedMemory === undefined
+        ? {}
+        : { sharedMemory: state.sharedMemory.buffer }),
     },
   };
   state.worker.postMessage(message, [canvas]);

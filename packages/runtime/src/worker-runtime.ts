@@ -6,6 +6,8 @@ import {
   type WorkerToMainMessage,
 } from "./protocol.js";
 import { createWasmCore, type WasmCore } from "./wasm.js";
+import { SharedHeader } from "./shared-memory/layout.js";
+import { openSharedRuntimeViews, type SharedRuntimeViews } from "./shared-memory/views.js";
 
 interface WorkerRuntimeState {
   renderer: MeshRenderer | undefined;
@@ -17,6 +19,7 @@ interface WorkerRuntimeState {
   lastFrameTimeMs: number;
   lastCpuTimeMs: number;
   previousFrameStart: number;
+  sharedMemory: SharedRuntimeViews | undefined;
 }
 
 export interface WorkerHost {
@@ -36,6 +39,7 @@ export function createWorkerRuntime(host: WorkerHost): (message: MainToWorkerMes
     lastFrameTimeMs: 0,
     lastCpuTimeMs: 0,
     previousFrameStart: 0,
+    sharedMemory: undefined,
   };
 
   const report = (error: unknown): void => {
@@ -83,7 +87,11 @@ export function createWorkerRuntime(host: WorkerHost): (message: MainToWorkerMes
         ).then((value) => {
           renderer = value;
         }),
-        createWasmCore(message.value.wasmUrl, message.value.entityCapacity).then((value) => {
+        createWasmCore(
+          message.value.wasmUrl,
+          message.value.entityCapacity,
+          message.value.sharedMemory,
+        ).then((value) => {
           core = value;
         }),
       ]);
@@ -123,6 +131,9 @@ export function createWorkerRuntime(host: WorkerHost): (message: MainToWorkerMes
           }
           if (state.renderer !== undefined) throw new Error("Runtime is already initialized.");
           state.size = message.value.size;
+          state.sharedMemory = message.value.sharedMemory === undefined
+            ? undefined
+            : openSharedRuntimeViews(message.value.sharedMemory);
           void initialize(message);
           break;
         }
@@ -175,6 +186,7 @@ export function createWorkerRuntime(host: WorkerHost): (message: MainToWorkerMes
                 framePreparationCpuTime:
                   rendererStats?.framePreparationCpuTimeMs ?? 0,
               },
+              transport: transportStats(state.sharedMemory, coreStats?.sharedTransformUpdates ?? 0),
             },
           });
           break;
@@ -191,6 +203,30 @@ export function createWorkerRuntime(host: WorkerHost): (message: MainToWorkerMes
     } catch (error) {
       report(error);
     }
+  };
+}
+
+function transportStats(
+  sharedMemory: SharedRuntimeViews | undefined,
+  appliedTransforms: number,
+): import("./protocol.js").EngineStats["transport"] {
+  if (sharedMemory === undefined) {
+    return {
+      kind: "commands",
+      appliedTransforms: 0,
+      pendingTransforms: 0,
+      writeEpoch: 0,
+      readEpoch: 0,
+      overflows: 0,
+    };
+  }
+  return {
+    kind: "shared-memory",
+    appliedTransforms,
+    pendingTransforms: Atomics.load(sharedMemory.header, SharedHeader.PendingCount),
+    writeEpoch: Atomics.load(sharedMemory.header, SharedHeader.WriteEpoch),
+    readEpoch: Atomics.load(sharedMemory.header, SharedHeader.ReadEpoch),
+    overflows: Atomics.load(sharedMemory.header, SharedHeader.OverflowCount),
   };
 }
 

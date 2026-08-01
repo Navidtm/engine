@@ -7,12 +7,16 @@ use lume_core::{
     RenderWorld, Transform, VisibleRenderBuffer, World, WorldCapacity,
 };
 
-pub const ABI_VERSION: u32 = 3;
+pub const ABI_VERSION: u32 = 4;
+
+const TRANSFORM_UPDATE_FLOATS: usize = 10;
 
 struct EngineCore {
     world: World,
     render_world: RenderWorld,
     visible: VisibleRenderBuffer,
+    transform_update_entities: Box<[u32]>,
+    transform_update_values: Box<[[f32; TRANSFORM_UPDATE_FLOATS]]>,
 }
 
 #[unsafe(no_mangle)]
@@ -35,6 +39,8 @@ pub extern "C" fn lume_engine_create(entity_capacity: u32) -> *mut c_void {
         world: World::with_capacity(capacity),
         render_world: RenderWorld::with_capacity(entities, 8),
         visible: VisibleRenderBuffer::with_capacity(entities),
+        transform_update_entities: vec![0; entities].into_boxed_slice(),
+        transform_update_values: vec![[0.0; TRANSFORM_UPDATE_FLOATS]; entities].into_boxed_slice(),
     }))
     .cast()
 }
@@ -90,6 +96,55 @@ pub extern "C" fn lume_engine_add_transform(
             },
         )
     }) as u32
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn lume_transform_update_capacity(engine: *mut c_void) -> u32 {
+    with_engine_value(engine, |core| core.transform_update_entities.len() as u32).unwrap_or(0)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn lume_transform_update_entities_ptr(engine: *mut c_void) -> *mut u32 {
+    with_engine_mut_value(engine, |core| core.transform_update_entities.as_mut_ptr())
+        .unwrap_or(core::ptr::null_mut())
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn lume_transform_update_values_ptr(engine: *mut c_void) -> *mut f32 {
+    with_engine_mut_value(engine, |core| {
+        core.transform_update_values.as_mut_ptr().cast::<f32>()
+    })
+    .unwrap_or(core::ptr::null_mut())
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn lume_engine_apply_transform_updates(
+    engine: *mut c_void,
+    update_count: u32,
+) -> u32 {
+    with_engine_mut_value(engine, |core| {
+        let count = usize::try_from(update_count)
+            .unwrap_or(usize::MAX)
+            .min(core.transform_update_entities.len());
+        let mut applied = 0;
+        for index in 0..count {
+            let entity = Entity::from_raw(core.transform_update_entities[index]);
+            let value = core.transform_update_values[index];
+            if core.world.add_transform(
+                entity,
+                Transform {
+                    local_position: Vec3::new([value[0], value[1], value[2]]),
+                    rotation: Quat::new([value[3], value[4], value[5], value[6]]),
+                    scale: Vec3::new([value[7], value[8], value[9]]),
+                    ..Transform::default()
+                },
+            ) {
+                applied += 1;
+            }
+        }
+        applied
+    })
+    .unwrap_or(0)
 }
 
 #[unsafe(no_mangle)]
@@ -293,6 +348,15 @@ fn with_engine_value<T>(
     Some(operation(core))
 }
 
+fn with_engine_mut_value<T>(
+    engine: *mut c_void,
+    operation: impl FnOnce(&mut EngineCore) -> T,
+) -> Option<T> {
+    // SAFETY: JS only receives pointers created by this module. Null is rejected.
+    let core = unsafe { engine.cast::<EngineCore>().as_mut() }?;
+    Some(operation(core))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -324,6 +388,20 @@ mod tests {
         assert_eq!(lume_visible_count(engine), 1);
         assert!(!lume_visible_geometries_ptr(engine).is_null());
         assert!(!lume_visible_instances_ptr(engine).is_null());
+        assert_eq!(lume_transform_update_capacity(engine), 16);
+        // SAFETY: both staging pointers address initialized storage owned by the live engine.
+        unsafe {
+            *lume_transform_update_entities_ptr(engine) = 0;
+            let values = lume_transform_update_values_ptr(engine);
+            for (index, value) in [2.0, 3.0, -4.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0]
+                .into_iter()
+                .enumerate()
+            {
+                *values.add(index) = value;
+            }
+        }
+        assert_eq!(lume_engine_apply_transform_updates(engine, 1), 1);
+        assert_eq!(lume_engine_update(engine), 1);
         // SAFETY: pointer was created above and has not yet been destroyed.
         unsafe { lume_engine_destroy(engine) };
     }
