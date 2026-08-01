@@ -22,11 +22,12 @@ const engine = createEngine({
 });
 
 const blue = engine.create.basicMaterial({ color: [0.32, 0.58, 1, 1] });
-engine.create.mesh({
+const cube = engine.create.mesh({
   geometry: "cube",
   material: blue,
   rotation: [0.18, 0.32, 0, 0.93],
 });
+cube.position.set(0, 0, -2);
 engine.create.perspectiveCamera({ position: [0, 0, 3], near: 0.1, far: 100 });
 
 try {

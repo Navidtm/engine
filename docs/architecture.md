@@ -46,9 +46,7 @@ Application
 ```
 
 Commands are buffered until initialization completes. Runtime state does not
-cross the worker boundary as mutable JavaScript objects. Future milestones can
-replace structured-clone command batches with a `SharedArrayBuffer` ring without
-changing the public API or ECS storage.
+cross the worker boundary as mutable JavaScript objects.
 
 Milestone 4 performs that transport split for hot transform data. Structural
 changes continue through versioned worker commands, while transform values use
@@ -56,6 +54,9 @@ a fixed-capacity shared state buffer and dirty-index ring. The worker drains the
 ring into preallocated WebAssembly staging arrays and crosses the WASM boundary
 once per batch. See [milestone-4.md](milestone-4.md) for ownership and
 synchronization invariants.
+
+Detailed byte layout and browser-thread responsibilities are documented in
+[memory-model.md](memory-model.md) and [threading-model.md](threading-model.md).
 
 ## Memory model
 

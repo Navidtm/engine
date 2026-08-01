@@ -5,7 +5,7 @@ product experiences. Phase 1 deliberately keeps the surface area small: a
 data-oriented Rust core compiled to WebAssembly, a worker-owned WebGPU renderer,
 and a functional TypeScript API.
 
-The repository currently contains the first three foundation milestones:
+The repository currently contains the first four foundation milestones:
 
 - a generational-entity, sparse-set ECS in Rust;
 - allocation-free math primitives and reusable frame memory;
@@ -15,6 +15,7 @@ The repository currently contains the first three foundation milestones:
   fixed-capacity instance storage;
 - allocation-free CPU frustum culling and grouped visible render buffers;
 - a reusable FrameGraph and optional real GPU timestamp profiling;
+- SharedArrayBuffer transform transport with a bulk WASM update boundary;
 - a high-level functional TypeScript API plus Vite triangle and cube examples.
 
 See [the architecture notes](docs/architecture.md) and
@@ -34,6 +35,8 @@ rustup target add wasm32-unknown-unknown
 pnpm install
 pnpm build
 pnpm test
+pnpm lint
+pnpm format:check
 ```
 
 Run the indexed cube example with:
@@ -53,6 +56,9 @@ The latest raw internal results are stored in
 comparison harnesses live under `benchmarks/renderer` and
 `benchmarks/comparison`; their reports must be captured on the same browser,
 hardware, resolution, and configuration before numbers are compared.
+
+The main-thread/worker transport comparison lives under `benchmarks/transport`.
+See [benchmarking.md](docs/benchmarking.md) for the complete measurement policy.
 
 The examples expect the raw WebAssembly artifact in their `public` directories.
 `pnpm build:wasm` builds and copies that artifact before TypeScript packages are
