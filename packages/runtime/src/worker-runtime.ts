@@ -161,7 +161,7 @@ export function createWorkerRuntime(host: WorkerHost): (message: MainToWorkerMes
               visibleObjects: coreStats?.visibleObjects ?? 0,
               frameTimeMs: state.lastFrameTimeMs,
               cpuTimeMs: state.lastCpuTimeMs,
-              gpuTimeMs: null,
+              gpuTimeMs: rendererStats?.gpuTimeMs ?? null,
               allocationsPerFrame: 0,
               wasmHeapBytes: coreStats?.wasmHeapBytes ?? 0,
               jsHeapBytes: workerHeapBytes(),

@@ -14,6 +14,13 @@ import { requestAdapter } from "./webgpu/adapter.js";
 import { requestDevice } from "./webgpu/device.js";
 import { createMeshRegistry, type MeshRegistry } from "./webgpu/mesh-registry.js";
 import {
+  createGpuTimestampProfiler,
+  destroyGpuTimestampProfiler,
+  encodeGpuTimestampResolve,
+  requestGpuTimestampRead,
+  type GpuTimestampProfiler,
+} from "./webgpu/timestamp-profiler.js";
+import {
   createSurface,
   destroySurface,
   resizeSurface,
@@ -60,6 +67,7 @@ export interface RendererStats {
   readonly submittedInstances: number;
   readonly bufferUploadCpuTimeMs: number;
   readonly framePreparationCpuTimeMs: number;
+  readonly gpuTimeMs: number | null;
 }
 
 export interface MeshRenderer {
@@ -79,6 +87,7 @@ interface RendererState {
   readonly cameraBuffer: GPUBuffer;
   readonly instanceBuffer: GPUBuffer;
   readonly bindGroup: GPUBindGroup;
+  readonly profiler: GpuTimestampProfiler;
   readonly colorAttachment: GPURenderPassColorAttachment;
   readonly depthAttachment: GPURenderPassDepthStencilAttachment;
   readonly passDescriptor: GPURenderPassDescriptor;
@@ -105,9 +114,13 @@ export async function createMeshRenderer(
   const adapter = await requestAdapter(
     options.powerPreference === undefined ? {} : { powerPreference: options.powerPreference },
   );
+  const requiredFeatures = [...(options.requiredFeatures ?? [])];
+  if (adapter.features.has("timestamp-query") && !requiredFeatures.includes("timestamp-query")) {
+    requiredFeatures.push("timestamp-query");
+  }
   const device = await requestDevice(
     adapter,
-    options.requiredFeatures === undefined ? {} : { requiredFeatures: options.requiredFeatures },
+    { requiredFeatures },
   );
   const instanceBytes = Math.max(INSTANCE_BYTES, instanceCapacity * INSTANCE_BYTES);
   if (
@@ -123,6 +136,7 @@ export async function createMeshRenderer(
   const pipelineCache = createPipelineCache();
   const pipeline = await getMeshPipeline(device, pipelineCache, surface.format);
   const meshes = createMeshRegistry(device, BUILTIN_MESHES);
+  const profiler = createGpuTimestampProfiler(device);
   const cameraBuffer = device.createBuffer({
     label: "Lume camera uniform",
     size: CAMERA_BYTES,
@@ -159,6 +173,9 @@ export async function createMeshRenderer(
     label: "Lume main render pass",
     colorAttachments: [colorAttachment],
     depthStencilAttachment: depthAttachment,
+    ...(profiler.timestampWrites === undefined
+      ? {}
+      : { timestampWrites: profiler.timestampWrites }),
   };
   const state: RendererState = {
     device,
@@ -169,6 +186,7 @@ export async function createMeshRenderer(
     cameraBuffer,
     instanceBuffer,
     bindGroup,
+    profiler,
     colorAttachment,
     depthAttachment,
     passDescriptor,
@@ -197,11 +215,15 @@ export async function createMeshRenderer(
     resize: (nextSize) => resize(state, nextSize),
     stats: () => ({
       gpuBufferBytes:
-        state.meshes.gpuBytes + state.cameraBuffer.size + state.instanceBuffer.size,
+        state.meshes.gpuBytes +
+        state.cameraBuffer.size +
+        state.instanceBuffer.size +
+        state.profiler.gpuBytes,
       drawCalls: state.drawCalls,
       submittedInstances: state.submittedInstances,
       bufferUploadCpuTimeMs: state.bufferUploadCpuTimeMs,
       framePreparationCpuTimeMs: state.framePreparationCpuTimeMs,
+      gpuTimeMs: state.profiler.gpuTimeMs,
     }),
     dispose: () => dispose(state),
   };
@@ -289,8 +311,10 @@ function encodeMainPass(context: RendererFrameContext): void {
     instance = runEnd;
   }
   pass.end();
+  const timestampReadback = encodeGpuTimestampResolve(state.profiler, encoder);
   state.submissions[0] = encoder.finish();
   state.device.queue.submit(state.submissions);
+  requestGpuTimestampRead(state.profiler, timestampReadback);
   state.drawCalls = drawCalls;
   state.submittedInstances = instanceCount;
   state.framePreparationCpuTimeMs = performance.now() - context.preparationStart;
@@ -304,6 +328,7 @@ function dispose(state: RendererState): void {
   if (state.disposed) return;
   state.disposed = true;
   state.meshes.dispose();
+  destroyGpuTimestampProfiler(state.profiler);
   state.cameraBuffer.destroy();
   state.instanceBuffer.destroy();
   state.pipelineCache.clear();
