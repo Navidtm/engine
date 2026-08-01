@@ -1,25 +1,18 @@
-import { BUILTIN_MESHES } from "./geometry/mesh-data.js";
 import {
   addFramePass,
   addFrameResource,
+  type CompiledFrameGraph,
   compileFrameGraph,
   createFrameGraph,
   executeFrameGraph,
-  type CompiledFrameGraph,
 } from "./framegraph/graph.js";
 import { defineFramePass } from "./framegraph/pass.js";
+import { BUILTIN_MESHES } from "./geometry/mesh-data.js";
 import { createPipelineCache, type PipelineCache } from "./pipeline/cache.js";
 import { getMeshPipeline } from "./pipeline/mesh.js";
 import { requestAdapter } from "./webgpu/adapter.js";
 import { requestDevice } from "./webgpu/device.js";
 import { createMeshRegistry, type MeshRegistry } from "./webgpu/mesh-registry.js";
-import {
-  createGpuTimestampProfiler,
-  destroyGpuTimestampProfiler,
-  encodeGpuTimestampResolve,
-  requestGpuTimestampRead,
-  type GpuTimestampProfiler,
-} from "./webgpu/timestamp-profiler.js";
 import {
   createSurface,
   destroySurface,
@@ -27,6 +20,13 @@ import {
   type SurfaceSize,
   type SurfaceState,
 } from "./webgpu/surface.js";
+import {
+  createGpuTimestampProfiler,
+  destroyGpuTimestampProfiler,
+  encodeGpuTimestampResolve,
+  type GpuTimestampProfiler,
+  requestGpuTimestampRead,
+} from "./webgpu/timestamp-profiler.js";
 
 const INSTANCE_FLOATS = 20;
 const INSTANCE_BYTES = INSTANCE_FLOATS * Float32Array.BYTES_PER_ELEMENT;
@@ -118,10 +118,7 @@ export async function createMeshRenderer(
   if (adapter.features.has("timestamp-query") && !requiredFeatures.includes("timestamp-query")) {
     requiredFeatures.push("timestamp-query");
   }
-  const device = await requestDevice(
-    adapter,
-    { requiredFeatures },
-  );
+  const device = await requestDevice(adapter, { requiredFeatures });
   const instanceBytes = Math.max(INSTANCE_BYTES, instanceCapacity * INSTANCE_BYTES);
   if (
     instanceBytes > device.limits.maxStorageBufferBindingSize ||
@@ -236,18 +233,24 @@ function createRendererFrameGraph(): CompiledFrameGraph<RendererFrameContext> {
   const uploadedFrame = addFrameResource(graph, "gpu-frame-data");
   const colorTarget = addFrameResource(graph, "surface-color");
   const depthTarget = addFrameResource(graph, "surface-depth");
-  addFramePass(graph, defineFramePass({
-    name: "upload",
-    reads: [extractedFrame],
-    writes: [uploadedFrame],
-    execute: uploadFrame,
-  }));
-  addFramePass(graph, defineFramePass({
-    name: "main-render",
-    reads: [uploadedFrame],
-    writes: [colorTarget, depthTarget],
-    execute: encodeMainPass,
-  }));
+  addFramePass(
+    graph,
+    defineFramePass({
+      name: "upload",
+      reads: [extractedFrame],
+      writes: [uploadedFrame],
+      execute: uploadFrame,
+    }),
+  );
+  addFramePass(
+    graph,
+    defineFramePass({
+      name: "main-render",
+      reads: [uploadedFrame],
+      writes: [colorTarget, depthTarget],
+      execute: encodeMainPass,
+    }),
+  );
   return compileFrameGraph(graph);
 }
 

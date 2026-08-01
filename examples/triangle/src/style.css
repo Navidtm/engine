@@ -4,17 +4,25 @@
   background: #040610;
 }
 
-* { box-sizing: border-box; }
+* {
+  box-sizing: border-box;
+}
 
-html, body, #viewport {
+html,
+body,
+#viewport {
   width: 100%;
   height: 100%;
   margin: 0;
 }
 
-body { overflow: hidden; }
+body {
+  overflow: hidden;
+}
 
-#viewport { display: block; }
+#viewport {
+  display: block;
+}
 
 aside {
   position: fixed;
@@ -35,6 +43,14 @@ aside strong {
   text-transform: uppercase;
 }
 
-#status { color: #a8b0c8; font-size: 12px; }
-#status[data-state="ready"] { color: #83e6b2; }
-#status[data-state="error"] { color: #ff8d91; max-width: min(480px, 80vw); }
+#status {
+  color: #a8b0c8;
+  font-size: 12px;
+}
+#status[data-state="ready"] {
+  color: #83e6b2;
+}
+#status[data-state="error"] {
+  color: #ff8d91;
+  max-width: min(480px, 80vw);
+}

@@ -40,11 +40,13 @@ export function createGpuTimestampProfiler(device: GPUDevice): GpuTimestampProfi
   });
   const readbackBuffers: GPUBuffer[] = [];
   for (let index = 0; index < READBACK_BUFFER_COUNT; index += 1) {
-    readbackBuffers.push(device.createBuffer({
-      label: `Lume timestamp readback ${index}`,
-      size: QUERY_BYTES,
-      usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
-    }));
+    readbackBuffers.push(
+      device.createBuffer({
+        label: `Lume timestamp readback ${index}`,
+        size: QUERY_BYTES,
+        usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
+      }),
+    );
   }
   return {
     querySet,
@@ -67,7 +69,11 @@ export function encodeGpuTimestampResolve(
   profiler: GpuTimestampProfiler,
   encoder: GPUCommandEncoder,
 ): number {
-  if (profiler.disposed || profiler.querySet === undefined || profiler.resolveBuffer === undefined) {
+  if (
+    profiler.disposed ||
+    profiler.querySet === undefined ||
+    profiler.resolveBuffer === undefined
+  ) {
     return -1;
   }
   for (let offset = 0; offset < profiler.readbackBuffers.length; offset += 1) {

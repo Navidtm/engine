@@ -1,9 +1,15 @@
 import { createEngine } from "@lume/api";
 
 declare global {
-  interface Window { __LUME_BENCHMARK_RESULT__?: unknown; }
-  interface Performance { readonly memory?: { readonly usedJSHeapSize: number }; }
-  interface Navigator { readonly deviceMemory?: number; }
+  interface Window {
+    __LUME_BENCHMARK_RESULT__?: unknown;
+  }
+  interface Performance {
+    readonly memory?: { readonly usedJSHeapSize: number };
+  }
+  interface Navigator {
+    readonly deviceMemory?: number;
+  }
 }
 
 const canvas = document.querySelector<HTMLCanvasElement>("#viewport");

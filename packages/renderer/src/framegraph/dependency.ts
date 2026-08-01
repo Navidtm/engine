@@ -63,7 +63,9 @@ function validateResource(
   passName: string,
 ): void {
   if (resources[resource.id] !== resource) {
-    throw new Error(`Frame pass '${passName}' references unregistered resource '${resource.name}'.`);
+    throw new Error(
+      `Frame pass '${passName}' references unregistered resource '${resource.name}'.`,
+    );
   }
 }
 

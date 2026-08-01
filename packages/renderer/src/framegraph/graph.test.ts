@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+
 import {
   addFramePass,
   addFrameResource,
@@ -13,16 +14,22 @@ describe("frame graph", () => {
   it("executes resource dependencies in declaration order", () => {
     const graph = createFrameGraph<string[]>();
     const uploaded = addFrameResource(graph, "uploaded-frame");
-    addFramePass(graph, defineFramePass({
-      name: "upload",
-      writes: [uploaded],
-      execute: (order) => order.push("upload"),
-    }));
-    addFramePass(graph, defineFramePass({
-      name: "main-render",
-      reads: [uploaded],
-      execute: (order) => order.push("main-render"),
-    }));
+    addFramePass(
+      graph,
+      defineFramePass({
+        name: "upload",
+        writes: [uploaded],
+        execute: (order) => order.push("upload"),
+      }),
+    );
+    addFramePass(
+      graph,
+      defineFramePass({
+        name: "main-render",
+        reads: [uploaded],
+        execute: (order) => order.push("main-render"),
+      }),
+    );
 
     const compiled = compileFrameGraph(graph);
     const order: string[] = [];
@@ -33,26 +40,35 @@ describe("frame graph", () => {
   });
 
   it("rejects unknown resources and dependency cycles", () => {
-    const invalid = createFrameGraph<void>();
+    const invalid = createFrameGraph<undefined>();
     const foreign = createFrameResource(0, "foreign");
-    addFramePass(invalid, defineFramePass({
-      name: "invalid",
-      reads: [foreign],
-      execute: () => undefined,
-    }));
+    addFramePass(
+      invalid,
+      defineFramePass({
+        name: "invalid",
+        reads: [foreign],
+        execute: () => undefined,
+      }),
+    );
     expect(() => compileFrameGraph(invalid)).toThrow("unregistered resource");
 
-    const cyclic = createFrameGraph<void>();
-    addFramePass(cyclic, defineFramePass({
-      name: "first",
-      after: ["second"],
-      execute: () => undefined,
-    }));
-    addFramePass(cyclic, defineFramePass({
-      name: "second",
-      after: ["first"],
-      execute: () => undefined,
-    }));
+    const cyclic = createFrameGraph<undefined>();
+    addFramePass(
+      cyclic,
+      defineFramePass({
+        name: "first",
+        after: ["second"],
+        execute: () => undefined,
+      }),
+    );
+    addFramePass(
+      cyclic,
+      defineFramePass({
+        name: "second",
+        after: ["first"],
+        execute: () => undefined,
+      }),
+    );
     expect(() => compileFrameGraph(cyclic)).toThrow("dependency cycle");
   });
 });

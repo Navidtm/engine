@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+
 import { bounds, camera, transform } from "./components.js";
 
 describe("component constructors", () => {

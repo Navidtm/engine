@@ -1,0 +1,7 @@
+.pnpm-store/
+node_modules/
+target/
+**/dist/
+**/public/*.wasm
+benchmarks/results/*.json
+pnpm-lock.yaml

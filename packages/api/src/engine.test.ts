@@ -1,5 +1,6 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
 import type { MainToWorkerMessage, WorkerToMainMessage } from "@lume/runtime";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
 import { createEngine } from "./engine.js";
 
 afterEach(() => vi.unstubAllGlobals());
@@ -21,7 +22,7 @@ describe("high-level engine API", () => {
     } as unknown as Worker;
     const canvas = {
       getBoundingClientRect: () => ({ width: 640, height: 360 }),
-      transferControlToOffscreen: () => ({} as OffscreenCanvas),
+      transferControlToOffscreen: () => ({}) as OffscreenCanvas,
     } as HTMLCanvasElement;
     vi.stubGlobal("document", { baseURI: "https://example.test/" });
     vi.stubGlobal("window", { devicePixelRatio: 2 });
@@ -62,9 +63,7 @@ describe("high-level engine API", () => {
     expect(posted).toHaveLength(messagesBeforeTransform);
     const initializationMessage = posted[0];
     expect(
-      initializationMessage?.type === "init"
-        ? initializationMessage.value.sharedMemory
-        : undefined,
+      initializationMessage?.type === "init" ? initializationMessage.value.sharedMemory : undefined,
     ).toBeInstanceOf(SharedArrayBuffer);
   });
 });

@@ -1,8 +1,5 @@
 export interface PipelineCache {
-  getOrCreate(
-    key: string,
-    create: () => Promise<GPURenderPipeline>,
-  ): Promise<GPURenderPipeline>;
+  getOrCreate(key: string, create: () => Promise<GPURenderPipeline>): Promise<GPURenderPipeline>;
   clear(): void;
 }
 

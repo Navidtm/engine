@@ -1,7 +1,9 @@
 import { allocateSharedRuntimeMemory, writeSharedTransform } from "@lume/runtime";
 
 declare global {
-  interface Window { __LUME_TRANSPORT_RESULT__?: unknown; }
+  interface Window {
+    __LUME_TRANSPORT_RESULT__?: unknown;
+  }
 }
 
 interface WorkerResult {

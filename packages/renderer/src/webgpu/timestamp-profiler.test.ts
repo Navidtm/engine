@@ -1,8 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import {
-  createGpuTimestampProfiler,
-  destroyGpuTimestampProfiler,
-} from "./timestamp-profiler.js";
+
+import { createGpuTimestampProfiler, destroyGpuTimestampProfiler } from "./timestamp-profiler.js";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -27,7 +25,8 @@ describe("GPU timestamp profiler ownership", () => {
       COPY_DST: 8,
     });
     const querySet = { destroy: vi.fn() };
-    const buffers: Array<{ readonly size: number; readonly destroy: ReturnType<typeof vi.fn> }> = [];
+    const buffers: Array<{ readonly size: number; readonly destroy: ReturnType<typeof vi.fn> }> =
+      [];
     const device = {
       features: new Set<GPUFeatureName>(["timestamp-query"]),
       createQuerySet: vi.fn(() => querySet),

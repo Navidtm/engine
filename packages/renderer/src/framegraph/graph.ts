@@ -16,20 +16,14 @@ export function createFrameGraph<Context>(): FrameGraph<Context> {
   return { resources: [], passes: [], compiled: false };
 }
 
-export function addFrameResource<Context>(
-  graph: FrameGraph<Context>,
-  name: string,
-): FrameResource {
+export function addFrameResource<Context>(graph: FrameGraph<Context>, name: string): FrameResource {
   assertMutable(graph);
   const resource = createFrameResource(graph.resources.length, name);
   graph.resources.push(resource);
   return resource;
 }
 
-export function addFramePass<Context>(
-  graph: FrameGraph<Context>,
-  pass: FramePass<Context>,
-): void {
+export function addFramePass<Context>(graph: FrameGraph<Context>, pass: FramePass<Context>): void {
   assertMutable(graph);
   graph.passes.push(pass);
 }

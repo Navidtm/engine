@@ -1,6 +1,6 @@
 import type {
-  CameraComponent,
   BoundsComponent,
+  CameraComponent,
   Color,
   Entity,
   MaterialComponent,

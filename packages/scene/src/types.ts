@@ -38,11 +38,7 @@ export interface BoundsComponent {
 }
 
 export type Component =
-  | TransformComponent
-  | MaterialComponent
-  | CameraComponent
-  | MeshComponent
-  | BoundsComponent;
+  TransformComponent | MaterialComponent | CameraComponent | MeshComponent | BoundsComponent;
 
 export interface Geometry {
   readonly id: number;

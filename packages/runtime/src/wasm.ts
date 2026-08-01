@@ -1,7 +1,8 @@
-import type { RuntimeCommand } from "./protocol.js";
 import type { RenderFrame } from "@lume/renderer";
-import { drainSharedTransforms } from "./shared-memory/synchronization.js";
+
+import type { RuntimeCommand } from "./protocol.js";
 import { SHARED_TRANSFORM_FLOATS } from "./shared-memory/layout.js";
+import { drainSharedTransforms } from "./shared-memory/synchronization.js";
 import { openSharedRuntimeViews } from "./shared-memory/views.js";
 
 const EXPECTED_ABI_VERSION = 4;
@@ -124,9 +125,7 @@ export async function createWasmCore(
   const transformUpdateCapacity = exports.lume_transform_update_capacity(handle);
   const transformUpdateEntitiesPointer = exports.lume_transform_update_entities_ptr(handle);
   const transformUpdateValuesPointer = exports.lume_transform_update_values_ptr(handle);
-  const sharedViews = sharedMemory === undefined
-    ? undefined
-    : openSharedRuntimeViews(sharedMemory);
+  const sharedViews = sharedMemory === undefined ? undefined : openSharedRuntimeViews(sharedMemory);
   if (sharedViews !== undefined && sharedViews.layout.capacity > transformUpdateCapacity) {
     exports.lume_engine_destroy(handle);
     throw new Error("Shared transform capacity exceeds WASM staging capacity.");
@@ -300,11 +299,6 @@ function applyCommand(
         command.material,
       );
     case "add-bounds":
-      return wasm.lume_engine_add_bounds(
-        engine,
-        command.entity,
-        ...command.center,
-        command.radius,
-      );
+      return wasm.lume_engine_add_bounds(engine, command.entity, ...command.center, command.radius);
   }
 }

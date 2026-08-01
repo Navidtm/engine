@@ -4,10 +4,22 @@
   background: #03050d;
 }
 
-* { box-sizing: border-box; }
-html, body, #viewport { width: 100%; height: 100%; margin: 0; }
-body { overflow: hidden; }
-#viewport { display: block; }
+* {
+  box-sizing: border-box;
+}
+html,
+body,
+#viewport {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+}
+body {
+  overflow: hidden;
+}
+#viewport {
+  display: block;
+}
 
 aside {
   position: fixed;
@@ -22,7 +34,19 @@ aside {
   backdrop-filter: blur(16px);
 }
 
-aside strong { font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; }
-#status, #stats { color: #a8b0c8; font-size: 12px; }
-#status[data-state="ready"] { color: #83e6b2; }
-#status[data-state="error"] { color: #ff8d91; }
+aside strong {
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+#status,
+#stats {
+  color: #a8b0c8;
+  font-size: 12px;
+}
+#status[data-state="ready"] {
+  color: #83e6b2;
+}
+#status[data-state="error"] {
+  color: #ff8d91;
+}

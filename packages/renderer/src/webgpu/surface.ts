@@ -18,11 +18,7 @@ function physicalDimension(value: number, scale: number, limit: number): number 
   return Math.max(1, Math.min(limit, Math.round(value * scale)));
 }
 
-function createDepthTexture(
-  device: GPUDevice,
-  width: number,
-  height: number,
-): GPUTexture {
+function createDepthTexture(device: GPUDevice, width: number, height: number): GPUTexture {
   return device.createTexture({
     label: "Lume main depth",
     size: { width, height },

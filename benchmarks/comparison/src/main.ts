@@ -3,9 +3,15 @@ import * as THREE from "three";
 import WebGPURenderer from "three/src/renderers/webgpu/WebGPURenderer.js";
 
 declare global {
-  interface Window { __LUME_COMPARISON_RESULT__?: unknown; }
-  interface Performance { readonly memory?: { readonly usedJSHeapSize: number }; }
-  interface Navigator { readonly deviceMemory?: number; }
+  interface Window {
+    __LUME_COMPARISON_RESULT__?: unknown;
+  }
+  interface Performance {
+    readonly memory?: { readonly usedJSHeapSize: number };
+  }
+  interface Navigator {
+    readonly deviceMemory?: number;
+  }
 }
 
 const canvas = document.querySelector<HTMLCanvasElement>("#viewport");
@@ -21,9 +27,10 @@ const resolution = [1280, 720] as const;
 const warmupFrames = 60;
 const sampleFrames = 180;
 
-const report = implementation === "three"
-  ? await runThree(canvas, scenario, count)
-  : await runLume(canvas, scenario, count);
+const report =
+  implementation === "three"
+    ? await runThree(canvas, scenario, count)
+    : await runLume(canvas, scenario, count);
 window.__LUME_COMPARISON_RESULT__ = report;
 output.textContent = JSON.stringify(report, null, 2);
 
@@ -83,7 +90,12 @@ async function runThree(target: HTMLCanvasElement, selectedScenario: string, ent
   renderer.setSize(resolution[0], resolution[1], false);
   const scene = new THREE.Scene();
   const side = Math.ceil(Math.sqrt(entities));
-  const viewCamera = new THREE.PerspectiveCamera(60, resolution[0] / resolution[1], 0.1, Math.max(100, side * 3));
+  const viewCamera = new THREE.PerspectiveCamera(
+    60,
+    resolution[0] / resolution[1],
+    0.1,
+    Math.max(100, side * 3),
+  );
   viewCamera.position.z = Math.max(3, side * 1.15);
   const geometry = new THREE.BoxGeometry(1, 1, 1);
   const meshMaterial = new THREE.MeshBasicMaterial({ color: 0x4f8fff });
@@ -158,7 +170,13 @@ function baseReport(
       deviceMemoryGiB: navigator.deviceMemory ?? null,
     },
     browser: navigator.userAgent,
-    configuration: { entities, resolution, warmupFrames, sampleFrames, geometry: "indexed unit cube" },
+    configuration: {
+      entities,
+      resolution,
+      warmupFrames,
+      sampleFrames,
+      geometry: "indexed unit cube",
+    },
     measurements: {
       initializationMs,
       frameTimesMs,
@@ -170,7 +188,7 @@ function baseReport(
 }
 
 function gridPosition(index: number, side: number, z: number): readonly [number, number, number] {
-  return [(index % side - side * 0.5) * 1.2, (Math.floor(index / side) - side * 0.5) * 1.2, z];
+  return [((index % side) - side * 0.5) * 1.2, (Math.floor(index / side) - side * 0.5) * 1.2, z];
 }
 
 function nextAnimationFrame(): Promise<void> {

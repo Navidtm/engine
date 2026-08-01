@@ -1,22 +1,23 @@
 packages:
-  - 'packages/renderer'
-  - 'packages/scene'
-  - 'packages/runtime'
-  - 'packages/api'
-  - 'examples/*'
-  - 'benchmarks/renderer'
-  - 'benchmarks/comparison'
-  - 'benchmarks/transport'
+  - "packages/renderer"
+  - "packages/scene"
+  - "packages/runtime"
+  - "packages/api"
+  - "examples/*"
+  - "benchmarks/renderer"
+  - "benchmarks/comparison"
+  - "benchmarks/transport"
 
 allowBuilds:
   esbuild: true
+  unrs-resolver: true
 
 ignoreWorkspaceRootCheck: true
 
 catalog:
-  '@webgpu/types': '^0.1.71'
-  typescript: '^5.9.3'
-  vite: '^7.3.6'
-  vitest: '^3.2.7'
-  three: '0.185.1'
-  '@types/three': '0.185.1'
+  "@webgpu/types": "^0.1.71"
+  typescript: "^5.9.3"
+  vite: "^7.3.6"
+  vitest: "^3.2.7"
+  three: "0.185.1"
+  "@types/three": "0.185.1"

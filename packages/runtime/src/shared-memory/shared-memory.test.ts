@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+
 import { allocateSharedRuntimeMemory } from "./allocator.js";
 import { SHARED_TRANSFORM_FLOATS, SharedHeader } from "./layout.js";
 import { drainSharedTransforms, writeSharedTransform } from "./synchronization.js";
@@ -16,9 +17,7 @@ describe("shared runtime memory", () => {
     const opened = openSharedRuntimeViews(allocated.buffer);
     expect(opened.layout.capacity).toBe(8);
     expect(opened.transforms).toHaveLength(8 * SHARED_TRANSFORM_FLOATS);
-    expect(opened.layout.sequenceByteOffset).toBeGreaterThanOrEqual(
-      opened.header.byteLength,
-    );
+    expect(opened.layout.sequenceByteOffset).toBeGreaterThanOrEqual(opened.header.byteLength);
   });
 
   it("coalesces repeated writes and drains the latest value", () => {

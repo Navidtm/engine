@@ -1,5 +1,6 @@
-import { createEngine } from "@lume/api";
 import "./style.css";
+
+import { createEngine } from "@lume/api";
 
 const canvas = document.querySelector<HTMLCanvasElement>("#viewport");
 const status = document.querySelector<HTMLElement>("#status");

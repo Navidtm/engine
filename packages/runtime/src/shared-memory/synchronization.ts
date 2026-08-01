@@ -7,10 +7,7 @@ export interface SharedTransformValue {
   readonly scale: readonly [number, number, number];
 }
 
-export type SharedTransformConsumer = (
-  entity: number,
-  values: Float32Array<ArrayBuffer>,
-) => void;
+export type SharedTransformConsumer = (entity: number, values: Float32Array<ArrayBuffer>) => void;
 
 export function writeSharedTransform(
   views: SharedRuntimeViews,
@@ -42,11 +39,7 @@ export function writeSharedTransform(
     }
     const tail = Atomics.load(views.header, SharedHeader.QueueTail);
     Atomics.store(views.queue, tail, entity);
-    Atomics.store(
-      views.header,
-      SharedHeader.QueueTail,
-      (tail + 1) % views.layout.capacity,
-    );
+    Atomics.store(views.header, SharedHeader.QueueTail, (tail + 1) % views.layout.capacity);
     Atomics.add(views.header, SharedHeader.PendingCount, 1);
     enqueued = true;
   }
@@ -68,11 +61,7 @@ export function drainSharedTransforms(
   while (Atomics.load(views.header, SharedHeader.PendingCount) > 0) {
     const head = Atomics.load(views.header, SharedHeader.QueueHead);
     const entity = Atomics.load(views.queue, head);
-    Atomics.store(
-      views.header,
-      SharedHeader.QueueHead,
-      (head + 1) % views.layout.capacity,
-    );
+    Atomics.store(views.header, SharedHeader.QueueHead, (head + 1) % views.layout.capacity);
     Atomics.sub(views.header, SharedHeader.PendingCount, 1);
     Atomics.store(views.dirty, entity, 0);
     readStableTransform(views, entity, scratch);

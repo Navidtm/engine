@@ -8,7 +8,9 @@
     "dev": "vite",
     "typecheck": "tsc --noEmit"
   },
-  "dependencies": { "@lume/api": "workspace:*" },
+  "dependencies": {
+    "@lume/api": "workspace:*"
+  },
   "devDependencies": {
     "@webgpu/types": "catalog:",
     "typescript": "catalog:",

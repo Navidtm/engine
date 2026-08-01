@@ -1,13 +1,15 @@
 import { createMeshRenderer, type MeshRenderer, type SurfaceSize } from "@lume/renderer";
+
 import {
-  RUNTIME_PROTOCOL_VERSION,
+  type EngineStats,
   type MainToWorkerMessage,
+  RUNTIME_PROTOCOL_VERSION,
   type RuntimeCommand,
   type WorkerToMainMessage,
 } from "./protocol.js";
-import { createWasmCore, type WasmCore } from "./wasm.js";
 import { SharedHeader } from "./shared-memory/layout.js";
 import { openSharedRuntimeViews, type SharedRuntimeViews } from "./shared-memory/views.js";
+import { createWasmCore, type WasmCore } from "./wasm.js";
 
 interface WorkerRuntimeState {
   renderer: MeshRenderer | undefined;
@@ -44,9 +46,10 @@ export function createWorkerRuntime(host: WorkerHost): (message: MainToWorkerMes
 
   const report = (error: unknown): void => {
     const value = error instanceof Error ? error : new Error(String(error));
-    const event: WorkerToMainMessage = value.stack === undefined
-      ? { type: "error", message: value.message }
-      : { type: "error", message: value.message, stack: value.stack };
+    const event: WorkerToMainMessage =
+      value.stack === undefined
+        ? { type: "error", message: value.message }
+        : { type: "error", message: value.message, stack: value.stack };
     host.postMessage(event);
   };
 
@@ -58,7 +61,8 @@ export function createWorkerRuntime(host: WorkerHost): (message: MainToWorkerMes
       if (renderFrame !== undefined) state.renderer?.execute(renderFrame);
       const frameEnd = performance.now();
       state.lastCpuTimeMs = frameEnd - frameStart;
-      state.lastFrameTimeMs = state.previousFrameStart === 0 ? 0 : frameStart - state.previousFrameStart;
+      state.lastFrameTimeMs =
+        state.previousFrameStart === 0 ? 0 : frameStart - state.previousFrameStart;
       state.previousFrameStart = frameStart;
       state.frameRequest = host.requestAnimationFrame(frame);
     } catch (error) {
@@ -74,7 +78,9 @@ export function createWorkerRuntime(host: WorkerHost): (message: MainToWorkerMes
     core.apply(command, size.width / Math.max(size.height, 1));
   };
 
-  const initialize = async (message: Extract<MainToWorkerMessage, { type: "init" }>): Promise<void> => {
+  const initialize = async (
+    message: Extract<MainToWorkerMessage, { type: "init" }>,
+  ): Promise<void> => {
     let renderer: MeshRenderer | undefined;
     let core: WasmCore | undefined;
     try {
@@ -131,9 +137,10 @@ export function createWorkerRuntime(host: WorkerHost): (message: MainToWorkerMes
           }
           if (state.renderer !== undefined) throw new Error("Runtime is already initialized.");
           state.size = message.value.size;
-          state.sharedMemory = message.value.sharedMemory === undefined
-            ? undefined
-            : openSharedRuntimeViews(message.value.sharedMemory);
+          state.sharedMemory =
+            message.value.sharedMemory === undefined
+              ? undefined
+              : openSharedRuntimeViews(message.value.sharedMemory);
           void initialize(message);
           break;
         }
@@ -183,8 +190,7 @@ export function createWorkerRuntime(host: WorkerHost): (message: MainToWorkerMes
               },
               timings: {
                 bufferUploadCpuTime: rendererStats?.bufferUploadCpuTimeMs ?? 0,
-                framePreparationCpuTime:
-                  rendererStats?.framePreparationCpuTimeMs ?? 0,
+                framePreparationCpuTime: rendererStats?.framePreparationCpuTimeMs ?? 0,
               },
               transport: transportStats(state.sharedMemory, coreStats?.sharedTransformUpdates ?? 0),
             },
@@ -209,7 +215,7 @@ export function createWorkerRuntime(host: WorkerHost): (message: MainToWorkerMes
 function transportStats(
   sharedMemory: SharedRuntimeViews | undefined,
   appliedTransforms: number,
-): import("./protocol.js").EngineStats["transport"] {
+): EngineStats["transport"] {
   if (sharedMemory === undefined) {
     return {
       kind: "commands",

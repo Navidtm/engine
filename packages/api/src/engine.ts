@@ -1,33 +1,34 @@
 import {
   allocateSharedRuntimeMemory,
   createDefaultWorker,
-  RUNTIME_PROTOCOL_VERSION,
-  supportsSharedRuntimeMemory,
-  writeSharedTransform,
-  type MainToWorkerMessage,
   type EngineStats,
+  type MainToWorkerMessage,
+  RUNTIME_PROTOCOL_VERSION,
   type RuntimeCommand,
   type SharedRuntimeViews,
+  supportsSharedRuntimeMemory,
   type WorkerToMainMessage,
+  writeSharedTransform,
 } from "@lume/runtime";
 import {
   bounds,
   boxGeometry,
   camera,
-  material,
-  mesh,
-  transform,
-  triangleGeometry,
   type Color,
   type Component,
   type Entity,
+  material,
+  mesh,
   type Quat,
+  transform,
+  triangleGeometry,
   type Vec3,
 } from "@lume/scene";
 
 const MAX_ENTITY_INDEX = (1 << 20) - 1;
 
-export type EngineStatus = "new" | "initializing" | "ready" | "running" | "stopped" | "disposed" | "failed";
+export type EngineStatus =
+  "new" | "initializing" | "ready" | "running" | "stopped" | "disposed" | "failed";
 
 export interface EngineConfig {
   readonly canvas: HTMLCanvasElement;
@@ -110,11 +111,14 @@ export interface CreateApi {
 }
 
 export interface SetApi {
-  transform(handle: SceneHandle, options: {
-    readonly position?: Vec3;
-    readonly rotation?: Quat;
-    readonly scale?: Vec3;
-  }): void;
+  transform(
+    handle: SceneHandle,
+    options: {
+      readonly position?: Vec3;
+      readonly rotation?: Quat;
+      readonly scale?: Vec3;
+    },
+  ): void;
 }
 
 export interface WorldApi {
@@ -148,10 +152,13 @@ interface EngineState {
   resolveInit: (() => void) | undefined;
   rejectInit: ((error: Error) => void) | undefined;
   resizeObserver: ResizeObserver | undefined;
-  readonly statsRequests: Map<number, {
-    readonly resolve: (stats: EngineStats) => void;
-    readonly reject: (error: Error) => void;
-  }>;
+  readonly statsRequests: Map<
+    number,
+    {
+      readonly resolve: (stats: EngineStats) => void;
+      readonly reject: (error: Error) => void;
+    }
+  >;
   nextStatsRequest: number;
 }
 
@@ -161,9 +168,8 @@ export function createEngine(
   canvasOrConfig: HTMLCanvasElement | EngineConfig,
   options: EngineOptions = {},
 ): Engine {
-  const config: EngineConfig = "canvas" in canvasOrConfig
-    ? canvasOrConfig
-    : { ...options, canvas: canvasOrConfig };
+  const config: EngineConfig =
+    "canvas" in canvasOrConfig ? canvasOrConfig : { ...options, canvas: canvasOrConfig };
   const entityCapacity = config.entityCapacity ?? 4_096;
   const state: EngineState = {
     config,
@@ -223,7 +229,10 @@ interface MutableTransformValue {
   readonly scale: [number, number, number];
 }
 
-function createHighLevelApi(state: EngineState, world: WorldApi): {
+function createHighLevelApi(
+  state: EngineState,
+  world: WorldApi,
+): {
   readonly create: CreateApi;
   readonly set: SetApi;
   readonly destroy: (handle: EngineHandle) => void;
@@ -242,16 +251,20 @@ function createHighLevelApi(state: EngineState, world: WorldApi): {
   const create: CreateApi = Object.freeze({
     basicMaterial: createBasicMaterial,
     mesh(options: MeshOptions) {
-      const materialHandle = options.material === undefined || options.material === "basic"
-        ? defaultBasicMaterial()
-        : options.material;
+      const materialHandle =
+        options.material === undefined || options.material === "basic"
+          ? defaultBasicMaterial()
+          : options.material;
       const entity = world.createEntity();
       const initialTransform = mutableTransform(options);
-      world.add(entity, transform({
-        ...(options.position === undefined ? {} : { position: options.position }),
-        ...(options.rotation === undefined ? {} : { rotation: options.rotation }),
-        ...(options.scale === undefined ? {} : { scale: options.scale }),
-      }));
+      world.add(
+        entity,
+        transform({
+          ...(options.position === undefined ? {} : { position: options.position }),
+          ...(options.rotation === undefined ? {} : { rotation: options.rotation }),
+          ...(options.scale === undefined ? {} : { scale: options.scale }),
+        }),
+      );
       const geometry = options.geometry === "cube" ? boxGeometry() : triangleGeometry();
       world.add(entity, mesh(geometry, materialHandle.id as Entity));
       if (options.bounds !== undefined) world.add(entity, bounds(options.bounds));
@@ -262,26 +275,35 @@ function createHighLevelApi(state: EngineState, world: WorldApi): {
     perspectiveCamera(options: PerspectiveCameraOptions = {}) {
       const entity = world.createEntity();
       const initialTransform = mutableTransform(options);
-      world.add(entity, transform({
-        ...(options.position === undefined ? {} : { position: options.position }),
-        ...(options.rotation === undefined ? {} : { rotation: options.rotation }),
-      }));
-      world.add(entity, camera({
-        ...(options.verticalFov === undefined ? {} : { verticalFov: options.verticalFov }),
-        ...(options.near === undefined ? {} : { near: options.near }),
-        ...(options.far === undefined ? {} : { far: options.far }),
-      }));
+      world.add(
+        entity,
+        transform({
+          ...(options.position === undefined ? {} : { position: options.position }),
+          ...(options.rotation === undefined ? {} : { rotation: options.rotation }),
+        }),
+      );
+      world.add(
+        entity,
+        camera({
+          ...(options.verticalFov === undefined ? {} : { verticalFov: options.verticalFov }),
+          ...(options.near === undefined ? {} : { near: options.near }),
+          ...(options.far === undefined ? {} : { far: options.far }),
+        }),
+      );
       const handle = createSceneHandle(state, "camera", entity, initialTransform);
       transforms.set(handle, initialTransform);
       return handle;
     },
   });
   const set: SetApi = Object.freeze({
-    transform(handle: SceneHandle, options: {
-      readonly position?: Vec3;
-      readonly rotation?: Quat;
-      readonly scale?: Vec3;
-    }) {
+    transform(
+      handle: SceneHandle,
+      options: {
+        readonly position?: Vec3;
+        readonly rotation?: Quat;
+        readonly scale?: Vec3;
+      },
+    ) {
       const value = transforms.get(handle);
       if (value === undefined) throw new Error("Scene handle does not belong to this engine.");
       if (options.position !== undefined) copyVec3(value.position, options.position);
@@ -325,8 +347,13 @@ function createSceneHandle<Kind extends "mesh" | "camera">(
   const position = createVector3Control(value.position, publish);
   const rotation = createQuaternionControl(value.rotation, publish);
   const scale = createVector3Control(value.scale, publish);
-  return Object.freeze({ kind, id: entity, position, rotation, scale }) as unknown as
-    Kind extends "mesh" ? MeshHandle : CameraHandle;
+  return Object.freeze({
+    kind,
+    id: entity,
+    position,
+    rotation,
+    scale,
+  }) as unknown as Kind extends "mesh" ? MeshHandle : CameraHandle;
 }
 
 function createVector3Control(
@@ -334,9 +361,15 @@ function createVector3Control(
   publish: () => void,
 ): Vector3Control {
   return Object.freeze({
-    get x() { return value[0]; },
-    get y() { return value[1]; },
-    get z() { return value[2]; },
+    get x() {
+      return value[0];
+    },
+    get y() {
+      return value[1];
+    },
+    get z() {
+      return value[2];
+    },
     set(x: number, y: number, z: number) {
       value[0] = x;
       value[1] = y;
@@ -351,10 +384,18 @@ function createQuaternionControl(
   publish: () => void,
 ): QuaternionControl {
   return Object.freeze({
-    get x() { return value[0]; },
-    get y() { return value[1]; },
-    get z() { return value[2]; },
-    get w() { return value[3]; },
+    get x() {
+      return value[0];
+    },
+    get y() {
+      return value[1];
+    },
+    get z() {
+      return value[2];
+    },
+    get w() {
+      return value[3];
+    },
     set(x: number, y: number, z: number, w: number) {
       value[0] = x;
       value[1] = y;
@@ -365,11 +406,7 @@ function createQuaternionControl(
   });
 }
 
-function publishTransform(
-  state: EngineState,
-  entity: number,
-  value: MutableTransformValue,
-): void {
+function publishTransform(state: EngineState, entity: number, value: MutableTransformValue): void {
   if (state.status === "disposed" || state.status === "failed") {
     throw new Error(`Cannot update a ${state.status} engine.`);
   }
@@ -457,7 +494,8 @@ function componentCommand(entity: Entity, component: Component): RuntimeCommand 
 
 function initialize(state: EngineState): Promise<void> {
   if (state.initPromise !== undefined) return state.initPromise;
-  if (state.status !== "new") return Promise.reject(new Error(`Cannot initialize from '${state.status}'.`));
+  if (state.status !== "new")
+    return Promise.reject(new Error(`Cannot initialize from '${state.status}'.`));
   if (!("transferControlToOffscreen" in state.config.canvas)) {
     return Promise.reject(new Error("OffscreenCanvas transfer is unavailable in this browser."));
   }
@@ -470,7 +508,9 @@ function initialize(state: EngineState): Promise<void> {
   const rect = state.config.canvas.getBoundingClientRect();
   const canvas = state.config.canvas.transferControlToOffscreen();
   const renderer = {
-    ...(state.config.powerPreference === undefined ? {} : { powerPreference: state.config.powerPreference }),
+    ...(state.config.powerPreference === undefined
+      ? {}
+      : { powerPreference: state.config.powerPreference }),
     ...(state.config.alphaMode === undefined ? {} : { alphaMode: state.config.alphaMode }),
     ...(state.config.clearColor === undefined ? {} : { clearColor: state.config.clearColor }),
   };
@@ -487,9 +527,7 @@ function initialize(state: EngineState): Promise<void> {
         devicePixelRatio: window.devicePixelRatio,
       },
       renderer,
-      ...(state.sharedMemory === undefined
-        ? {}
-        : { sharedMemory: state.sharedMemory.buffer }),
+      ...(state.sharedMemory === undefined ? {} : { sharedMemory: state.sharedMemory.buffer }),
     },
   };
   state.worker.postMessage(message, [canvas]);

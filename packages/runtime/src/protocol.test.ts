@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+
 import type { WorkerToMainMessage } from "./protocol.js";
 import { createWorkerRuntime } from "./worker-runtime.js";
 

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+
 import { BUILTIN_MESHES } from "./mesh-data.js";
 
 describe("built-in CPU mesh data", () => {

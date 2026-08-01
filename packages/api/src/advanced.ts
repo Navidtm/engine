@@ -1,4 +1,4 @@
-export { bounds, boxGeometry, camera, material, mesh, transform, triangleGeometry } from "@lume/scene";
+export type { WorldApi } from "./engine.js";
 export type {
   BoundsComponent,
   CameraComponent,
@@ -9,4 +9,12 @@ export type {
   MeshComponent,
   TransformComponent,
 } from "@lume/scene";
-export type { WorldApi } from "./engine.js";
+export {
+  bounds,
+  boxGeometry,
+  camera,
+  material,
+  mesh,
+  transform,
+  triangleGeometry,
+} from "@lume/scene";

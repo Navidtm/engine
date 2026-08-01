@@ -1,8 +1,8 @@
 export { bounds, camera, material, mesh, transform } from "./components.js";
 export { boxGeometry, triangleGeometry } from "./geometry.js";
 export type {
-  CameraComponent,
   BoundsComponent,
+  CameraComponent,
   Color,
   Component,
   Entity,

@@ -60,14 +60,14 @@ built.
 
 ## Package map
 
-| Package | Responsibility |
-| --- | --- |
-| `packages/core` | Rust ECS, math, components, and reusable memory |
-| `packages/renderer` | WebGPU device, surface, mesh ownership, pipeline cache, and passes |
-| `packages/scene` | Public component constructors and geometry descriptors |
-| `packages/runtime/wasm` | Raw-WASM ABI over World and extracted RenderWorld |
-| `packages/runtime` | Main-thread/worker protocol and worker orchestration |
-| `packages/api` | Functional browser-facing API |
+| Package                 | Responsibility                                                     |
+| ----------------------- | ------------------------------------------------------------------ |
+| `packages/core`         | Rust ECS, math, components, and reusable memory                    |
+| `packages/renderer`     | WebGPU device, surface, mesh ownership, pipeline cache, and passes |
+| `packages/scene`        | Public component constructors and geometry descriptors             |
+| `packages/runtime/wasm` | Raw-WASM ABI over World and extracted RenderWorld                  |
+| `packages/runtime`      | Main-thread/worker protocol and worker orchestration               |
+| `packages/api`          | Functional browser-facing API                                      |
 
 The build uses Rust's `wasm32-unknown-unknown` target directly. `wasm-pack` is
 not required for this repository.

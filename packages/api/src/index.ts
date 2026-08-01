@@ -1,4 +1,3 @@
-export { createEngine } from "./engine.js";
 export type {
   BasicMaterialHandle,
   BasicMaterialOptions,
@@ -12,11 +11,12 @@ export type {
   MeshHandle,
   MeshOptions,
   PerspectiveCameraOptions,
+  QuaternionControl,
   SceneHandle,
   SetApi,
-  QuaternionControl,
   Vector3Control,
   WorldApi,
 } from "./engine.js";
+export { createEngine } from "./engine.js";
 export type { EngineStats } from "@lume/runtime";
 export type { Color, Quat, Vec2, Vec3, Vec4 } from "@lume/scene";
