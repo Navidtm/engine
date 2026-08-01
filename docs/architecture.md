@@ -18,6 +18,10 @@ Beginning with milestone 2, the renderer-facing data is an explicit
 [milestone-2.md](milestone-2.md) for its fixed-capacity layout and ownership
 contract.
 
+Milestone 3 adds a visibility boundary and reusable FrameGraph. See
+[milestone-3.md](milestone-3.md) for culling, material grouping, profiling, and
+public authoring API decisions.
+
 The WebAssembly bridge uses a small, versioned C ABI instead of generated JS
 bindings. That makes ownership explicit, removes glue-code allocation from hot
 paths, and lets any bundler load the module with `WebAssembly.instantiate`.

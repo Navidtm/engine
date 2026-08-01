@@ -20,7 +20,7 @@ lists, and material arenas remain follow-up optimizations.
 Benchmark focus: transform updates per millisecond, draw preparation cost,
 buffer upload bytes, and CPU cost per visible mesh.
 
-## Milestone 3 — high-throughput transport
+## Milestone 4 — high-throughput transport
 
 Move structural commands and frame snapshots to versioned
 `SharedArrayBuffer` rings when cross-origin isolation is available. Keep the
@@ -29,7 +29,10 @@ current transferable-message path as a compatibility mode.
 Benchmark focus: main-to-worker latency, structured-clone bytes, ring pressure,
 and missed-frame rate under input load.
 
-## Milestone 4 — production rendering
+Milestone 3 first establishes CPU visibility, material grouping, FrameGraph
+orchestration, and optional GPU timestamps.
+
+## Milestone 5 — production rendering
 
 Introduce bind-group layouts, shader/material variants, pipeline prewarming,
 texture streaming, GPU culling, instancing, clustered lighting, and render-graph
