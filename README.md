@@ -5,7 +5,7 @@ product experiences. Phase 1 deliberately keeps the surface area small: a
 data-oriented Rust core compiled to WebAssembly, a worker-owned WebGPU renderer,
 and a functional TypeScript API.
 
-The repository currently contains the first foundation milestone:
+The repository currently contains the first three foundation milestones:
 
 - a generational-entity, sparse-set ECS in Rust;
 - allocation-free math primitives and reusable frame memory;
@@ -13,7 +13,9 @@ The repository currently contains the first foundation milestone:
 - worker-owned WebGPU initialization and lifecycle management;
 - a cached indexed-mesh pipeline, owned GPU mesh buffers, camera uniforms, and
   fixed-capacity instance storage;
-- a functional TypeScript API and a Vite triangle example.
+- allocation-free CPU frustum culling and grouped visible render buffers;
+- a reusable FrameGraph and optional real GPU timestamp profiling;
+- a high-level functional TypeScript API plus Vite triangle and cube examples.
 
 See [the architecture notes](docs/architecture.md) and
 [the implementation roadmap](docs/roadmap.md) before extending the runtime.
@@ -22,7 +24,7 @@ See [the architecture notes](docs/architecture.md) and
 
 - Rust 1.85 or newer
 - Node.js 22 or newer
-- pnpm 10 or newer
+- pnpm 11 or newer
 - a browser with WebGPU and WebGPU-in-worker support
 
 ## Setup
@@ -66,6 +68,9 @@ built.
 | `packages/runtime/wasm` | Raw-WASM ABI over World and extracted RenderWorld |
 | `packages/runtime` | Main-thread/worker protocol and worker orchestration |
 | `packages/api` | Functional browser-facing API |
+
+The build uses Rust's `wasm32-unknown-unknown` target directly. `wasm-pack` is
+not required for this repository.
 
 ## Browser support
 

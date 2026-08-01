@@ -64,10 +64,12 @@ changing the public API or ECS storage.
 
 ## Public API
 
-`createEngine(config)` returns a plain record of functions and state adapters.
-No mutable class hierarchy or singleton is exposed. Component helpers return
-serializable value descriptions; `world.add` converts them into versioned
-worker commands.
+`createEngine(canvas, options?)` returns a plain record of functions and state
+adapters. `engine.create`, `engine.set`, and immutable handles cover normal
+authoring without exposing ECS vocabulary. No mutable class hierarchy or
+singleton is exposed. The `world` surface and `@lume/api/advanced` component
+helpers remain an explicit advanced compatibility layer; `world.add` converts
+their serializable descriptions into versioned worker commands.
 
 Entity IDs are allocated synchronously on the main thread so authoring remains
 ergonomic. The worker validates every ID before inserting it into the canonical

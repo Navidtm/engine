@@ -42,9 +42,9 @@ real dependency seam without a general-purpose render-graph framework.
 
 Timestamp queries are requested only when the adapter reports
 `timestamp-query`. The profiler owns its query set, resolve buffer, readback
-ring, and conversion using `timestampPeriod` when exposed. Results are delayed
-and asynchronous; the latest completed value is returned. Unsupported or not
-yet-resolved GPU time is `null` and is never inferred from CPU timings.
+ring, and nanosecond-to-millisecond conversion. Results are delayed and
+asynchronous; the latest completed value is returned. Unsupported or not-yet-
+resolved GPU time is `null` and is never inferred from CPU timings.
 
 ## Public API review
 
@@ -71,3 +71,9 @@ there are no scene objects with hidden mutable state.
 - Browser render results contain raw samples and environment metadata.
 - Three.js comparison data is raw JSON only; this milestone publishes no
   comparative conclusion.
+
+The native culling report is committed under `benchmarks/results`. The browser
+comparison harness is production-build validated, but a raw comparison run
+requires a connected WebGPU-capable Browser or Chrome session. A `not-run`
+status artifact is committed when that execution environment is unavailable;
+it must never be interpreted as measurement data.

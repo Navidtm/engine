@@ -20,6 +20,16 @@ lists, and material arenas remain follow-up optimizations.
 Benchmark focus: transform updates per millisecond, draw preparation cost,
 buffer upload bytes, and CPU cost per visible mesh.
 
+## Milestone 3 — visibility and frame orchestration (implemented)
+
+Adds world-space bounding spheres, allocation-free CPU frustum culling, compact
+visible buffers grouped by pipeline/material/mesh, a reusable FrameGraph,
+color-only BasicMaterial, optional WebGPU timestamp queries, and a high-level
+authoring facade over the advanced ECS API.
+
+Benchmark focus: 100k-object culling at 100%, 50%, 10%, and 1% visibility;
+rendering at 1k, 10k, 50k, and 100k objects; and controlled raw Three.js data.
+
 ## Milestone 4 — high-throughput transport
 
 Move structural commands and frame snapshots to versioned
@@ -28,9 +38,6 @@ current transferable-message path as a compatibility mode.
 
 Benchmark focus: main-to-worker latency, structured-clone bytes, ring pressure,
 and missed-frame rate under input load.
-
-Milestone 3 first establishes CPU visibility, material grouping, FrameGraph
-orchestration, and optional GPU timestamps.
 
 ## Milestone 5 — production rendering
 
