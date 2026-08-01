@@ -6,7 +6,20 @@ import {
   type RuntimeCommand,
   type WorkerToMainMessage,
 } from "@lume/runtime";
-import type { Component, Entity } from "@lume/scene";
+import {
+  bounds,
+  boxGeometry,
+  camera,
+  material,
+  mesh,
+  transform,
+  triangleGeometry,
+  type Color,
+  type Component,
+  type Entity,
+  type Quat,
+  type Vec3,
+} from "@lume/scene";
 
 const MAX_ENTITY_INDEX = (1 << 20) - 1;
 
@@ -24,6 +37,61 @@ export interface EngineConfig {
   readonly onError?: (error: Error) => void;
 }
 
+export type EngineOptions = Omit<EngineConfig, "canvas">;
+
+export interface BasicMaterialHandle {
+  readonly kind: "basic-material";
+  readonly id: number;
+}
+
+export interface MeshHandle {
+  readonly kind: "mesh";
+  readonly id: number;
+}
+
+export interface CameraHandle {
+  readonly kind: "camera";
+  readonly id: number;
+}
+
+export type EngineHandle = BasicMaterialHandle | MeshHandle | CameraHandle;
+export type SceneHandle = MeshHandle | CameraHandle;
+
+export interface BasicMaterialOptions {
+  readonly color?: Color;
+}
+
+export interface MeshOptions {
+  readonly geometry: "cube" | "triangle";
+  readonly material?: BasicMaterialHandle | "basic";
+  readonly position?: Vec3;
+  readonly rotation?: Quat;
+  readonly scale?: Vec3;
+  readonly bounds?: { readonly center?: Vec3; readonly radius: number };
+}
+
+export interface PerspectiveCameraOptions {
+  readonly position?: Vec3;
+  readonly rotation?: Quat;
+  readonly verticalFov?: number;
+  readonly near?: number;
+  readonly far?: number;
+}
+
+export interface CreateApi {
+  basicMaterial(options?: BasicMaterialOptions): BasicMaterialHandle;
+  mesh(options: MeshOptions): MeshHandle;
+  perspectiveCamera(options?: PerspectiveCameraOptions): CameraHandle;
+}
+
+export interface SetApi {
+  transform(handle: SceneHandle, options: {
+    readonly position?: Vec3;
+    readonly rotation?: Quat;
+    readonly scale?: Vec3;
+  }): void;
+}
+
 export interface WorldApi {
   createEntity(): Entity;
   destroyEntity(entity: Entity): void;
@@ -31,6 +99,8 @@ export interface WorldApi {
 }
 
 export interface Engine {
+  readonly create: CreateApi;
+  readonly set: SetApi;
   readonly world: WorldApi;
   readonly status: EngineStatus;
   init(): Promise<void>;
@@ -38,6 +108,7 @@ export interface Engine {
   stop(): void;
   resize(): void;
   getStats(): Promise<EngineStats>;
+  destroy(handle: EngineHandle): void;
   dispose(): void;
 }
 
@@ -58,7 +129,15 @@ interface EngineState {
   nextStatsRequest: number;
 }
 
-export function createEngine(config: EngineConfig): Engine {
+export function createEngine(canvas: HTMLCanvasElement, options?: EngineOptions): Engine;
+export function createEngine(config: EngineConfig): Engine;
+export function createEngine(
+  canvasOrConfig: HTMLCanvasElement | EngineConfig,
+  options: EngineOptions = {},
+): Engine {
+  const config: EngineConfig = "canvas" in canvasOrConfig
+    ? canvasOrConfig
+    : { ...options, canvas: canvasOrConfig };
   const state: EngineState = {
     config,
     worker: (config.workerFactory ?? createDefaultWorker)(),
@@ -73,6 +152,7 @@ export function createEngine(config: EngineConfig): Engine {
     nextStatsRequest: 1,
   };
   const world = createWorldApi(state);
+  const highLevel = createHighLevelApi(world);
 
   state.worker.addEventListener("message", (event: MessageEvent<WorkerToMainMessage>) => {
     handleWorkerMessage(state, event.data);
@@ -82,6 +162,8 @@ export function createEngine(config: EngineConfig): Engine {
   });
 
   const engine: Engine = {
+    create: highLevel.create,
+    set: highLevel.set,
     world,
     get status() {
       return state.status;
@@ -99,9 +181,75 @@ export function createEngine(config: EngineConfig): Engine {
     },
     resize: () => resize(state),
     getStats: () => getStats(state),
+    destroy: highLevel.destroy,
     dispose: () => dispose(state),
   };
   return Object.freeze(engine);
+}
+
+function createHighLevelApi(world: WorldApi): {
+  readonly create: CreateApi;
+  readonly set: SetApi;
+  readonly destroy: (handle: EngineHandle) => void;
+} {
+  let defaultMaterial: BasicMaterialHandle | undefined;
+  const createBasicMaterial = (options: BasicMaterialOptions = {}): BasicMaterialHandle => {
+    const entity = world.createEntity();
+    world.add(entity, material(options));
+    return Object.freeze({ kind: "basic-material", id: entity });
+  };
+  const defaultBasicMaterial = (): BasicMaterialHandle => {
+    defaultMaterial ??= createBasicMaterial();
+    return defaultMaterial;
+  };
+  const create: CreateApi = Object.freeze({
+    basicMaterial: createBasicMaterial,
+    mesh(options: MeshOptions) {
+      const materialHandle = options.material === undefined || options.material === "basic"
+        ? defaultBasicMaterial()
+        : options.material;
+      const entity = world.createEntity();
+      world.add(entity, transform({
+        ...(options.position === undefined ? {} : { position: options.position }),
+        ...(options.rotation === undefined ? {} : { rotation: options.rotation }),
+        ...(options.scale === undefined ? {} : { scale: options.scale }),
+      }));
+      const geometry = options.geometry === "cube" ? boxGeometry() : triangleGeometry();
+      world.add(entity, mesh(geometry, materialHandle.id as Entity));
+      if (options.bounds !== undefined) world.add(entity, bounds(options.bounds));
+      return Object.freeze({ kind: "mesh", id: entity });
+    },
+    perspectiveCamera(options: PerspectiveCameraOptions = {}) {
+      const entity = world.createEntity();
+      world.add(entity, transform({
+        ...(options.position === undefined ? {} : { position: options.position }),
+        ...(options.rotation === undefined ? {} : { rotation: options.rotation }),
+      }));
+      world.add(entity, camera({
+        ...(options.verticalFov === undefined ? {} : { verticalFov: options.verticalFov }),
+        ...(options.near === undefined ? {} : { near: options.near }),
+        ...(options.far === undefined ? {} : { far: options.far }),
+      }));
+      return Object.freeze({ kind: "camera", id: entity });
+    },
+  });
+  const set: SetApi = Object.freeze({
+    transform(handle: SceneHandle, options: {
+      readonly position?: Vec3;
+      readonly rotation?: Quat;
+      readonly scale?: Vec3;
+    }) {
+      world.add(handle.id as Entity, transform(options));
+    },
+  });
+  return Object.freeze({
+    create,
+    set,
+    destroy(handle: EngineHandle) {
+      world.destroyEntity(handle.id as Entity);
+      if (handle === defaultMaterial) defaultMaterial = undefined;
+    },
+  });
 }
 
 function createWorldApi(state: EngineState): WorldApi {

@@ -1,4 +1,4 @@
-import { boxGeometry, camera, createEngine, material, mesh, transform } from "@lume/api";
+import { createEngine } from "@lume/api";
 
 declare global {
   interface Window { __LUME_BENCHMARK_RESULT__?: unknown; }
@@ -22,19 +22,22 @@ const engine = createEngine({
   autoResize: false,
   powerPreference: "high-performance",
 });
-const materialEntity = engine.world.createEntity();
-engine.world.add(materialEntity, material({ color: [0.31, 0.56, 1, 1] }));
+const blue = engine.create.basicMaterial({ color: [0.31, 0.56, 1, 1] });
 const side = Math.ceil(Math.sqrt(count));
 for (let index = 0; index < count; index += 1) {
-  const entity = engine.world.createEntity();
   const x = (index % side) - side * 0.5;
   const y = Math.floor(index / side) - side * 0.5;
-  engine.world.add(entity, transform({ position: [x * 1.2, y * 1.2, 0] }));
-  engine.world.add(entity, mesh(boxGeometry(), materialEntity));
+  engine.create.mesh({
+    geometry: "cube",
+    material: blue,
+    position: [x * 1.2, y * 1.2, 0],
+  });
 }
-const cameraEntity = engine.world.createEntity();
-engine.world.add(cameraEntity, transform({ position: [0, 0, Math.max(3, side * 1.15)] }));
-engine.world.add(cameraEntity, camera({ near: 0.1, far: Math.max(100, side * 3) }));
+engine.create.perspectiveCamera({
+  position: [0, 0, Math.max(3, side * 1.15)],
+  near: 0.1,
+  far: Math.max(100, side * 3),
+});
 
 const initializationStart = performance.now();
 await engine.init();
@@ -53,10 +56,10 @@ const preparationTimesMs: number[] = [];
 for (let frame = 0; frame < sampleFrames; frame += 1) {
   await nextAnimationFrame();
   const stats = await engine.getStats();
-  frameTimesMs.push(stats.frameTimeMs);
-  cpuTimesMs.push(stats.cpuTimeMs);
-  uploadTimesMs.push(stats.bufferUploadCpuTimeMs);
-  preparationTimesMs.push(stats.framePreparationCpuTimeMs);
+  frameTimesMs.push(stats.frameTime);
+  cpuTimesMs.push(stats.cpuTime);
+  uploadTimesMs.push(stats.timings.bufferUploadCpuTime);
+  preparationTimesMs.push(stats.timings.framePreparationCpuTime);
 }
 const stats = await engine.getStats();
 const report = {
@@ -86,11 +89,13 @@ const report = {
     bufferUploadCpuTimesMs: uploadTimesMs,
     framePreparationCpuTimesMs: preparationTimesMs,
     jsHeapBytes: performance.memory?.usedJSHeapSize ?? null,
-    gpuBufferBytes: stats.gpuBufferBytes,
-    wasmHeapBytes: stats.wasmHeapBytes,
-    workerJsHeapBytes: stats.jsHeapBytes,
+    gpuFrameTimeMs: stats.gpuTime,
+    gpuBufferBytes: stats.memory.gpuBuffers,
+    wasmHeapBytes: stats.memory.wasmHeap,
+    workerJsHeapBytes: stats.memory.jsHeap,
     bundleTransferBytes: resourceTransferBytes(),
-    drawCalls: stats.drawCalls,
+    drawCalls: stats.render.drawCalls,
+    visibleObjects: stats.render.visibleObjects,
     allocationsPerFrame: stats.allocationsPerFrame,
   },
 };

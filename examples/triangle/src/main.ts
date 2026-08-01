@@ -1,11 +1,4 @@
-import {
-  camera,
-  createEngine,
-  material,
-  mesh,
-  transform,
-  triangleGeometry,
-} from "@lume/api";
+import { createEngine } from "@lume/api";
 import "./style.css";
 
 const canvas = document.querySelector<HTMLCanvasElement>("#viewport");
@@ -23,17 +16,9 @@ const engine = createEngine({
   },
 });
 
-const world = engine.world;
-const materialEntity = world.createEntity();
-world.add(materialEntity, material({ color: [0.5, 0.3, 1, 1] }));
-
-const triangle = world.createEntity();
-world.add(triangle, transform({ position: [0, 0, -2] }));
-world.add(triangle, mesh(triangleGeometry(), materialEntity));
-
-const mainCamera = world.createEntity();
-world.add(mainCamera, transform({ position: [0, 0, 3] }));
-world.add(mainCamera, camera());
+const violet = engine.create.basicMaterial({ color: [0.5, 0.3, 1, 1] });
+engine.create.mesh({ geometry: "triangle", material: violet, position: [0, 0, -2] });
+engine.create.perspectiveCamera({ position: [0, 0, 3] });
 
 try {
   await engine.init();

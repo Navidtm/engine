@@ -3,19 +3,24 @@ import type { RendererOptions, SurfaceSize } from "@lume/renderer";
 export const RUNTIME_PROTOCOL_VERSION = 3;
 
 export interface EngineStats {
-  readonly entities: number;
-  readonly renderInstances: number;
-  readonly visibleObjects: number;
-  readonly frameTimeMs: number;
-  readonly cpuTimeMs: number;
-  readonly gpuTimeMs: number | null;
+  readonly frameTime: number;
+  readonly cpuTime: number;
+  readonly gpuTime: number | null;
   readonly allocationsPerFrame: number;
-  readonly wasmHeapBytes: number;
-  readonly jsHeapBytes: number | null;
-  readonly gpuBufferBytes: number;
-  readonly drawCalls: number;
-  readonly bufferUploadCpuTimeMs: number;
-  readonly framePreparationCpuTimeMs: number;
+  readonly render: {
+    readonly drawCalls: number;
+    readonly visibleObjects: number;
+    readonly extractedObjects: number;
+  };
+  readonly memory: {
+    readonly gpuBuffers: number;
+    readonly wasmHeap: number;
+    readonly jsHeap: number | null;
+  };
+  readonly timings: {
+    readonly bufferUploadCpuTime: number;
+    readonly framePreparationCpuTime: number;
+  };
 }
 
 export type RuntimeCommand =

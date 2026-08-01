@@ -1,11 +1,4 @@
-import {
-  boxGeometry,
-  camera,
-  createEngine,
-  material,
-  mesh,
-  transform,
-} from "@lume/api";
+import { createEngine } from "@lume/api";
 import "./style.css";
 
 const canvas = document.querySelector<HTMLCanvasElement>("#viewport");
@@ -27,16 +20,13 @@ const engine = createEngine({
   },
 });
 
-const materialEntity = engine.world.createEntity();
-engine.world.add(materialEntity, material({ color: [0.32, 0.58, 1, 1] }));
-
-const cube = engine.world.createEntity();
-engine.world.add(cube, transform({ rotation: [0.18, 0.32, 0, 0.93] }));
-engine.world.add(cube, mesh(boxGeometry(), materialEntity));
-
-const mainCamera = engine.world.createEntity();
-engine.world.add(mainCamera, transform({ position: [0, 0, 3] }));
-engine.world.add(mainCamera, camera({ near: 0.1, far: 100 }));
+const blue = engine.create.basicMaterial({ color: [0.32, 0.58, 1, 1] });
+engine.create.mesh({
+  geometry: "cube",
+  material: blue,
+  rotation: [0.18, 0.32, 0, 0.93],
+});
+engine.create.perspectiveCamera({ position: [0, 0, 3], near: 0.1, far: 100 });
 
 try {
   await engine.init();
@@ -44,7 +34,7 @@ try {
   status.textContent = "Indexed cube · extracted RenderWorld · Rust/WASM";
   status.dataset.state = "ready";
   const stats = await engine.getStats();
-  statsOutput.textContent = `${stats.renderInstances} instance · ${stats.drawCalls} draw · ${Math.round(stats.gpuBufferBytes / 1024)} KiB GPU · ${Math.round(stats.wasmHeapBytes / 1024)} KiB WASM`;
+  statsOutput.textContent = `${stats.render.visibleObjects} visible · ${stats.render.drawCalls} draw · ${Math.round(stats.memory.gpuBuffers / 1024)} KiB GPU · ${Math.round(stats.memory.wasmHeap / 1024)} KiB WASM`;
 } catch (error) {
   status.textContent = error instanceof Error ? error.message : String(error);
   status.dataset.state = "error";

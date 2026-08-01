@@ -156,20 +156,25 @@ export function createWorkerRuntime(host: WorkerHost): (message: MainToWorkerMes
             type: "stats",
             requestId: message.requestId,
             value: {
-              entities: coreStats?.entities ?? 0,
-              renderInstances: coreStats?.renderInstances ?? 0,
-              visibleObjects: coreStats?.visibleObjects ?? 0,
-              frameTimeMs: state.lastFrameTimeMs,
-              cpuTimeMs: state.lastCpuTimeMs,
-              gpuTimeMs: rendererStats?.gpuTimeMs ?? null,
+              frameTime: state.lastFrameTimeMs,
+              cpuTime: state.lastCpuTimeMs,
+              gpuTime: rendererStats?.gpuTimeMs ?? null,
               allocationsPerFrame: 0,
-              wasmHeapBytes: coreStats?.wasmHeapBytes ?? 0,
-              jsHeapBytes: workerHeapBytes(),
-              gpuBufferBytes: rendererStats?.gpuBufferBytes ?? 0,
-              drawCalls: rendererStats?.drawCalls ?? 0,
-              bufferUploadCpuTimeMs: rendererStats?.bufferUploadCpuTimeMs ?? 0,
-              framePreparationCpuTimeMs:
-                rendererStats?.framePreparationCpuTimeMs ?? 0,
+              render: {
+                drawCalls: rendererStats?.drawCalls ?? 0,
+                visibleObjects: coreStats?.visibleObjects ?? 0,
+                extractedObjects: coreStats?.renderInstances ?? 0,
+              },
+              memory: {
+                gpuBuffers: rendererStats?.gpuBufferBytes ?? 0,
+                wasmHeap: coreStats?.wasmHeapBytes ?? 0,
+                jsHeap: workerHeapBytes(),
+              },
+              timings: {
+                bufferUploadCpuTime: rendererStats?.bufferUploadCpuTimeMs ?? 0,
+                framePreparationCpuTime:
+                  rendererStats?.framePreparationCpuTimeMs ?? 0,
+              },
             },
           });
           break;

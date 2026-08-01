@@ -1,4 +1,4 @@
-import { boxGeometry, camera, createEngine, material, mesh, transform, type Entity } from "@lume/api";
+import { createEngine, type MeshHandle } from "@lume/api";
 import * as THREE from "three";
 import WebGPURenderer from "three/src/renderers/webgpu/WebGPURenderer.js";
 
@@ -35,19 +35,20 @@ async function runLume(target: HTMLCanvasElement, selectedScenario: string, enti
     autoResize: false,
     powerPreference: "high-performance",
   });
-  const materialEntity = engine.world.createEntity();
-  engine.world.add(materialEntity, material({ color: [0.31, 0.56, 1, 1] }));
-  const entityHandles: Entity[] = new Array(entities);
+  const blue = engine.create.basicMaterial({ color: [0.31, 0.56, 1, 1] });
+  const entityHandles: MeshHandle[] = new Array(entities);
   const side = Math.ceil(Math.sqrt(entities));
   for (let index = 0; index < entities; index += 1) {
-    const entity = engine.world.createEntity();
-    entityHandles[index] = entity;
-    engine.world.add(entity, transform({ position: gridPosition(index, side, 0) }));
-    engine.world.add(entity, mesh(boxGeometry(), materialEntity));
+    entityHandles[index] = engine.create.mesh({
+      geometry: "cube",
+      material: blue,
+      position: gridPosition(index, side, 0),
+    });
   }
-  const cameraEntity = engine.world.createEntity();
-  engine.world.add(cameraEntity, transform({ position: [0, 0, Math.max(3, side * 1.15)] }));
-  engine.world.add(cameraEntity, camera({ far: Math.max(100, side * 3) }));
+  engine.create.perspectiveCamera({
+    position: [0, 0, Math.max(3, side * 1.15)],
+    far: Math.max(100, side * 3),
+  });
   const startup = performance.now();
   await engine.init();
   engine.start();
@@ -61,16 +62,18 @@ async function runLume(target: HTMLCanvasElement, selectedScenario: string, enti
     const phase = performance.now() * 0.001;
     for (let index = 0; index < entities; index += 1) {
       const position = gridPosition(index, side, Math.sin(phase + index * 0.001) * 0.1);
-      engine.world.add(entityHandles[index] as Entity, transform({ position }));
+      engine.set.transform(entityHandles[index] as MeshHandle, { position });
     }
   });
   const stats = await engine.getStats();
   return baseReport("lume", selectedScenario, entities, initializationMs, samples, {
-    gpuBufferBytes: stats.gpuBufferBytes,
-    drawCalls: stats.drawCalls,
-    workerCpuTimeMs: stats.cpuTimeMs,
-    wasmHeapBytes: stats.wasmHeapBytes,
-    workerJsHeapBytes: stats.jsHeapBytes,
+    gpuBufferBytes: stats.memory.gpuBuffers,
+    drawCalls: stats.render.drawCalls,
+    visibleObjects: stats.render.visibleObjects,
+    gpuFrameTimeMs: stats.gpuTime,
+    workerCpuTimeMs: stats.cpuTime,
+    wasmHeapBytes: stats.memory.wasmHeap,
+    workerJsHeapBytes: stats.memory.jsHeap,
     firstRenderedFrameMs,
   });
 }
