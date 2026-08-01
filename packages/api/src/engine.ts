@@ -150,6 +150,13 @@ function componentCommand(entity: Entity, component: Component): RuntimeCommand 
         geometry: component.geometry.id,
         material: component.material,
       };
+    case "bounds":
+      return {
+        type: "add-bounds",
+        entity,
+        center: component.center,
+        radius: component.radius,
+      };
   }
 }
 

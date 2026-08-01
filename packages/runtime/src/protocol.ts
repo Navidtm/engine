@@ -1,10 +1,11 @@
 import type { RendererOptions, SurfaceSize } from "@lume/renderer";
 
-export const RUNTIME_PROTOCOL_VERSION = 2;
+export const RUNTIME_PROTOCOL_VERSION = 3;
 
 export interface EngineStats {
   readonly entities: number;
   readonly renderInstances: number;
+  readonly visibleObjects: number;
   readonly frameTimeMs: number;
   readonly cpuTimeMs: number;
   readonly gpuTimeMs: number | null;
@@ -44,6 +45,12 @@ export type RuntimeCommand =
       readonly entity: number;
       readonly geometry: number;
       readonly material: number;
+    }
+  | {
+      readonly type: "add-bounds";
+      readonly entity: number;
+      readonly center: readonly [number, number, number];
+      readonly radius: number;
     };
 
 export interface RuntimeInit {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { camera, transform } from "./components.js";
+import { bounds, camera, transform } from "./components.js";
 
 describe("component constructors", () => {
   it("creates immutable transform values with stable defaults", () => {
@@ -10,5 +10,9 @@ describe("component constructors", () => {
 
   it("rejects invalid camera clipping planes", () => {
     expect(() => camera({ near: 10, far: 1 })).toThrow(RangeError);
+  });
+
+  it("rejects negative bounding spheres", () => {
+    expect(() => bounds({ radius: -1 })).toThrow(RangeError);
   });
 });

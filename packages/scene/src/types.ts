@@ -31,11 +31,18 @@ export interface MeshComponent {
   readonly material: Entity;
 }
 
+export interface BoundsComponent {
+  readonly kind: "bounds";
+  readonly center: Vec3;
+  readonly radius: number;
+}
+
 export type Component =
   | TransformComponent
   | MaterialComponent
   | CameraComponent
-  | MeshComponent;
+  | MeshComponent
+  | BoundsComponent;
 
 export interface Geometry {
   readonly id: number;

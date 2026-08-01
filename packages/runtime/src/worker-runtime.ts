@@ -158,6 +158,7 @@ export function createWorkerRuntime(host: WorkerHost): (message: MainToWorkerMes
             value: {
               entities: coreStats?.entities ?? 0,
               renderInstances: coreStats?.renderInstances ?? 0,
+              visibleObjects: coreStats?.visibleObjects ?? 0,
               frameTimeMs: state.lastFrameTimeMs,
               cpuTimeMs: state.lastCpuTimeMs,
               gpuTimeMs: null,

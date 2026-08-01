@@ -16,6 +16,7 @@ const INSTANCE_FLOATS = 20;
 const INSTANCE_BYTES = INSTANCE_FLOATS * Float32Array.BYTES_PER_ELEMENT;
 const CAMERA_FLOATS = 32;
 const CAMERA_BYTES = CAMERA_FLOATS * Float32Array.BYTES_PER_ELEMENT;
+const BASIC_PIPELINE_ID = 1;
 
 const DEFAULT_CAMERA = new Float32Array(CAMERA_FLOATS);
 DEFAULT_CAMERA[0] = 1;
@@ -38,6 +39,8 @@ export interface RenderFrame {
   instanceCount: number;
   cameraCount: number;
   geometries: Uint32Array<ArrayBuffer>;
+  pipelines: Uint32Array<ArrayBuffer>;
+  materials: Uint32Array<ArrayBuffer>;
   instanceData: Float32Array<ArrayBuffer>;
   cameraData: Float32Array<ArrayBuffer>;
 }
@@ -215,10 +218,19 @@ function render(state: RendererState, frame: RenderFrame): void {
   let drawCalls = 0;
   while (instance < instanceCount) {
     const geometry = frame.geometries[instance] ?? 0;
+    const pipeline = frame.pipelines[instance] ?? 0;
+    const material = frame.materials[instance] ?? 0;
     const mesh = state.meshes.get(geometry);
     let runEnd = instance + 1;
-    while (runEnd < instanceCount && frame.geometries[runEnd] === geometry) runEnd += 1;
-    if (mesh !== undefined) {
+    while (
+      runEnd < instanceCount &&
+      frame.pipelines[runEnd] === pipeline &&
+      frame.materials[runEnd] === material &&
+      frame.geometries[runEnd] === geometry
+    ) {
+      runEnd += 1;
+    }
+    if (pipeline === BASIC_PIPELINE_ID && mesh !== undefined) {
       pass.setVertexBuffer(0, mesh.vertexBuffer);
       pass.setIndexBuffer(mesh.indexBuffer, "uint32");
       pass.drawIndexed(mesh.indexCount, runEnd - instance, 0, 0, instance);

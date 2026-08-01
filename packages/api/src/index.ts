@@ -1,9 +1,10 @@
 export { createEngine } from "./engine.js";
 export type { Engine, EngineConfig, EngineStatus, WorldApi } from "./engine.js";
 export type { EngineStats } from "@lume/runtime";
-export { boxGeometry, camera, material, mesh, transform, triangleGeometry } from "@lume/scene";
+export { bounds, boxGeometry, camera, material, mesh, transform, triangleGeometry } from "@lume/scene";
 export type {
   Color,
+  BoundsComponent,
   Component,
   Entity,
   Geometry,

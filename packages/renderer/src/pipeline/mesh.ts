@@ -17,10 +17,7 @@ export function getMeshPipeline(
         buffers: [
           {
             arrayStride: 24,
-            attributes: [
-              { shaderLocation: 0, offset: 0, format: "float32x3" },
-              { shaderLocation: 1, offset: 12, format: "float32x3" },
-            ],
+            attributes: [{ shaderLocation: 0, offset: 0, format: "float32x3" }],
           },
         ],
       },

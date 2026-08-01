@@ -3,15 +3,16 @@
 use core::ffi::c_void;
 use lume_core::math::{Color, Quat, Vec3};
 use lume_core::{
-    Camera, Entity, GpuCamera, GpuInstance, Material, MaterialHandle, MeshRenderer, RenderWorld,
-    Transform, World, WorldCapacity,
+    Bounds, Camera, Entity, GpuCamera, GpuInstance, Material, MaterialHandle, MeshRenderer,
+    RenderWorld, Transform, VisibleRenderBuffer, World, WorldCapacity,
 };
 
-pub const ABI_VERSION: u32 = 2;
+pub const ABI_VERSION: u32 = 3;
 
 struct EngineCore {
     world: World,
     render_world: RenderWorld,
+    visible: VisibleRenderBuffer,
 }
 
 #[unsafe(no_mangle)]
@@ -33,6 +34,7 @@ pub extern "C" fn lume_engine_create(entity_capacity: u32) -> *mut c_void {
     Box::into_raw(Box::new(EngineCore {
         world: World::with_capacity(capacity),
         render_world: RenderWorld::with_capacity(entities, 8),
+        visible: VisibleRenderBuffer::with_capacity(entities),
     }))
     .cast()
 }
@@ -129,6 +131,26 @@ pub extern "C" fn lume_engine_add_mesh_renderer(
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn lume_engine_add_bounds(
+    engine: *mut c_void,
+    entity_raw: u32,
+    center_x: f32,
+    center_y: f32,
+    center_z: f32,
+    radius: f32,
+) -> u32 {
+    with_engine(engine, |core| {
+        core.world.add_bounds(
+            Entity::from_raw(entity_raw),
+            Bounds {
+                center: Vec3::new([center_x, center_y, center_z]),
+                radius,
+            },
+        )
+    }) as u32
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn lume_engine_add_camera(
     engine: *mut c_void,
     entity_raw: u32,
@@ -156,6 +178,7 @@ pub extern "C" fn lume_engine_update(engine: *mut c_void) -> u32 {
     with_engine(engine, |core| {
         core.world.update();
         core.render_world.extract(&core.world).is_ok()
+            && core.visible.cull(&core.render_world).is_ok()
     }) as u32
 }
 
@@ -219,6 +242,40 @@ pub extern "C" fn lume_render_cameras_ptr(engine: *mut c_void) -> *const GpuCame
         .unwrap_or(core::ptr::null())
 }
 
+#[unsafe(no_mangle)]
+pub extern "C" fn lume_visible_count(engine: *mut c_void) -> u32 {
+    with_engine_value(engine, |core| core.visible.len() as u32).unwrap_or(0)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn lume_visible_capacity(engine: *mut c_void) -> u32 {
+    with_engine_value(engine, |core| core.visible.capacity() as u32).unwrap_or(0)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn lume_visible_geometries_ptr(engine: *mut c_void) -> *const u32 {
+    with_engine_value(engine, |core| core.visible.geometries_capacity_ptr())
+        .unwrap_or(core::ptr::null())
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn lume_visible_pipelines_ptr(engine: *mut c_void) -> *const u32 {
+    with_engine_value(engine, |core| core.visible.pipelines_capacity_ptr())
+        .unwrap_or(core::ptr::null())
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn lume_visible_materials_ptr(engine: *mut c_void) -> *const u32 {
+    with_engine_value(engine, |core| core.visible.materials_capacity_ptr())
+        .unwrap_or(core::ptr::null())
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn lume_visible_instances_ptr(engine: *mut c_void) -> *const GpuInstance {
+    with_engine_value(engine, |core| core.visible.instances_capacity_ptr())
+        .unwrap_or(core::ptr::null())
+}
+
 fn with_engine(engine: *mut c_void, operation: impl FnOnce(&mut EngineCore) -> bool) -> bool {
     // SAFETY: JS only receives pointers created by this module. Null is rejected.
     let Some(core) = (unsafe { engine.cast::<EngineCore>().as_mut() }) else {
@@ -245,11 +302,28 @@ mod tests {
         let engine = lume_engine_create(16);
         assert!(!engine.is_null());
         assert_eq!(lume_engine_spawn(engine, 0), 1);
+        assert_eq!(lume_engine_spawn(engine, 1), 1);
+        assert_eq!(lume_engine_spawn(engine, 2), 1);
         assert_eq!(
             lume_engine_add_transform(engine, 0, 0.0, 0.0, -5.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0,),
             1
         );
+        assert_eq!(lume_engine_add_material(engine, 1, 1.0, 0.0, 0.0, 1.0), 1);
+        assert_eq!(lume_engine_add_mesh_renderer(engine, 0, 1, 1), 1);
+        assert_eq!(lume_engine_add_bounds(engine, 0, 0.0, 0.0, 0.0, 1.0), 1);
+        assert_eq!(
+            lume_engine_add_transform(engine, 2, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0,),
+            1
+        );
+        assert_eq!(
+            lume_engine_add_camera(engine, 2, 60.0_f32.to_radians(), 0.1, 100.0, 1.0),
+            1
+        );
         assert_eq!(lume_engine_update(engine), 1);
+        assert_eq!(lume_render_instance_count(engine), 1);
+        assert_eq!(lume_visible_count(engine), 1);
+        assert!(!lume_visible_geometries_ptr(engine).is_null());
+        assert!(!lume_visible_instances_ptr(engine).is_null());
         // SAFETY: pointer was created above and has not yet been destroyed.
         unsafe { lume_engine_destroy(engine) };
     }

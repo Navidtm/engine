@@ -1,5 +1,6 @@
 import type {
   CameraComponent,
+  BoundsComponent,
   Color,
   Entity,
   MaterialComponent,
@@ -58,4 +59,20 @@ export function camera(options: CameraOptions = {}): CameraComponent {
 
 export function mesh(geometry: MeshComponent["geometry"], materialEntity: Entity): MeshComponent {
   return Object.freeze({ kind: "mesh", geometry, material: materialEntity });
+}
+
+export interface BoundsOptions {
+  readonly center?: Vec3;
+  readonly radius: number;
+}
+
+export function bounds(options: BoundsOptions): BoundsComponent {
+  if (!Number.isFinite(options.radius) || options.radius < 0) {
+    throw new RangeError("bounds radius must be a finite non-negative number");
+  }
+  return Object.freeze({
+    kind: "bounds",
+    center: options.center ?? ZERO,
+    radius: options.radius,
+  });
 }

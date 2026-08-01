@@ -1,7 +1,7 @@
 import type { RuntimeCommand } from "./protocol.js";
 import type { RenderFrame } from "@lume/renderer";
 
-const EXPECTED_ABI_VERSION = 2;
+const EXPECTED_ABI_VERSION = 3;
 const INSTANCE_FLOATS = 20;
 const CAMERA_FLOATS = 32;
 
@@ -48,6 +48,14 @@ interface LumeWasmExports extends WebAssembly.Exports {
     geometry: number,
     material: number,
   ): number;
+  lume_engine_add_bounds(
+    engine: number,
+    entity: number,
+    centerX: number,
+    centerY: number,
+    centerZ: number,
+    radius: number,
+  ): number;
   lume_engine_update(engine: number): number;
   lume_engine_set_camera_aspect(engine: number, aspect: number): number;
   lume_engine_entity_count(engine: number): number;
@@ -59,11 +67,18 @@ interface LumeWasmExports extends WebAssembly.Exports {
   lume_render_geometries_ptr(engine: number): number;
   lume_render_instances_ptr(engine: number): number;
   lume_render_cameras_ptr(engine: number): number;
+  lume_visible_count(engine: number): number;
+  lume_visible_capacity(engine: number): number;
+  lume_visible_geometries_ptr(engine: number): number;
+  lume_visible_pipelines_ptr(engine: number): number;
+  lume_visible_materials_ptr(engine: number): number;
+  lume_visible_instances_ptr(engine: number): number;
 }
 
 export interface WasmStats {
   readonly entities: number;
   readonly renderInstances: number;
+  readonly visibleObjects: number;
   readonly wasmHeapBytes: number;
 }
 
@@ -87,17 +102,21 @@ export async function createWasmCore(url: string, entityCapacity: number): Promi
   }
   const handle = exports.lume_engine_create(entityCapacity);
   if (handle === 0) throw new Error("Lume WASM core allocation failed.");
-  const renderEntityCapacity = exports.lume_render_entity_capacity(handle);
+  const visibleCapacity = exports.lume_visible_capacity(handle);
   const renderCameraCapacity = exports.lume_render_camera_capacity(handle);
-  const geometriesPointer = exports.lume_render_geometries_ptr(handle);
-  const instancesPointer = exports.lume_render_instances_ptr(handle);
+  const geometriesPointer = exports.lume_visible_geometries_ptr(handle);
+  const pipelinesPointer = exports.lume_visible_pipelines_ptr(handle);
+  const materialsPointer = exports.lume_visible_materials_ptr(handle);
+  const instancesPointer = exports.lume_visible_instances_ptr(handle);
   const camerasPointer = exports.lume_render_cameras_ptr(handle);
   let observedMemory = exports.memory.buffer;
   const frame: RenderFrame = createFrameViews(
     observedMemory,
-    renderEntityCapacity,
+    visibleCapacity,
     renderCameraCapacity,
     geometriesPointer,
+    pipelinesPointer,
+    materialsPointer,
     instancesPointer,
     camerasPointer,
   );
@@ -119,17 +138,21 @@ export async function createWasmCore(url: string, entityCapacity: number): Promi
         observedMemory = exports.memory.buffer;
         const refreshed = createFrameViews(
           observedMemory,
-          renderEntityCapacity,
+          visibleCapacity,
           renderCameraCapacity,
           geometriesPointer,
+          pipelinesPointer,
+          materialsPointer,
           instancesPointer,
           camerasPointer,
         );
         frame.geometries = refreshed.geometries;
+        frame.pipelines = refreshed.pipelines;
+        frame.materials = refreshed.materials;
         frame.instanceData = refreshed.instanceData;
         frame.cameraData = refreshed.cameraData;
       }
-      frame.instanceCount = exports.lume_render_instance_count(handle);
+      frame.instanceCount = exports.lume_visible_count(handle);
       frame.cameraCount = exports.lume_render_camera_count(handle);
       return frame;
     },
@@ -142,6 +165,7 @@ export async function createWasmCore(url: string, entityCapacity: number): Promi
       return {
         entities: exports.lume_engine_entity_count(handle),
         renderInstances: exports.lume_render_instance_count(handle),
+        visibleObjects: exports.lume_visible_count(handle),
         wasmHeapBytes: exports.memory.buffer.byteLength,
       };
     },
@@ -156,17 +180,21 @@ export async function createWasmCore(url: string, entityCapacity: number): Promi
 
 function createFrameViews(
   memory: ArrayBuffer,
-  entityCapacity: number,
+  visibleCapacity: number,
   cameraCapacity: number,
   geometriesPointer: number,
+  pipelinesPointer: number,
+  materialsPointer: number,
   instancesPointer: number,
   camerasPointer: number,
 ): RenderFrame {
   return {
     instanceCount: 0,
     cameraCount: 0,
-    geometries: new Uint32Array(memory, geometriesPointer, entityCapacity),
-    instanceData: new Float32Array(memory, instancesPointer, entityCapacity * INSTANCE_FLOATS),
+    geometries: new Uint32Array(memory, geometriesPointer, visibleCapacity),
+    pipelines: new Uint32Array(memory, pipelinesPointer, visibleCapacity),
+    materials: new Uint32Array(memory, materialsPointer, visibleCapacity),
+    instanceData: new Float32Array(memory, instancesPointer, visibleCapacity * INSTANCE_FLOATS),
     cameraData: new Float32Array(memory, camerasPointer, cameraCapacity * CAMERA_FLOATS),
   };
 }
@@ -207,6 +235,13 @@ function applyCommand(
         command.entity,
         command.geometry,
         command.material,
+      );
+    case "add-bounds":
+      return wasm.lume_engine_add_bounds(
+        engine,
+        command.entity,
+        ...command.center,
+        command.radius,
       );
   }
 }
