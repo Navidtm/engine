@@ -19,6 +19,13 @@ pub struct GpuCamera {
     pub projection: Mat4,
 }
 
+/// World-space sphere used only by the visibility stage.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[repr(C, align(16))]
+pub struct GpuBounds {
+    pub center_radius: [f32; 4],
+}
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct ExtractionStats {
     pub instances: usize,
@@ -57,7 +64,10 @@ pub struct RenderWorld {
     camera_capacity: usize,
     entities: Vec<u32>,
     geometries: Vec<u32>,
+    pipelines: Vec<u32>,
+    materials: Vec<u32>,
     instances: Vec<GpuInstance>,
+    bounds: Vec<GpuBounds>,
     camera_entities: Vec<u32>,
     cameras: Vec<GpuCamera>,
 }
@@ -70,7 +80,10 @@ impl RenderWorld {
             camera_capacity,
             entities: Vec::with_capacity(entity_capacity),
             geometries: Vec::with_capacity(entity_capacity),
+            pipelines: Vec::with_capacity(entity_capacity),
+            materials: Vec::with_capacity(entity_capacity),
             instances: Vec::with_capacity(entity_capacity),
+            bounds: Vec::with_capacity(entity_capacity),
             camera_entities: Vec::with_capacity(camera_capacity),
             cameras: Vec::with_capacity(camera_capacity),
         }
@@ -96,10 +109,15 @@ impl RenderWorld {
             }
             self.entities.push(entity.raw());
             self.geometries.push(mesh.geometry);
+            self.pipelines.push(material.pipeline.raw());
+            self.materials.push(mesh.material.raw());
             self.instances.push(GpuInstance {
                 world_matrix: transform.world_matrix,
                 color: material.color,
             });
+            let local_bounds = world.bounds.get(entity).copied().unwrap_or_default();
+            self.bounds
+                .push(world_space_bounds(&transform.world_matrix, local_bounds));
         }
 
         for (entity, camera) in world.cameras.iter() {
@@ -125,7 +143,10 @@ impl RenderWorld {
     pub fn clear(&mut self) {
         self.entities.clear();
         self.geometries.clear();
+        self.pipelines.clear();
+        self.materials.clear();
         self.instances.clear();
+        self.bounds.clear();
         self.camera_entities.clear();
         self.cameras.clear();
     }
@@ -153,6 +174,21 @@ impl RenderWorld {
     #[must_use]
     pub fn instances(&self) -> &[GpuInstance] {
         &self.instances
+    }
+
+    #[must_use]
+    pub fn pipelines(&self) -> &[u32] {
+        &self.pipelines
+    }
+
+    #[must_use]
+    pub fn materials(&self) -> &[u32] {
+        &self.materials
+    }
+
+    #[must_use]
+    pub fn bounds(&self) -> &[GpuBounds] {
+        &self.bounds
     }
 
     #[must_use]
@@ -186,11 +222,32 @@ impl RenderWorld {
     }
 }
 
+fn world_space_bounds(matrix: &Mat4, bounds: crate::Bounds) -> GpuBounds {
+    let values = &matrix.0;
+    let [x, y, z] = bounds.center.0;
+    let center = [
+        values[0] * x + values[4] * y + values[8] * z + values[12],
+        values[1] * x + values[5] * y + values[9] * z + values[13],
+        values[2] * x + values[6] * y + values[10] * z + values[14],
+    ];
+    let scale_x = (values[0] * values[0] + values[1] * values[1] + values[2] * values[2]).sqrt();
+    let scale_y = (values[4] * values[4] + values[5] * values[5] + values[6] * values[6]).sqrt();
+    let scale_z = (values[8] * values[8] + values[9] * values[9] + values[10] * values[10]).sqrt();
+    GpuBounds {
+        center_radius: [
+            center[0],
+            center[1],
+            center[2],
+            bounds.radius * scale_x.max(scale_y).max(scale_z),
+        ],
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::math::Color;
-    use crate::{Material, MeshRenderer, Transform, WorldCapacity};
+    use crate::{Material, MaterialHandle, MeshRenderer, Transform, WorldCapacity};
 
     #[test]
     fn extraction_joins_components_into_gpu_layout() {
@@ -200,6 +257,7 @@ mod tests {
             material_entity,
             Material {
                 color: Color::new([1.0, 0.0, 0.0, 1.0]),
+                ..Material::default()
             },
         );
         let mesh_entity = world.spawn().unwrap();
@@ -208,7 +266,7 @@ mod tests {
             mesh_entity,
             MeshRenderer {
                 geometry: 2,
-                material: material_entity,
+                material: MaterialHandle::from_entity(material_entity),
             },
         );
         world.update();
@@ -234,7 +292,7 @@ mod tests {
                 entity,
                 MeshRenderer {
                     geometry,
-                    material: material_entity,
+                    material: MaterialHandle::from_entity(material_entity),
                 },
             );
         }

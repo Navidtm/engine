@@ -7,13 +7,22 @@
 
 pub mod components;
 pub mod ecs;
+pub mod material;
 pub mod math;
 pub mod memory;
 pub mod render_world;
 pub mod systems;
+pub mod visibility;
 pub mod world;
 
-pub use components::{Camera, Material, MeshRenderer, Transform};
+pub use components::{Bounds, Camera, MeshRenderer, Transform};
 pub use ecs::{Entity, EntityAllocator, SparseSet};
-pub use render_world::{ExtractionError, ExtractionStats, GpuCamera, GpuInstance, RenderWorld};
+pub use material::{
+    BASIC_PIPELINE_ID, BasicMaterial, MaterialHandle, MaterialRegistry, PipelineId,
+};
+pub type Material = BasicMaterial;
+pub use render_world::{
+    ExtractionError, ExtractionStats, GpuBounds, GpuCamera, GpuInstance, RenderWorld,
+};
+pub use visibility::{Frustum, VisibilityError, VisibilityStats, VisibleRenderBuffer};
 pub use world::{World, WorldCapacity};

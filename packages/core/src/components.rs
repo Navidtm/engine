@@ -1,5 +1,5 @@
-use crate::ecs::Entity;
-use crate::math::{Color, Mat4, Quat, Vec3};
+use crate::material::MaterialHandle;
+use crate::math::{Mat4, Quat, Vec3};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[repr(C, align(16))]
@@ -29,7 +29,27 @@ impl Default for Transform {
 #[repr(C)]
 pub struct MeshRenderer {
     pub geometry: u32,
-    pub material: Entity,
+    pub material: MaterialHandle,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[repr(C, align(16))]
+pub struct Bounds {
+    pub center: Vec3,
+    pub radius: f32,
+}
+
+impl Bounds {
+    pub const UNIT_CUBE: Self = Self {
+        center: Vec3::new([0.0, 0.0, 0.0]),
+        radius: 0.866_025_4,
+    };
+}
+
+impl Default for Bounds {
+    fn default() -> Self {
+        Self::UNIT_CUBE
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -54,10 +74,4 @@ impl Default for Camera {
             projection: Mat4::default(),
         }
     }
-}
-
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
-#[repr(C, align(16))]
-pub struct Material {
-    pub color: Color,
 }

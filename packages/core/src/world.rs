@@ -1,5 +1,6 @@
-use crate::components::{Camera, Material, MeshRenderer, Transform};
+use crate::components::{Bounds, Camera, MeshRenderer, Transform};
 use crate::ecs::{Entity, EntityAllocator, SparseSet};
+use crate::material::{BasicMaterial, MaterialHandle, MaterialRegistry};
 use crate::systems::{update_cameras, update_transforms};
 
 #[derive(Clone, Copy, Debug)]
@@ -9,6 +10,7 @@ pub struct WorldCapacity {
     pub mesh_renderers: usize,
     pub cameras: usize,
     pub materials: usize,
+    pub bounds: usize,
 }
 
 impl Default for WorldCapacity {
@@ -19,6 +21,7 @@ impl Default for WorldCapacity {
             mesh_renderers: 4_096,
             cameras: 8,
             materials: 256,
+            bounds: 4_096,
         }
     }
 }
@@ -28,7 +31,8 @@ pub struct World {
     pub transforms: SparseSet<Transform>,
     pub mesh_renderers: SparseSet<MeshRenderer>,
     pub cameras: SparseSet<Camera>,
-    pub materials: SparseSet<Material>,
+    pub bounds: SparseSet<Bounds>,
+    pub materials: MaterialRegistry,
 }
 
 impl World {
@@ -39,7 +43,8 @@ impl World {
             transforms: SparseSet::with_capacity(capacity.entities, capacity.transforms),
             mesh_renderers: SparseSet::with_capacity(capacity.entities, capacity.mesh_renderers),
             cameras: SparseSet::with_capacity(capacity.entities, capacity.cameras),
-            materials: SparseSet::with_capacity(capacity.entities, capacity.materials),
+            bounds: SparseSet::with_capacity(capacity.entities, capacity.bounds),
+            materials: MaterialRegistry::with_capacity(capacity.entities, capacity.materials),
         }
     }
 
@@ -58,7 +63,8 @@ impl World {
         self.transforms.remove(entity);
         self.mesh_renderers.remove(entity);
         self.cameras.remove(entity);
-        self.materials.remove(entity);
+        self.bounds.remove(entity);
+        self.materials.remove(MaterialHandle::from_entity(entity));
         true
     }
 
@@ -85,6 +91,9 @@ impl World {
             return false;
         }
         self.mesh_renderers.insert(entity, value);
+        if !self.bounds.contains(entity) {
+            self.bounds.insert(entity, Bounds::default());
+        }
         true
     }
 
@@ -96,11 +105,20 @@ impl World {
         true
     }
 
-    pub fn add_material(&mut self, entity: Entity, value: Material) -> bool {
+    pub fn add_bounds(&mut self, entity: Entity, value: Bounds) -> bool {
+        if !self.is_alive(entity) || value.radius < 0.0 {
+            return false;
+        }
+        self.bounds.insert(entity, value);
+        true
+    }
+
+    pub fn add_material(&mut self, entity: Entity, value: BasicMaterial) -> bool {
         if !self.is_alive(entity) {
             return false;
         }
-        self.materials.insert(entity, value);
+        self.materials
+            .insert(MaterialHandle::from_entity(entity), value);
         true
     }
 

@@ -8,7 +8,9 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use lume_core::math::Color;
-use lume_core::{Material, MeshRenderer, RenderWorld, Transform, World, WorldCapacity};
+use lume_core::{
+    Material, MaterialHandle, MeshRenderer, RenderWorld, Transform, World, WorldCapacity,
+};
 
 struct CountingAllocator;
 
@@ -109,6 +111,7 @@ fn capacity(count: usize) -> WorldCapacity {
         mesh_renderers: count,
         cameras: 1,
         materials: 1,
+        bounds: count,
     }
 }
 
@@ -224,6 +227,7 @@ fn benchmark_render_extraction(count: usize) -> ResultRecord {
         material_entity,
         Material {
             color: Color::new([0.3, 0.6, 1.0, 1.0]),
+            ..Material::default()
         },
     );
     for _ in 0..count {
@@ -233,7 +237,7 @@ fn benchmark_render_extraction(count: usize) -> ResultRecord {
             entity,
             MeshRenderer {
                 geometry: 2,
-                material: material_entity,
+                material: MaterialHandle::from_entity(material_entity),
             },
         );
     }

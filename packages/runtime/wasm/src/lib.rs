@@ -3,8 +3,8 @@
 use core::ffi::c_void;
 use lume_core::math::{Color, Quat, Vec3};
 use lume_core::{
-    Camera, Entity, GpuCamera, GpuInstance, Material, MeshRenderer, RenderWorld, Transform, World,
-    WorldCapacity,
+    Camera, Entity, GpuCamera, GpuInstance, Material, MaterialHandle, MeshRenderer, RenderWorld,
+    Transform, World, WorldCapacity,
 };
 
 pub const ABI_VERSION: u32 = 2;
@@ -28,6 +28,7 @@ pub extern "C" fn lume_engine_create(entity_capacity: u32) -> *mut c_void {
         mesh_renderers: entities,
         cameras: 8,
         materials: entities.min(1_024),
+        bounds: entities,
     };
     Box::into_raw(Box::new(EngineCore {
         world: World::with_capacity(capacity),
@@ -103,6 +104,7 @@ pub extern "C" fn lume_engine_add_material(
             Entity::from_raw(entity_raw),
             Material {
                 color: Color::new([red, green, blue, alpha]),
+                ..Material::default()
             },
         )
     }) as u32
@@ -120,7 +122,7 @@ pub extern "C" fn lume_engine_add_mesh_renderer(
             Entity::from_raw(entity_raw),
             MeshRenderer {
                 geometry,
-                material: Entity::from_raw(material_raw),
+                material: MaterialHandle::from_raw(material_raw),
             },
         )
     }) as u32
