@@ -4,7 +4,10 @@ export type Vec4 = readonly [number, number, number, number];
 export type Quat = Vec4;
 export type Color = Vec4;
 
-export type Entity = number & { readonly __entity: unique symbol };
+export interface Entity {
+  readonly index: number;
+  readonly generation: number;
+}
 
 export interface TransformComponent {
   readonly kind: "transform";

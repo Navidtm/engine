@@ -65,5 +65,11 @@ describe("high-level engine API", () => {
     expect(
       initializationMessage?.type === "init" ? initializationMessage.value.sharedMemory : undefined,
     ).toBeInstanceOf(SharedArrayBuffer);
+
+    engine.destroy(cube);
+    const recycled = engine.world.createEntity();
+    expect(recycled).toEqual({ index: cube.id.index, generation: cube.id.generation + 1 });
+    expect(() => cube.position.set(0, 0, 0)).toThrow("Entity handle is stale");
+    expect(() => engine.world.destroyEntity(cube.id)).toThrow("Entity handle is stale");
   });
 });

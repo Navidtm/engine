@@ -28,6 +28,8 @@ import {
 } from "@lume/scene";
 
 const MAX_ENTITY_INDEX = (1 << 20) - 1;
+const MAX_ENTITY_GENERATION = (1 << 12) - 1;
+const ENTITY_OWNER = Symbol("lume-entity-owner");
 
 export type EngineStatus =
   "new" | "initializing" | "ready" | "running" | "stopped" | "disposed" | "failed";
@@ -48,12 +50,12 @@ export type EngineOptions = Omit<EngineConfig, "canvas">;
 
 export interface BasicMaterialHandle {
   readonly kind: "basic-material";
-  readonly id: number;
+  readonly id: Entity;
 }
 
 export interface MeshHandle {
   readonly kind: "mesh";
-  readonly id: number;
+  readonly id: Entity;
   readonly position: Vector3Control;
   readonly rotation: QuaternionControl;
   readonly scale: Vector3Control;
@@ -61,7 +63,7 @@ export interface MeshHandle {
 
 export interface CameraHandle {
   readonly kind: "camera";
-  readonly id: number;
+  readonly id: Entity;
   readonly position: Vector3Control;
   readonly rotation: QuaternionControl;
   readonly scale: Vector3Control;
@@ -150,7 +152,12 @@ interface EngineState {
   readonly pendingCommands: RuntimeCommand[];
   readonly sharedMemory: SharedRuntimeViews | undefined;
   status: EngineStatus;
-  nextEntity: number;
+  readonly entityCapacity: number;
+  readonly entityGenerations: Uint16Array;
+  readonly entityAlive: Uint8Array;
+  readonly freeEntities: Uint32Array;
+  nextEntityIndex: number;
+  freeEntityCount: number;
   initPromise: Promise<void> | undefined;
   resolveInit: (() => void) | undefined;
   rejectInit: ((error: Error) => void) | undefined;
@@ -166,6 +173,8 @@ interface EngineState {
   structuralFallback: boolean;
 }
 
+type OwnedEntity = Entity & { readonly [ENTITY_OWNER]: EngineState };
+
 export function createEngine(canvas: HTMLCanvasElement, options?: EngineOptions): Engine;
 export function createEngine(config: EngineConfig): Engine;
 export function createEngine(
@@ -175,6 +184,9 @@ export function createEngine(
   const config: EngineConfig =
     "canvas" in canvasOrConfig ? canvasOrConfig : { ...options, canvas: canvasOrConfig };
   const entityCapacity = config.entityCapacity ?? 4_096;
+  if (!Number.isSafeInteger(entityCapacity) || entityCapacity <= 0 || entityCapacity > 1 << 20) {
+    throw new RangeError("entityCapacity must be an integer between 1 and 1,048,576.");
+  }
   const state: EngineState = {
     config,
     worker: (config.workerFactory ?? createDefaultWorker)(),
@@ -183,7 +195,12 @@ export function createEngine(
       ? allocateSharedRuntimeMemory(entityCapacity)
       : undefined,
     status: "new",
-    nextEntity: 0,
+    entityCapacity,
+    entityGenerations: new Uint16Array(entityCapacity),
+    entityAlive: new Uint8Array(entityCapacity),
+    freeEntities: new Uint32Array(entityCapacity),
+    nextEntityIndex: 0,
+    freeEntityCount: 0,
     initPromise: undefined,
     resolveInit: undefined,
     rejectInit: undefined,
@@ -271,7 +288,7 @@ function createHighLevelApi(
         }),
       );
       const geometry = options.geometry === "cube" ? boxGeometry() : triangleGeometry();
-      world.add(entity, mesh(geometry, materialHandle.id as Entity));
+      world.add(entity, mesh(geometry, materialHandle.id));
       if (options.bounds !== undefined) world.add(entity, bounds(options.bounds));
       const handle = createSceneHandle(state, "mesh", entity, initialTransform);
       transforms.set(handle, initialTransform);
@@ -325,7 +342,7 @@ function createHighLevelApi(
     create,
     set,
     destroy(handle: EngineHandle) {
-      world.destroyEntity(handle.id as Entity);
+      world.destroyEntity(handle.id);
       if (handle === defaultMaterial) defaultMaterial = undefined;
     },
   });
@@ -422,20 +439,22 @@ function createQuaternionControl(
 
 function publishTransform(
   state: EngineState,
-  entity: number,
+  entity: Entity,
   value: MutableTransformValue,
   fieldMask: number,
 ): void {
   if (state.status === "disposed" || state.status === "failed") {
     throw new Error(`Cannot update a ${state.status} engine.`);
   }
+  validateLiveEntity(state, entity);
+  const packedEntity = packEntity(entity);
   if (state.sharedMemory !== undefined) {
-    writeSharedTransform(state.sharedMemory, entity, value, fieldMask);
+    writeSharedTransform(state.sharedMemory, packedEntity, value, fieldMask);
     return;
   }
   dispatchCommand(state, {
     type: "add-transform",
-    entity,
+    entity: packedEntity,
     position: value.position,
     rotation: value.rotation,
     scale: value.scale,
@@ -459,40 +478,49 @@ function createWorldApi(state: EngineState): WorldApi {
   const world: WorldApi = {
     createEntity() {
       if (state.status === "disposed") throw new Error("Cannot create an entity after disposal.");
-      if (state.nextEntity > MAX_ENTITY_INDEX) throw new Error("Entity ID capacity exhausted.");
-      const entity = state.nextEntity++ as Entity;
-      dispatchCommand(state, { type: "spawn", entity });
+      const index = allocateEntityIndex(state);
+      const entity = createEntityHandle(state, index, state.entityGenerations[index] ?? 0);
+      state.entityAlive[index] = 1;
+      dispatchCommand(state, { type: "spawn", entity: packEntity(entity) });
       return entity;
     },
     destroyEntity(entity: Entity) {
-      dispatchCommand(state, { type: "despawn", entity });
+      validateLiveEntity(state, entity);
+      dispatchCommand(state, { type: "despawn", entity: packEntity(entity) });
+      state.entityAlive[entity.index] = 0;
+      state.entityGenerations[entity.index] = (entity.generation + 1) & MAX_ENTITY_GENERATION;
+      state.freeEntities[state.freeEntityCount] = entity.index;
+      state.freeEntityCount += 1;
     },
     add(entity: Entity, component: Component) {
+      validateLiveEntity(state, entity);
       dispatchCommand(state, componentCommand(entity, component));
     },
     remove(entity: Entity, component: Component["kind"]) {
-      dispatchCommand(state, { type: "remove-component", entity, component });
+      validateLiveEntity(state, entity);
+      dispatchCommand(state, { type: "remove-component", entity: packEntity(entity), component });
     },
   };
   return Object.freeze(world);
 }
 
 function componentCommand(entity: Entity, component: Component): RuntimeCommand {
+  const packedEntity = packEntity(entity);
   switch (component.kind) {
     case "transform":
       return {
         type: "add-transform",
-        entity,
+        entity: packedEntity,
         position: component.position,
         rotation: component.rotation,
         scale: component.scale,
       };
     case "material":
-      return { type: "add-material", entity, color: component.color };
+      return { type: "add-material", entity: packedEntity, color: component.color };
     case "camera":
       return {
         type: "add-camera",
-        entity,
+        entity: packedEntity,
         verticalFov: component.verticalFov,
         near: component.near,
         far: component.far,
@@ -500,18 +528,57 @@ function componentCommand(entity: Entity, component: Component): RuntimeCommand 
     case "mesh":
       return {
         type: "add-mesh",
-        entity,
+        entity: packedEntity,
         geometry: component.geometry.id,
-        material: component.material,
+        material: packEntity(component.material),
       };
     case "bounds":
       return {
         type: "add-bounds",
-        entity,
+        entity: packedEntity,
         center: component.center,
         radius: component.radius,
       };
   }
+}
+
+function allocateEntityIndex(state: EngineState): number {
+  if (state.freeEntityCount > 0) {
+    state.freeEntityCount -= 1;
+    return state.freeEntities[state.freeEntityCount] ?? 0;
+  }
+  if (state.nextEntityIndex >= state.entityCapacity || state.nextEntityIndex > MAX_ENTITY_INDEX) {
+    throw new Error("Entity capacity exhausted.");
+  }
+  const index = state.nextEntityIndex;
+  state.nextEntityIndex += 1;
+  return index;
+}
+
+function createEntityHandle(state: EngineState, index: number, generation: number): OwnedEntity {
+  const entity = { index, generation } as OwnedEntity;
+  Object.defineProperty(entity, ENTITY_OWNER, { value: state });
+  return Object.freeze(entity);
+}
+
+function validateLiveEntity(state: EngineState, entity: Entity): void {
+  if (
+    !Number.isInteger(entity.index) ||
+    !Number.isInteger(entity.generation) ||
+    entity.index < 0 ||
+    entity.index >= state.entityCapacity ||
+    entity.generation < 0 ||
+    entity.generation > MAX_ENTITY_GENERATION ||
+    state.entityAlive[entity.index] !== 1 ||
+    state.entityGenerations[entity.index] !== entity.generation ||
+    (entity as Partial<OwnedEntity>)[ENTITY_OWNER] !== state
+  ) {
+    throw new Error("Entity handle is stale or does not belong to this engine.");
+  }
+}
+
+function packEntity(entity: Entity): number {
+  return ((entity.generation << 20) | entity.index) >>> 0;
 }
 
 function initialize(state: EngineState): Promise<void> {
