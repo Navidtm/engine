@@ -1,300 +1,331 @@
 # Current Project State
 
-## Project Phase
+Last verified: 2026-08-02 at commit `306d35a`
 
-Current phase:
+This document records the implementation that exists in the repository. It is
+an evidence-based snapshot, not a description of intended future architecture.
 
-Foundation and Runtime Scalability
+## Executive Status
 
-Current priority:
+The engine has completed its runtime-foundation and transport-hardening work.
+The actual implementation is ready to move from Roadmap Phase 4 into Phase 5,
+Renderer Scalability, with controlled browser validation retained as an
+acceptance task.
 
-Finalize engine runtime architecture before expanding rendering features.
+The roadmap currently labels Transport Hardening as **In Progress**. That label
+is stale: all listed Phase 4 mechanisms are implemented, tested, documented, and
+covered by a committed Node benchmark result. The roadmap itself is not changed
+by this snapshot.
 
-# Completed Architecture
+Current boundary:
 
-## Core Runtime
+```text
+Application
+  -> public TypeScript API
+  -> worker runtime
+  -> shared-memory or message transport
+  -> Rust/WASM ECS
+  -> extraction into RenderWorld
+  -> CPU visibility and ordering
+  -> compiled FrameGraph
+  -> WebGPU renderer
+  -> GPU
+```
+
+## Architecture Compliance
+
+The implementation follows the project architecture rules:
+
+- Public API, runtime, renderer, and scene packages use functional modules and
+  explicit state objects; engine-owned classes and inheritance are absent.
+- The Rust ECS owns simulation entities and components but no GPU objects.
+- Rendering consumes extracted, contiguous `RenderFrame` typed-array views and
+  does not query ECS storage.
+- `RenderWorld` is a distinct transient representation between ECS and the
+  renderer.
+- The worker owns the WASM core, WebGPU renderer, and frame loop. The main
+  thread owns the public API and is the producer for shared runtime writes.
+- Pipelines and persistent GPU buffers are created during renderer
+  initialization, not during frame execution.
+- Hot-path transport, extraction, visibility, and frame-graph storage are
+  capacity-bounded and reused. Capacity exhaustion is explicit rather than
+  silently growing frame-time storage.
+
+No architecture-rule violation was found in the inspected implementation.
+There is documentation drift in ADR 003: it still describes structural changes
+as message-based, while the current primary path is the shared structural SPSC
+ring with an ordered message fallback.
+
+## Implemented Subsystems
+
+### Public TypeScript API and Scene Descriptors
 
 Implemented:
 
-- Rust/WASM core
-- TypeScript public API
-- Worker-based execution model
-- Shared memory communication layer
+- Functional `createEngine` API with explicit lifecycle states.
+- High-level mesh, perspective-camera, and basic-material creation.
+- Lower-level `world` API for entity creation/destruction and component
+  addition/removal.
+- Immutable engine-owned entity handles shaped as `{ index, generation }`.
+- Validation of handle ownership, liveness, index, and generation before use.
+- Fixed-capacity entity allocation, free-list reuse, and stale-handle rejection.
+- Declarative scene components for transform, mesh, bounds, camera, and basic
+  material data.
 
-Architecture:
+Current content support is deliberately small: built-in triangle and box
+geometry plus a color-only basic material.
 
-```
-TypeScript API
-
-↓
-
-Worker Runtime
-
-↓
-
-Rust/WASM Core
-```
-
-# ECS Status
-
-Current ECS:
-
-- Sparse-set ECS
-- Generational entities
-- Data-oriented component storage
-- Explicit system execution
-
-Implemented components:
-
-- Transform
-- MeshRenderer
-- Camera
-- Bounds
-- Material references
-
-ECS responsibilities:
-
-- simulation data
-- entity lifecycle
-- component storage
-- system execution
-
-ECS must not own:
-
-- GPU resources
-- render pipelines
-- WebGPU state
-
-# Render Architecture Status
-
-Current pipeline:
-
-```
-ECS World
-
-↓
-
-Render Extraction
-
-↓
-
-RenderWorld
-
-↓
-
-Visibility System
-
-↓
-
-FrameGraph
-
-↓
-
-WebGPU Renderer
-```
+### Rust/WASM Core and ECS
 
 Implemented:
 
-- RenderWorld separation
-- render extraction layer
-- visibility pipeline
-- frustum culling
-- frame graph foundation
+- Sparse-set component storage with generational entity validation.
+- A 32-bit packed handle: 20-bit index and 12-bit generation.
+- Safe destroy/recycle behavior in both TypeScript and Rust allocators.
+- Data-oriented stores for transforms, mesh renderers, cameras, bounds, and
+  materials.
+- Preallocated WASM staging arrays for shared transform updates.
+- ABI versioning and capacity checks at the TypeScript/WASM boundary.
+- Batched application of dirty transform ranges with per-field masks.
 
-# WebGPU Renderer Status
+The 12-bit generation wraps after 4,096 destructions of the same slot. This is
+an accepted compact-handle tradeoff, but it is not protection against an
+indefinitely retained handle across that full wrap interval.
 
-Implemented:
-
-- WebGPU initialization
-- render pipelines
-- vertex buffers
-- index buffers
-- uniform buffers
-- depth buffer
-- mesh registry
-- material registry
-- pipeline caching foundation
-
-Current supported rendering:
-
-- triangle rendering
-- indexed cube rendering
-- basic materials
-
-Not implemented yet:
-
-- textures
-- PBR
-- lighting systems
-- shadows
-- post processing
-
-# Memory Architecture Status
+### Render Extraction and Visibility
 
 Implemented:
 
-- SharedArrayBuffer transport
-- seqlock synchronization
-- dirty tracking
-- batch updates
-- SPSC queues
+- Separate, reusable `RenderWorld` storage.
+- Extraction of instance matrices, colors, geometry/material/pipeline IDs,
+  camera matrices, and bounding spheres.
+- CPU frustum culling using sphere bounds.
+- Reusable visibility output buffers.
+- CPU ordering by pipeline, material, and geometry for consecutive draw runs.
+- Capacity limits with explicit failure when extracted data exceeds the
+  configured entity capacity.
 
-Current goals:
+The visibility system currently uses the first extracted camera. Storage can
+hold multiple cameras, but true multi-camera rendering is not implemented.
 
-- reduce memory copies
-- improve transport scalability
-- finalize runtime communication model
+### FrameGraph
 
-# Current Milestone
+Implemented:
 
-## Milestone 5: Transport Hardening
+- Functional pass/resource declarations.
+- Dependency validation and topological compilation.
+- Reusable compiled execution order.
+- Current renderer graph with an upload pass followed by a main render pass.
 
-Goals:
+This is a frame-graph foundation, not yet a production transient-resource
+allocator or multi-pass scheduling system.
 
-- minimize SAB → WASM copying
-- partial component updates
-- dirty range tracking
-- structural command ring buffer
-- generational shared handles
-- entity recycling
-- transport metrics
-- large scale benchmarks
+### WebGPU Renderer
 
-# Do Not Implement Yet
+Implemented:
 
-The following features are intentionally postponed:
+- Adapter/device acquisition and canvas configuration.
+- Asynchronous basic render-pipeline creation and pipeline caching.
+- Persistent camera and instance GPU buffers.
+- Vertex/index buffers and a built-in mesh registry.
+- Depth target creation and resize handling.
+- Timestamp queries when supported, with CPU timing fallback metrics.
+- Indexed drawing and CPU-prepared instancing: consecutive compatible visible
+  items are submitted with one `drawIndexed` call using `instanceCount`.
+- Device-loss reporting to the main thread.
 
-## Rendering Features
+Current limitations:
 
-Do not add:
+- One basic pipeline and color-only material path.
+- Every frame uploads the complete visible instance range, even if only a
+  subset changed.
+- No indirect command buffers or indirect drawing.
+- No GPU-driven culling, compute visibility, or GPU scene database.
+- Device loss is reported but the renderer is not automatically rebuilt.
 
-- PBR materials
-- physically based lighting
-- shadows
-- reflections
-- post processing
+## Transport Hardening Status
 
-## Content Pipeline
+Milestone 5 is implemented.
 
-Do not add:
+### Memory Ownership and Copy Path
 
-- full asset pipeline
-- editor tooling
-- scene authoring system
+- Main thread: public handles, public entity allocator, shared-memory producer.
+- Worker: sole queue consumer, WASM instance, renderer, and reusable staging
+  views.
+- Rust: canonical entity allocator, ECS components, and render extraction.
+- Shared memory: fixed-capacity transport state only; it is not canonical ECS
+  storage.
 
-## Engine Features
+Ordinary Rust-owned WASM linear memory cannot directly alias the browser's
+`SharedArrayBuffer`. The implemented lowest-copy path is:
 
-Do not add:
+```text
+changed TypeScript fields
+  -> fixed SAB slots
+  -> fixed WASM staging views
+  -> canonical Rust components
+```
 
-- physics
-- gameplay systems
-- animation framework
-- networking
+One SAB-to-WASM copy remains. Only dirty entities and selected fields cross
+that boundary, and the worker does not create an intermediate compact
+JavaScript buffer.
 
-Reason:
+### Transform Updates
 
-The runtime architecture must be proven first.
+Implemented:
 
-# Performance Targets
+- Per-slot seqlock synchronization.
+- Field masks for position, rotation, scale, and the reserved matrix bit.
+- Atomic dirty-bit deduplication.
+- Fixed-capacity SPSC dirty-index queue.
+- Adjacent-index merging into reusable dirty ranges.
+- Race-safe requeue when a producer updates a slot during consumption.
+- One ranged WASM apply call after staging.
 
-The engine should optimize for:
+The matrix mask is a protocol marker; matrices are currently derived by Rust
+rather than copied as transform input.
 
-## CPU
+### Structural Commands
 
-- low frame preparation time
-- predictable execution
-- zero allocation hot paths
+Implemented shared SPSC commands include:
 
-## Memory
+- create and destroy entity;
+- add transform, material, camera, mesh, and bounds;
+- remove component.
 
-- minimal copying
-- predictable usage
-- explicit ownership
+The ring is lock-free, FIFO, bounded, and fixed-record-width. Overflow is
+observable through `droppedCommands`; the API switches to an ordered
+`postMessage` fallback so later structural commands cannot overtake the dropped
+command. Initialization batches and non-SAB environments also use messages.
 
-## GPU
+### Transport Metrics
 
-- efficient batching
-- pipeline reuse
-- scalable rendering
+`engine.getStats().transport` exposes:
 
-# Current Known Risks
+- `messages`;
+- `sharedWrites`;
+- `dirtyRanges`;
+- `bytesUploaded`;
+- `queueDepth`;
+- `droppedCommands`.
 
-## Transport Overhead
+Metrics combine worker message counts, atomic shared-memory counters, and WASM
+staging counters. They are diagnostic counters, not browser-independent timing
+guarantees.
 
-Remaining concern:
+## Benchmark Evidence
 
-SAB to WASM copying.
+The committed transport result is
+`benchmarks/results/transport-hardening-latest.json`, generated on macOS arm64
+with Node v24.16.0. It exercises the production shared-memory and ring
+implementations.
 
-Goal:
+### Shared Partial Transform Transport
 
-Move toward lower-copy or zero-copy data flow.
+|  Entities |   Publish |    Drain | Dirty ranges | Allocations | Bytes staged |
+| --------: | --------: | -------: | -----------: | ----------: | -----------: |
+|    10,000 |   1.48 ms |  1.11 ms |            1 |           0 |      200,008 |
+|   100,000 |   9.44 ms |  7.22 ms |            1 |           0 |    2,000,008 |
+|   500,000 |  46.77 ms | 34.85 ms |            1 |           0 |   10,000,008 |
+| 1,000,000 | 103.09 ms | 67.26 ms |            1 |           0 |   20,000,008 |
 
-## Large Scene Scaling
+For this position-only workload, staged bytes are approximately half of the
+legacy full-transform object transport. The legacy object path is faster in
+this single-process Node microbenchmark, but allocates four objects per entity;
+the hardened path performs zero measured runtime allocations and preserves the
+cross-thread shared-memory architecture. These results must not be presented as
+browser worker latency.
 
-Need validation:
+### Structural SPSC Ring
 
-- 100k entities
-- 500k entities
-- 1M entities
+| Commands |  Publish |    Drain | Dropped | Allocations |
+| -------: | -------: | -------: | ------: | ----------: |
+|   10,000 |  0.91 ms |  0.57 ms |       0 |           0 |
+|  100,000 |  4.38 ms |  3.85 ms |       0 |           0 |
+|  500,000 | 33.72 ms | 18.69 ms |       0 |           0 |
 
-## Browser Validation
+### Generational Entity Lifecycle
 
-Need real browser benchmarks:
+|  Entities |  Create | Destroy |   Reuse | Stale rejected |
+| --------: | ------: | ------: | ------: | :------------: |
+|    10,000 | 0.15 ms | 0.19 ms | 0.22 ms |      yes       |
+|   100,000 | 0.92 ms | 0.24 ms | 0.11 ms |      yes       |
+| 1,000,000 | 9.82 ms | 4.76 ms | 1.00 ms |      yes       |
 
-- Chrome
-- Edge
+The repository also contains Rust ECS/extraction benchmarks and browser
+renderer/comparison/transport harnesses. Controlled Chrome and Edge results on
+the same hardware and resolution remain outstanding.
 
-with:
+## Quality and Tooling
 
-- WebGPU enabled
-- same hardware
-- controlled resolution
+Implemented CI gates:
 
-# Benchmark Status
+- Rust formatting, Clippy with warnings denied, workspace tests, and release
+  `wasm32-unknown-unknown` build.
+- `cargo audit` and `cargo deny` dependency policy.
+- Prettier, ESLint, TypeScript checks, package tests, and builds for packages,
+  examples, and benchmarks.
 
-Implemented benchmarks:
+Tests cover generational entities, sparse-set validation, world lifecycle,
+render extraction, visibility, frame-graph compilation, shared-memory masks and
+ranges, structural queues, protocol behavior, WASM update staging, geometry,
+and timestamp profiling. End-to-end browser tests for the complete
+main-thread/worker/WASM/WebGPU path are not yet part of CI.
 
-## ECS
+## Roadmap Comparison
 
-- entity creation
-- transform updates
-- extraction
+| Roadmap phase                 | Roadmap label | Actual repository state                                                  |
+| ----------------------------- | ------------- | ------------------------------------------------------------------------ |
+| 1. Runtime Foundation         | Completed     | Implemented                                                              |
+| 2. Render Architecture        | Completed     | Implemented                                                              |
+| 3. Performance Infrastructure | Completed     | Implemented                                                              |
+| 4. Transport Hardening        | In Progress   | Implemented; browser validation remains                                  |
+| 5. Renderer Scalability       | Planned       | Baseline CPU instancing exists; scalable GPU-driven work has not started |
+| 6. Asset Pipeline             | Planned       | Not implemented                                                          |
+| 7. Advanced Graphics          | Planned       | Not implemented                                                          |
+| 8. Developer Ecosystem        | Planned       | Not implemented                                                          |
 
-## Rendering
+## Intentionally Not Implemented
 
-- cube rendering
-- object scaling tests
+- Textures, samplers, texture streaming, and texture compression.
+- PBR materials, lighting, shadows, reflections, and post-processing.
+- glTF or other asset loaders and a production asset pipeline.
+- Animation, skinning, morph targets, and skeletal systems.
+- Physics, networking, gameplay systems, editor, or scene authoring.
+- GPU compute culling, indirect rendering, and GPU-driven submission.
 
-## Transport
+These omissions match the roadmap and the scope constraints of the completed
+transport milestone.
 
-- command transport
-- shared memory transport
+## Remaining Runtime and Rendering Bottlenecks
 
-All performance claims require benchmark evidence.
+1. The required SAB-to-WASM staging copy still scales linearly with the number
+   and size of dirty fields.
+2. Extraction, frustum culling, and render-key sorting are CPU-side. Visibility
+   ordering performs an `O(V log V)` unstable sort each frame.
+3. The renderer uploads the full visible instance buffer every frame instead of
+   retaining GPU-side data and uploading dirty ranges.
+4. Draw-call reduction depends on consecutive CPU ordering; there are no
+   indirect batches or GPU-generated commands.
+5. Large-scale measurements are transport microbenchmarks. Real worker
+   scheduling, browser atomics, WASM copying, WebGPU upload, and GPU execution
+   still require controlled browser measurement.
+6. The current frame graph and resource model are sufficient for one basic
+   render pass but not yet proven for a larger renderer.
 
-# Current Recommended Next Steps
+## Current Priority
 
-Priority order:
+Transport semantics should now be treated as stable unless browser evidence
+finds a correctness or material performance problem. The next development
+milestone should focus on renderer scalability:
 
-1. Complete transport hardening.
+1. Establish controlled Chrome and Edge baselines for the complete runtime.
+2. Add persistent GPU scene/instance storage with dirty-range uploads.
+3. Scale batching beyond consecutive CPU-prepared instance runs.
+4. Introduce indirect command storage and indirect drawing.
+5. Move visibility/culling to GPU compute when measurements justify it.
+6. Preserve the existing ECS/RenderWorld/renderer ownership boundaries while
+   doing so.
 
-2. Validate large-scale runtime behavior.
-
-3. Run browser-based performance comparisons.
-
-4. Freeze core architecture.
-
-5. Begin rendering expansion:
-
-   - GPU instancing
-   - indirect rendering
-   - texture system
-   - advanced materials
-
-# Architectural Reminder
-
-Do not optimize for adding features quickly.
-
-The current objective is building a scalable engine foundation.
-
-The engine should become harder to break as it grows.
+Textures, lighting, animation, physics, and asset loading remain out of scope
+until the renderer scalability foundation is measured and stable.
