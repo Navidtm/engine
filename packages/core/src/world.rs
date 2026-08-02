@@ -92,7 +92,7 @@ impl World {
         mask: u32,
         value: &[f32; 10],
     ) -> bool {
-        if !self.is_alive(entity) || mask == 0 || mask & !7 != 0 {
+        if !self.is_alive(entity) || mask == 0 || mask & !15 != 0 {
             return false;
         }
         let Some(transform) = self.transforms.get_mut(entity) else {

@@ -41,7 +41,16 @@ frame's batch with one boundary crossing.
 Benchmark focus: main-to-worker latency, structured-clone bytes, ring pressure,
 and missed-frame rate under input load.
 
-## Milestone 5 — production rendering
+## Milestone 5 — transport hardening (implemented)
+
+Finalizes partial transform masks, index-based dirty-range WASM staging, the
+bounded structural SPSC ring, ordered overflow fallback, generational shared
+handles, entity slot recycling, transport metrics, and scale benchmarks.
+
+Benchmark focus: 10k through 1M shared updates, 10k through 500k structural
+commands, lifecycle reuse, staging bytes, ranges, and overflow visibility.
+
+## Milestone 6 — rendering scalability
 
 Introduce bind-group layouts, shader/material variants, pipeline prewarming,
 texture streaming, GPU culling, instancing, clustered lighting, and render-graph
@@ -52,8 +61,8 @@ draw/dispatch counts, and GPU frame time.
 
 ## Known future bottlenecks
 
-1. **Structured cloning:** adequate for Phase 1 authoring commands, but costly
-   for large streaming updates. The protocol is deliberately transport-neutral.
+1. **SAB-to-WASM staging:** one copy remains necessary to preserve canonical
+   Rust ownership. Field masks and ranges bound it to changed data.
 2. **Sparse-set removal order:** swap removal is fast but unstable. Systems must
    never depend on dense order; deterministic sorting should be opt-in.
 3. **Pipeline compilation stalls:** the cache prevents duplicates but cannot
@@ -62,8 +71,7 @@ draw/dispatch counts, and GPU frame time.
    scale. Phase 2 uses aligned arenas and dynamic offsets.
 5. **Device loss:** recovery currently terminates the runtime with a clear error.
    Asset descriptors must become replayable before transparent recovery.
-6. **Entity-ID authority:** main-thread monotonic IDs give synchronous DX but do
-   not yet recycle. Generational recycling requires acknowledgements or shared
-   allocation state.
+6. **Generation wrap:** compact 12-bit generations repeat after 4096 reuses of
+   one slot. Long-retained handles beyond that window are unsupported.
 7. **Browser worker variance:** WebGPU worker support and canvas transfer remain
    platform-sensitive. Capability errors are explicit and testable.

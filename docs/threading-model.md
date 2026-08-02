@@ -2,51 +2,66 @@
 
 ## Responsibilities
 
-The browser main thread owns authoring calls, handle creation, and shared
-transform writes. The runtime worker owns WebAssembly, WebGPU, the frame loop,
-and all canonical scene state.
+The main thread owns authoring handles, entity recycling and both shared
+producers. The runtime worker owns the sole consumers, WASM, WebGPU and the frame
+loop. Rust owns canonical scene state.
 
 ```text
 Main thread                         Runtime worker
 -----------                         --------------
-create/destroy/add component  --->  structural command handling
-position/rotation/scale writes ---> SharedArrayBuffer dirty ring
-                                     drain + one WASM bulk update
-                                     systems + extraction + visibility
-                                     FrameGraph + WebGPU submission
+create/destroy/add/remove  ------>  structural SPSC ring
+position/rotation/scale    ------>  seqlock slots + dirty SPSC ring
+                                      drain structural commands
+                                      stage transform dirty ranges
+                                      one range ABI call
+                                      systems/extraction/visibility
+                                      WebGPU submission
 ```
 
-No renderer or ECS object crosses the worker boundary.
+No ECS object, RenderWorld object or renderer resource crosses the boundary.
 
-## Synchronization protocol
+## Transform synchronization
 
-The transform channel is single-producer/single-consumer. Sequentially
-consistent Atomics publish queue positions and diagnostic epochs. The worker
-does not block on `Atomics.wait`; it drains available updates at the beginning
-of its existing animation frame.
+The producer makes a slot sequence odd, writes only selected floats, publishes
+generation and ORs the field mask, then makes the sequence even. A dirty
+compare-and-exchange enqueues the index at most once. Atomics provide the
+publication ordering.
 
-The consumer advances the queue and clears an entity's dirty flag before its
-stable read. A concurrent producer can therefore enqueue the same entity again
-without losing an update. Queue entries may be redundant under a race, but the
-latest complete transform is always applied.
+The consumer retries a read if the sequence is odd or changes. It exchanges the
+published mask, releases the dirty flag, and requeues the slot if a producer
+merged another mask during consumption. This closes the clear-versus-write race
+without a lock. The worker drains at frame start and never blocks with
+`Atomics.wait`.
 
-## Structural commands
+## Structural synchronization
 
-Commands are retained for operations that change storage shape or resource
-lifetime:
+Structural records are fixed at 16 words and cover spawn, despawn, add component
+and remove component. The main thread is the only producer and the worker is the
+only consumer. Payload words are written first; the atomic pending increment is
+the publication point. The consumer processes FIFO records before transform
+ranges, ensuring creation precedes component updates.
 
-- spawn and despawn entity;
-- add or remove component;
-- create material or mesh binding;
-- load or release resources.
+Initialization remains a message batch because it may exceed ring capacity
+before the worker begins draining. When a live ring fills, the API permanently
+selects message fallback for that engine session. The worker drains older shared
+records before applying the fallback message, preserving order.
 
-Per-frame transforms, animation outputs, and visibility results must not use
-the structural channel.
+## Lifecycle ordering
+
+Destroy and reuse are published through the same ordered structural channel:
+
+```text
+despawn(index, generation N)
+spawn(index, generation N+1)
+```
+
+The old handle becomes invalid synchronously on the main thread. FIFO processing
+then changes Rust liveness before any command for the replacement reaches the
+ECS. Both sides validate generations independently.
 
 ## Browser requirements
 
-SharedArrayBuffer requires a cross-origin-isolated document. Development and
-benchmark Vite servers emit `Cross-Origin-Opener-Policy: same-origin` and
-`Cross-Origin-Embedder-Policy: require-corp`. Production hosting must emit
-equivalent headers. The runtime automatically selects command fallback when
-the requirement is not met.
+`SharedArrayBuffer` requires cross-origin isolation. Development and benchmark
+servers emit `Cross-Origin-Opener-Policy: same-origin` and
+`Cross-Origin-Embedder-Policy: require-corp`. The compatibility path uses
+versioned worker messages when SAB is unavailable.

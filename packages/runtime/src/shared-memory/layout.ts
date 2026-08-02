@@ -8,7 +8,8 @@ export enum TransformField {
   Position = 1,
   Rotation = 2,
   Scale = 4,
-  All = 7,
+  Matrix = 8,
+  All = 15,
 }
 
 export const enum SharedHeader {

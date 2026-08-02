@@ -1,59 +1,95 @@
 # Memory model
 
-## Ownership boundaries
+## Ownership and lifetime
 
-Lume uses three explicit memory domains:
+Lume has three non-overlapping memory domains:
 
-| Domain            | Owner                        | Contents                                                                      |
-| ----------------- | ---------------------------- | ----------------------------------------------------------------------------- |
-| Public authoring  | Main-thread TypeScript       | Immutable resource handles and transform controls                             |
-| Transport         | Main thread + runtime worker | Shared transform slots, sequence counters, dirty flags, and dirty-index queue |
-| Canonical runtime | Rust/WASM worker             | ECS components, materials, RenderWorld, visibility, and bulk staging arrays   |
+| Domain            | Owner                                 | Lifetime            | Contents                                               |
+| ----------------- | ------------------------------------- | ------------------- | ------------------------------------------------------ |
+| Authoring         | main-thread TypeScript                | engine lifetime     | immutable entity handles, controls, free list          |
+| Transport         | main thread produces; worker consumes | `init` to `dispose` | transform slots, dirty ring, structural ring, counters |
+| Canonical runtime | Rust/WASM worker                      | `init` to `dispose` | ECS, RenderWorld, visibility and fixed staging arrays  |
 
-The shared transport is not the ECS. JavaScript cannot mutate Rust component
-storage directly, and Rust never retains references into SharedArrayBuffer.
-This preserves ECS invariants and keeps future storage changes independent of
-the public API.
+Shared memory is transport state, never the ECS. Rust does not retain references
+into the browser `SharedArrayBuffer`, and JavaScript cannot mutate sparse-set
+storage. This preserves Rust's exclusive mutation and allows ECS relocation.
 
-## Shared transform layout
+All hot-path arrays are capacity-sized once. A WASM memory growth refreshes
+JavaScript typed views but does not change the exported staging offsets.
 
-The transport layout is calculated once from `entityCapacity`:
+## Shared allocation
+
+The allocation is derived from `entityCapacity`:
 
 ```text
-header:       9 × i32
-sequences:    capacity × i32
-dirty flags:  capacity × i32
-generations:  capacity × i32
-field masks:  capacity × i32
-dirty queue:  capacity × i32
-transforms:   capacity × 10 × f32
+header:              15 × i32
+sequences:           capacity × i32
+dirty flags:         capacity × i32
+generations:         capacity × i32
+field masks:         capacity × i32
+transform queue:     capacity × i32
+transforms:          capacity × 10 × f32
+structural commands: capacity × 16 × i32
 ```
 
-Each transform contains position `[x, y, z]`, quaternion `[x, y, z, w]`, and
-scale `[x, y, z]`. The packed entity index selects a fixed slot while its
-generation travels beside the values. A three-bit mask marks position, rotation,
-and scale independently, so publishing an update does not allocate, search, or
-copy unchanged fields.
+The structural words also have a `Float32Array` view, so command encoding does
+not allocate or convert payload buffers. Transform slots contain position,
+quaternion and scale. Packed entity indices select slots; their 12-bit
+generation is stored separately.
 
-## Publication and draining
+## Lowest-copy transform path
 
-The main thread uses an odd/even sequence counter around each float write. A
-dirty compare-and-exchange ensures repeated writes to the same pending entity
-coalesce into one queue entry. The worker takes a stable sequence snapshot into
-a reusable ten-float scratch array.
+Browser SAB memory cannot become ordinary Rust-owned WASM linear memory. A
+shared-memory WASM build would make canonical component storage concurrently
+writable and invalidate sparse-set and Rust aliasing guarantees. True zero-copy
+is therefore not compatible with the current ownership model.
 
-Drained values are copied into two preallocated WASM arrays: entity IDs and
-packed transform values. A single bulk ABI call applies the entire batch before
-the world update. There is one necessary transport-to-WASM copy, no structured
-clone, and no per-transform boundary crossing.
+The implemented path is:
 
-## Capacity and failure
+```text
+authoring value
+  -> selected fields in a fixed SAB slot
+  -> selected fields in fixed index-based WASM staging
+  -> canonical Transform fields in Rust
+```
 
-All shared and WASM staging storage is fixed at engine initialization. The
-dirty ring has the same capacity as entity slots and each slot has at most one
-pending entry. Overflow is therefore an invariant failure and is surfaced in
-`engine.getStats().transport.overflows` rather than silently dropping data.
+There is one unavoidable SAB-to-WASM copy. There is no structured clone, compact
+temporary array, per-entity ABI call, or per-frame allocation. Generation and
+mask cost 8 bytes per updated slot; range descriptors cost 8 bytes per range.
+Position-only updates copy 12 payload bytes instead of the full 40-byte
+transform. The fourth mask bit marks a derived matrix refresh; it has no
+transport payload because the matrix is composed by the Rust transform system.
 
-When cross-origin isolation or SharedArrayBuffer is unavailable, public
-transform controls fall back to the versioned command channel. Structural
-commands always use that channel.
+## Dirty ranges
+
+The worker drains indices in producer order. Consecutive unique indices become
+one reusable `{start, count}` descriptor in WASM memory. A fixed epoch array
+deduplicates repeated indices without clearing or allocating. Non-adjacent queue
+order intentionally remains separate ranges; sorting would add work and storage.
+
+Rust receives the range count in one ABI call, reconstructs packed handles from
+index plus generation, validates liveness, applies masked fields, and clears the
+staging masks for reuse.
+
+## Entity lifecycle
+
+Public handles are immutable `{index, generation}` values associated with one
+engine. Transport packs 20 index bits and 12 generation bits into a `u32`.
+Destroy advances the generation and pushes the index onto a fixed TypeScript
+free list. Recreate pops that slot. TypeScript rejects stale or foreign handles
+before publication; Rust validates the packed generation again.
+
+Generation wraps after 4096 reuses of the same slot. Applications that retain a
+handle across that many destroy/recreate cycles exceed the protection window of
+the compact format.
+
+## Capacity and fallback
+
+Transform and structural queues are bounded by `entityCapacity`. Dirty-bit
+coalescing means the transform queue cannot exceed one pending entry per slot.
+Structural overflow increments `droppedCommands`; the attempted command and all
+later structural commands switch to ordered `postMessage` fallback, so scene
+operations are not semantically dropped.
+
+Without cross-origin isolation, the engine selects the versioned message path.
+Production hosting must provide COOP and COEP headers to enable shared transport.
