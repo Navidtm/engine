@@ -146,6 +146,23 @@ impl World {
         true
     }
 
+    pub fn remove_component(&mut self, entity: Entity, component: u32) -> bool {
+        if !self.is_alive(entity) {
+            return false;
+        }
+        match component {
+            1 => self.transforms.remove(entity).is_some(),
+            2 => self
+                .materials
+                .remove(MaterialHandle::from_entity(entity))
+                .is_some(),
+            3 => self.cameras.remove(entity).is_some(),
+            4 => self.mesh_renderers.remove(entity).is_some(),
+            5 => self.bounds.remove(entity).is_some(),
+            _ => false,
+        }
+    }
+
     pub fn set_camera_aspect(&mut self, aspect: f32) {
         if aspect <= 0.0 {
             return;

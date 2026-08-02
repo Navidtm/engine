@@ -97,6 +97,7 @@ export function createWorkerRuntime(host: WorkerHost): (message: MainToWorkerMes
           message.value.wasmUrl,
           message.value.entityCapacity,
           message.value.sharedMemory,
+          message.value.size.width / Math.max(message.value.size.height, 1),
         ).then((value) => {
           core = value;
         }),
@@ -145,6 +146,7 @@ export function createWorkerRuntime(host: WorkerHost): (message: MainToWorkerMes
           break;
         }
         case "command":
+          state.core?.updateSharedCommands();
           apply(message.value);
           break;
         case "batch":
@@ -168,6 +170,7 @@ export function createWorkerRuntime(host: WorkerHost): (message: MainToWorkerMes
           state.renderer?.resize(message.value);
           break;
         case "get-stats": {
+          state.core?.updateSharedCommands();
           const coreStats = state.core?.stats();
           const rendererStats = state.renderer?.stats();
           host.postMessage({

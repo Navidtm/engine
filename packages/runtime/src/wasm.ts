@@ -2,6 +2,7 @@ import type { RenderFrame } from "@lume/renderer";
 
 import type { RuntimeCommand } from "./protocol.js";
 import { SHARED_TRANSFORM_FLOATS } from "./shared-memory/layout.js";
+import { drainSharedCommands, StructuralOpcode } from "./shared-memory/structural.js";
 import { drainSharedTransforms } from "./shared-memory/synchronization.js";
 import { openSharedRuntimeViews } from "./shared-memory/views.js";
 
@@ -65,6 +66,7 @@ interface LumeWasmExports extends WebAssembly.Exports {
     centerZ: number,
     radius: number,
   ): number;
+  lume_engine_remove_component(engine: number, entity: number, component: number): number;
   lume_engine_update(engine: number): number;
   lume_engine_set_camera_aspect(engine: number, aspect: number): number;
   lume_engine_entity_count(engine: number): number;
@@ -94,6 +96,7 @@ export interface WasmStats {
 
 export interface WasmCore {
   apply(command: RuntimeCommand, aspect: number): void;
+  updateSharedCommands(): void;
   resize(aspect: number): void;
   update(): RenderFrame;
   stats(): WasmStats;
@@ -104,6 +107,7 @@ export async function createWasmCore(
   url: string,
   entityCapacity: number,
   sharedMemory?: SharedArrayBuffer,
+  initialAspect = 1,
 ): Promise<WasmCore> {
   const response = await fetch(url);
   if (!response.ok) {
@@ -172,6 +176,22 @@ export async function createWasmCore(
     stagedTransformCount += 1;
   };
   let disposed = false;
+  let currentAspect = initialAspect;
+  const updateSharedCommands = (): void => {
+    if (sharedViews === undefined) return;
+    drainSharedCommands(sharedViews, (opcode, entity, offset, views) => {
+      const accepted = applySharedCommand(
+        exports,
+        handle,
+        opcode,
+        entity,
+        offset,
+        views,
+        currentAspect,
+      );
+      if (accepted === 0) throw new Error(`WASM rejected shared structural command ${opcode}.`);
+    });
+  };
 
   const core: WasmCore = {
     apply(command: RuntimeCommand, aspect: number) {
@@ -181,6 +201,7 @@ export async function createWasmCore(
         throw new Error(`WASM rejected runtime command '${command.type}'.`);
       }
     },
+    updateSharedCommands,
     update() {
       if (exports.memory.buffer !== observedMemory) {
         observedMemory = exports.memory.buffer;
@@ -216,6 +237,7 @@ export async function createWasmCore(
         );
       }
       if (sharedViews !== undefined) {
+        updateSharedCommands();
         stagedTransformCount = 0;
         drainSharedTransforms(sharedViews, transformScratch, stageTransform);
         if (
@@ -235,6 +257,7 @@ export async function createWasmCore(
       return frame;
     },
     resize(aspect: number) {
+      currentAspect = aspect;
       if (!disposed && exports.lume_engine_set_camera_aspect(handle, aspect) === 0) {
         throw new Error("WASM camera resize failed.");
       }
@@ -317,5 +340,82 @@ function applyCommand(
       );
     case "add-bounds":
       return wasm.lume_engine_add_bounds(engine, command.entity, ...command.center, command.radius);
+    case "remove-component":
+      return wasm.lume_engine_remove_component(
+        engine,
+        command.entity,
+        componentCode(command.component),
+      );
+  }
+}
+
+function applySharedCommand(
+  wasm: LumeWasmExports,
+  engine: number,
+  opcode: StructuralOpcode,
+  entity: number,
+  offset: number,
+  views: ReturnType<typeof openSharedRuntimeViews>,
+  aspect: number,
+): number {
+  const floats = views.commandFloats;
+  const words = views.commandWords;
+  const float = (word: number): number => floats[offset + word] ?? 0;
+  const integer = (word: number): number => words[offset + word] ?? 0;
+  switch (opcode) {
+    case StructuralOpcode.Spawn:
+      return wasm.lume_engine_spawn(engine, entity);
+    case StructuralOpcode.Despawn:
+      return wasm.lume_engine_despawn(engine, entity);
+    case StructuralOpcode.AddTransform:
+      return wasm.lume_engine_add_transform(
+        engine,
+        entity,
+        float(2),
+        float(3),
+        float(4),
+        float(5),
+        float(6),
+        float(7),
+        float(8),
+        float(9),
+        float(10),
+        float(11),
+      );
+    case StructuralOpcode.AddMaterial:
+      return wasm.lume_engine_add_material(engine, entity, float(2), float(3), float(4), float(5));
+    case StructuralOpcode.AddCamera:
+      return wasm.lume_engine_add_camera(engine, entity, float(2), float(3), float(4), aspect);
+    case StructuralOpcode.AddMesh:
+      return wasm.lume_engine_add_mesh_renderer(engine, entity, integer(2), integer(3));
+    case StructuralOpcode.AddBounds:
+      return wasm.lume_engine_add_bounds(engine, entity, float(2), float(3), float(4), float(5));
+    case StructuralOpcode.RemoveTransform:
+    case StructuralOpcode.RemoveMaterial:
+    case StructuralOpcode.RemoveCamera:
+    case StructuralOpcode.RemoveMesh:
+    case StructuralOpcode.RemoveBounds:
+      return wasm.lume_engine_remove_component(
+        engine,
+        entity,
+        opcode - StructuralOpcode.RemoveTransform + 1,
+      );
+  }
+}
+
+function componentCode(
+  component: Extract<RuntimeCommand, { type: "remove-component" }>["component"],
+): number {
+  switch (component) {
+    case "transform":
+      return 1;
+    case "material":
+      return 2;
+    case "camera":
+      return 3;
+    case "mesh":
+      return 4;
+    case "bounds":
+      return 5;
   }
 }

@@ -61,6 +61,7 @@ export function writeSharedTransform(
     enqueued = true;
   }
   Atomics.add(views.header, SharedHeader.WriteEpoch, 1);
+  Atomics.add(views.header, SharedHeader.SharedWrites, 1);
   Atomics.notify(views.header, SharedHeader.WriteEpoch);
   return enqueued;
 }

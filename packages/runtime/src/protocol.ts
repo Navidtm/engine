@@ -64,6 +64,11 @@ export type RuntimeCommand =
       readonly entity: number;
       readonly center: readonly [number, number, number];
       readonly radius: number;
+    }
+  | {
+      readonly type: "remove-component";
+      readonly entity: number;
+      readonly component: "transform" | "material" | "camera" | "mesh" | "bounds";
     };
 
 export interface RuntimeInit {

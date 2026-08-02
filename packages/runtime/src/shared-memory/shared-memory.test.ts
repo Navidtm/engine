@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { allocateSharedRuntimeMemory } from "./allocator.js";
 import { SHARED_TRANSFORM_FLOATS, SharedHeader, TransformField } from "./layout.js";
+import { drainSharedCommands, StructuralOpcode, writeSharedCommand } from "./structural.js";
 import { drainSharedTransforms, writeSharedTransform } from "./synchronization.js";
 import { openSharedRuntimeViews } from "./views.js";
 
@@ -68,5 +69,32 @@ describe("shared runtime memory", () => {
     expect(drainSharedTransforms(views, scratch, (entity) => visited.push(entity))).toBe(4);
     expect(visited).toEqual([0, 1, 2, 3]);
     expect(Atomics.load(views.header, SharedHeader.OverflowCount)).toBe(0);
+  });
+
+  it("publishes structural commands in FIFO order and reports overflow", () => {
+    const views = allocateSharedRuntimeMemory(2);
+    expect(writeSharedCommand(views, { type: "spawn", entity: 3 })).toBe(true);
+    expect(
+      writeSharedCommand(views, {
+        type: "add-camera",
+        entity: 3,
+        verticalFov: 1.2,
+        near: 0.1,
+        far: 500,
+      }),
+    ).toBe(true);
+    expect(writeSharedCommand(views, { type: "despawn", entity: 3 })).toBe(false);
+
+    const received: number[] = [];
+    drainSharedCommands(views, (opcode, entity, offset, shared) => {
+      received.push(opcode, entity);
+      if (opcode === StructuralOpcode.AddCamera) {
+        expect(shared.commandFloats[offset + 2]).toBeCloseTo(1.2);
+        expect(shared.commandFloats[offset + 4]).toBe(500);
+      }
+    });
+    expect(received).toEqual([StructuralOpcode.Spawn, 3, StructuralOpcode.AddCamera, 3]);
+    expect(Atomics.load(views.header, SharedHeader.DroppedCommands)).toBe(1);
+    expect(Atomics.load(views.header, SharedHeader.CommandPending)).toBe(0);
   });
 });

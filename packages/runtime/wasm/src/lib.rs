@@ -230,6 +230,18 @@ pub extern "C" fn lume_engine_add_camera(
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn lume_engine_remove_component(
+    engine: *mut c_void,
+    entity_raw: u32,
+    component: u32,
+) -> u32 {
+    with_engine(engine, |core| {
+        core.world
+            .remove_component(Entity::from_raw(entity_raw), component)
+    }) as u32
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn lume_engine_update(engine: *mut c_void) -> u32 {
     with_engine(engine, |core| {
         core.world.update();

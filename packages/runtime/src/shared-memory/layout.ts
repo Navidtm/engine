@@ -1,7 +1,8 @@
 export const SHARED_MEMORY_MAGIC = 0x4c55_4d45;
-export const SHARED_MEMORY_VERSION = 2;
-export const SHARED_HEADER_INTS = 9;
+export const SHARED_MEMORY_VERSION = 3;
+export const SHARED_HEADER_INTS = 15;
 export const SHARED_TRANSFORM_FLOATS = 10;
+export const STRUCTURAL_COMMAND_WORDS = 16;
 
 export enum TransformField {
   Position = 1,
@@ -20,6 +21,12 @@ export const enum SharedHeader {
   QueueTail = 6,
   PendingCount = 7,
   OverflowCount = 8,
+  CommandHead = 9,
+  CommandTail = 10,
+  CommandPending = 11,
+  DroppedCommands = 12,
+  SharedWrites = 13,
+  Reserved = 14,
 }
 
 export interface SharedMemoryLayout {
@@ -32,6 +39,7 @@ export interface SharedMemoryLayout {
   readonly fieldMaskByteOffset: number;
   readonly queueByteOffset: number;
   readonly transformByteOffset: number;
+  readonly commandByteOffset: number;
 }
 
 export function calculateSharedMemoryLayout(capacity: number): SharedMemoryLayout {
@@ -47,7 +55,8 @@ export function calculateSharedMemoryLayout(capacity: number): SharedMemoryLayou
   const fieldMaskByteOffset = generationByteOffset + capacity * intBytes;
   const queueByteOffset = fieldMaskByteOffset + capacity * intBytes;
   const transformByteOffset = queueByteOffset + capacity * intBytes;
-  const byteLength = transformByteOffset + capacity * SHARED_TRANSFORM_FLOATS * floatBytes;
+  const commandByteOffset = transformByteOffset + capacity * SHARED_TRANSFORM_FLOATS * floatBytes;
+  const byteLength = commandByteOffset + capacity * STRUCTURAL_COMMAND_WORDS * intBytes;
   if (!Number.isSafeInteger(byteLength)) {
     throw new RangeError("Shared-memory layout exceeds JavaScript's safe integer range.");
   }
@@ -61,5 +70,6 @@ export function calculateSharedMemoryLayout(capacity: number): SharedMemoryLayou
     fieldMaskByteOffset,
     queueByteOffset,
     transformByteOffset,
+    commandByteOffset,
   });
 }

@@ -9,6 +9,7 @@ import {
   supportsSharedRuntimeMemory,
   TransformField,
   type WorkerToMainMessage,
+  writeSharedCommand,
   writeSharedTransform,
 } from "@lume/runtime";
 import {
@@ -126,6 +127,7 @@ export interface WorldApi {
   createEntity(): Entity;
   destroyEntity(entity: Entity): void;
   add(entity: Entity, component: Component): void;
+  remove(entity: Entity, component: Component["kind"]): void;
 }
 
 export interface Engine {
@@ -161,6 +163,7 @@ interface EngineState {
     }
   >;
   nextStatsRequest: number;
+  structuralFallback: boolean;
 }
 
 export function createEngine(canvas: HTMLCanvasElement, options?: EngineOptions): Engine;
@@ -187,6 +190,7 @@ export function createEngine(
     resizeObserver: undefined,
     statsRequests: new Map(),
     nextStatsRequest: 1,
+    structuralFallback: false,
   };
   const world = createWorldApi(state);
   const highLevel = createHighLevelApi(state, world);
@@ -466,6 +470,9 @@ function createWorldApi(state: EngineState): WorldApi {
     add(entity: Entity, component: Component) {
       dispatchCommand(state, componentCommand(entity, component));
     },
+    remove(entity: Entity, component: Component["kind"]) {
+      dispatchCommand(state, { type: "remove-component", entity, component });
+    },
   };
   return Object.freeze(world);
 }
@@ -594,7 +601,14 @@ function dispatchCommand(state: EngineState, command: RuntimeCommand): void {
   }
   if (state.status === "new" || state.status === "initializing") {
     state.pendingCommands.push(command);
+  } else if (
+    !state.structuralFallback &&
+    state.sharedMemory !== undefined &&
+    writeSharedCommand(state.sharedMemory, command)
+  ) {
+    return;
   } else {
+    state.structuralFallback = true;
     post(state, { type: "command", value: command });
   }
 }

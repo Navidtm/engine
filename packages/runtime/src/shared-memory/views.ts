@@ -6,6 +6,7 @@ import {
   SHARED_TRANSFORM_FLOATS,
   SharedHeader,
   type SharedMemoryLayout,
+  STRUCTURAL_COMMAND_WORDS,
 } from "./layout.js";
 
 export interface SharedRuntimeViews {
@@ -18,6 +19,8 @@ export interface SharedRuntimeViews {
   readonly fieldMasks: Int32Array<SharedArrayBuffer>;
   readonly queue: Int32Array<SharedArrayBuffer>;
   readonly transforms: Float32Array<SharedArrayBuffer>;
+  readonly commandWords: Int32Array<SharedArrayBuffer>;
+  readonly commandFloats: Float32Array<SharedArrayBuffer>;
 }
 
 export function createSharedRuntimeViews(
@@ -42,6 +45,16 @@ export function createSharedRuntimeViews(
       buffer,
       layout.transformByteOffset,
       layout.capacity * SHARED_TRANSFORM_FLOATS,
+    ),
+    commandWords: new Int32Array(
+      buffer,
+      layout.commandByteOffset,
+      layout.capacity * STRUCTURAL_COMMAND_WORDS,
+    ),
+    commandFloats: new Float32Array(
+      buffer,
+      layout.commandByteOffset,
+      layout.capacity * STRUCTURAL_COMMAND_WORDS,
     ),
   });
 }
