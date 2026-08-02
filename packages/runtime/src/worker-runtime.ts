@@ -18,6 +18,7 @@ interface WorkerRuntimeState {
   frameRequest: number | undefined;
   running: boolean;
   disposed: boolean;
+  initializing: boolean;
   lastFrameTimeMs: number;
   lastCpuTimeMs: number;
   previousFrameStart: number;
@@ -39,6 +40,7 @@ export function createWorkerRuntime(host: WorkerHost): (message: MainToWorkerMes
     frameRequest: undefined,
     running: false,
     disposed: false,
+    initializing: false,
     lastFrameTimeMs: 0,
     lastCpuTimeMs: 0,
     previousFrameStart: 0,
@@ -86,35 +88,35 @@ export function createWorkerRuntime(host: WorkerHost): (message: MainToWorkerMes
     let renderer: MeshRenderer | undefined;
     let core: WasmCore | undefined;
     try {
-      await Promise.all([
+      const [rendererResult, coreResult] = await Promise.allSettled([
         createMeshRenderer(
           message.value.canvas,
           message.value.size,
           message.value.entityCapacity,
           message.value.renderer,
-        ).then((value) => {
-          renderer = value;
-        }),
+        ),
         createWasmCore(
           message.value.wasmUrl,
           message.value.entityCapacity,
           message.value.sharedMemory,
           message.value.size.width / Math.max(message.value.size.height, 1),
-        ).then((value) => {
-          core = value;
-        }),
+        ),
       ]);
+      if (rendererResult.status === "fulfilled") renderer = rendererResult.value;
+      if (coreResult.status === "fulfilled") core = coreResult.value;
       if (state.disposed) {
         renderer?.dispose();
         core?.dispose();
         return;
       }
-      if (renderer === undefined || core === undefined) {
-        throw new Error("Runtime resources did not initialize.");
-      }
+      if (rendererResult.status === "rejected") throw rendererResult.reason;
+      if (coreResult.status === "rejected") throw coreResult.reason;
+      if (renderer === undefined || core === undefined)
+        throw new Error("Runtime initialization failed.");
       state.renderer = renderer;
       state.core = core;
-      void renderer.device.lost.then((info) => {
+      void renderer.lost.then((info) => {
+        if (state.disposed || state.renderer !== renderer) return;
         state.running = false;
         host.postMessage({
           type: "device-lost",
@@ -139,13 +141,18 @@ export function createWorkerRuntime(host: WorkerHost): (message: MainToWorkerMes
           if (message.value.protocolVersion !== RUNTIME_PROTOCOL_VERSION) {
             throw new Error("Lume worker protocol version mismatch.");
           }
-          if (state.renderer !== undefined) throw new Error("Runtime is already initialized.");
+          if (state.initializing || state.renderer !== undefined) {
+            throw new Error("Runtime is already initializing or initialized.");
+          }
+          state.initializing = true;
           state.size = message.value.size;
           state.sharedMemory =
             message.value.sharedMemory === undefined
               ? undefined
               : openSharedRuntimeViews(message.value.sharedMemory);
-          void initialize(message);
+          void initialize(message).finally(() => {
+            state.initializing = false;
+          });
           break;
         }
         case "command":

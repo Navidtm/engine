@@ -28,25 +28,34 @@ export function createGpuTimestampProfiler(device: GPUDevice): GpuTimestampProfi
       disposed: false,
     };
   }
-  const querySet = device.createQuerySet({
-    label: "Lume frame timestamps",
-    type: "timestamp",
-    count: QUERY_COUNT,
-  });
-  const resolveBuffer = device.createBuffer({
-    label: "Lume timestamp resolve",
-    size: QUERY_BYTES,
-    usage: GPUBufferUsage.QUERY_RESOLVE | GPUBufferUsage.COPY_SRC,
-  });
+  let querySet: GPUQuerySet | undefined;
+  let resolveBuffer: GPUBuffer | undefined;
   const readbackBuffers: GPUBuffer[] = [];
-  for (let index = 0; index < READBACK_BUFFER_COUNT; index += 1) {
-    readbackBuffers.push(
-      device.createBuffer({
-        label: `Lume timestamp readback ${index}`,
-        size: QUERY_BYTES,
-        usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
-      }),
-    );
+  try {
+    querySet = device.createQuerySet({
+      label: "Lume frame timestamps",
+      type: "timestamp",
+      count: QUERY_COUNT,
+    });
+    resolveBuffer = device.createBuffer({
+      label: "Lume timestamp resolve",
+      size: QUERY_BYTES,
+      usage: GPUBufferUsage.QUERY_RESOLVE | GPUBufferUsage.COPY_SRC,
+    });
+    for (let index = 0; index < READBACK_BUFFER_COUNT; index += 1) {
+      readbackBuffers.push(
+        device.createBuffer({
+          label: `Lume timestamp readback ${index}`,
+          size: QUERY_BYTES,
+          usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
+        }),
+      );
+    }
+  } catch (error) {
+    for (const buffer of readbackBuffers) buffer.destroy();
+    resolveBuffer?.destroy();
+    querySet?.destroy();
+    throw error;
   }
   return {
     querySet,

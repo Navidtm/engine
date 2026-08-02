@@ -33,6 +33,11 @@ surface, buffers, textures, shader creation, pipeline caching, and command
 encoding are separate modules, but they map directly to WebGPU concepts rather
 than emulating an older graphics API.
 
+The GPU device does not cross into the runtime package. The renderer exposes a
+device-loss promise as lifecycle information while retaining ownership of the
+device and every child resource. `dispose` destroys buffers, textures, profiler
+resources, the surface configuration, and the device.
+
 ## Runtime flow
 
 ```text
@@ -94,14 +99,19 @@ stale references fail validation.
 
 ## Failure model
 
-Initialization is an explicit promise. Device-loss and uncaptured GPU errors are
-reported as typed worker events. `start`, `stop`, `resize`, and `dispose` are
-idempotent. A failed initialization rejects pending work rather than silently
-falling back to a different graphics backend.
+Initialization is an explicit promise. Renderer and WASM creation run in
+parallel, but the worker waits for both branches to settle before reporting a
+failure. Any branch that succeeded is disposed, including a success that arrives
+after its sibling failed. Renderer construction also unwinds partially created
+GPU resources in reverse ownership order. Device loss is reported as a typed
+worker event. `start`, `stop`, `resize`, and `dispose` are idempotent. A failed
+initialization rejects pending work rather than silently falling back to a
+different graphics backend.
 
 ## Testing seams
 
-The Rust ECS and math code are tested without a browser. Renderer setup accepts
-explicit WebGPU objects at module boundaries, allowing future mock-device tests.
+The Rust ECS and math code are tested without a browser. Renderer ownership is
+tested with mock GPU devices, including partial initialization failure. Worker
+tests use deferred renderer/WASM promises to prove late successes are disposed.
 The worker protocol is a discriminated union that can be validated independently
 of rendering. Browser integration belongs in an end-to-end test layer.

@@ -132,7 +132,10 @@ Implemented:
 - Timestamp queries when supported, with CPU timing fallback metrics.
 - Indexed drawing and CPU-prepared instancing: consecutive compatible visible
   items are submitted with one `drawIndexed` call using `instanceCount`.
-- Device-loss reporting to the main thread.
+- Device-loss reporting to the main thread without exposing the `GPUDevice`
+  outside the renderer package.
+- Transactional renderer/WASM initialization with cleanup of partial and late
+  successful resources.
 
 Current limitations:
 

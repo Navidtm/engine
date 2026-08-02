@@ -19,6 +19,9 @@ position/rotation/scale    ------>  seqlock slots + dirty SPSC ring
 ```
 
 No ECS object, RenderWorld object or renderer resource crosses the boundary.
+The renderer retains the `GPUDevice`; only its device-loss promise is exposed to
+the worker lifecycle. Initialization waits for both renderer and WASM branches
+to settle, then disposes every fulfilled branch if either failed.
 
 ## Transform synchronization
 

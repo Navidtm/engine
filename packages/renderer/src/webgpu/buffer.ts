@@ -10,8 +10,13 @@ export function createStaticBuffer(
     usage,
     mappedAtCreation: true,
   });
-  const target = new Uint8Array(buffer.getMappedRange());
-  target.set(new Uint8Array(source.buffer, source.byteOffset, source.byteLength));
-  buffer.unmap();
-  return buffer;
+  try {
+    const target = new Uint8Array(buffer.getMappedRange());
+    target.set(new Uint8Array(source.buffer, source.byteOffset, source.byteLength));
+    buffer.unmap();
+    return buffer;
+  } catch (error) {
+    buffer.destroy();
+    throw error;
+  }
 }

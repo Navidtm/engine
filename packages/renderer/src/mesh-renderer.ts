@@ -71,7 +71,7 @@ export interface RendererStats {
 }
 
 export interface MeshRenderer {
-  readonly device: GPUDevice;
+  readonly lost: Promise<GPUDeviceLostInfo>;
   execute(frame: RenderFrame): void;
   resize(size: SurfaceSize): void;
   stats(): RendererStats;
@@ -119,112 +119,128 @@ export async function createMeshRenderer(
     requiredFeatures.push("timestamp-query");
   }
   const device = await requestDevice(adapter, { requiredFeatures });
-  const instanceBytes = Math.max(INSTANCE_BYTES, instanceCapacity * INSTANCE_BYTES);
-  if (
-    instanceBytes > device.limits.maxStorageBufferBindingSize ||
-    instanceBytes > device.limits.maxBufferSize
-  ) {
-    throw new RangeError(
-      `Configured render capacity requires ${instanceBytes} bytes, exceeding this device's storage-buffer limit.`,
-    );
-  }
-
-  const surface = createSurface(device, canvas, size, options.alphaMode ?? "opaque");
   const pipelineCache = createPipelineCache();
-  const pipeline = await getMeshPipeline(device, pipelineCache, surface.format);
-  const meshes = createMeshRegistry(device, BUILTIN_MESHES);
-  const profiler = createGpuTimestampProfiler(device);
-  const cameraBuffer = device.createBuffer({
-    label: "Lume camera uniform",
-    size: CAMERA_BYTES,
-    usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-  });
-  const instanceBuffer = device.createBuffer({
-    label: "Lume render instances",
-    size: instanceBytes,
-    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
-  });
-  const bindGroup = device.createBindGroup({
-    label: "Lume frame bind group",
-    layout: pipeline.getBindGroupLayout(0),
-    entries: [
-      { binding: 0, resource: { buffer: cameraBuffer } },
-      { binding: 1, resource: { buffer: instanceBuffer } },
-    ],
-  });
-  device.queue.writeBuffer(cameraBuffer, 0, DEFAULT_CAMERA);
+  let surface: SurfaceState | undefined;
+  let meshes: MeshRegistry | undefined;
+  let profiler: GpuTimestampProfiler | undefined;
+  let cameraBuffer: GPUBuffer | undefined;
+  let instanceBuffer: GPUBuffer | undefined;
+  try {
+    const instanceBytes = Math.max(INSTANCE_BYTES, instanceCapacity * INSTANCE_BYTES);
+    if (
+      instanceBytes > device.limits.maxStorageBufferBindingSize ||
+      instanceBytes > device.limits.maxBufferSize
+    ) {
+      throw new RangeError(
+        `Configured render capacity requires ${instanceBytes} bytes, exceeding this device's storage-buffer limit.`,
+      );
+    }
 
-  const colorAttachment: GPURenderPassColorAttachment = {
-    view: undefined as unknown as GPUTextureView,
-    clearValue: options.clearColor ?? { r: 0.018, g: 0.024, b: 0.04, a: 1 },
-    loadOp: "clear",
-    storeOp: "store",
-  };
-  const depthAttachment: GPURenderPassDepthStencilAttachment = {
-    view: surface.depthView,
-    depthClearValue: 1,
-    depthLoadOp: "clear",
-    depthStoreOp: "discard",
-  };
-  const passDescriptor: GPURenderPassDescriptor = {
-    label: "Lume main render pass",
-    colorAttachments: [colorAttachment],
-    depthStencilAttachment: depthAttachment,
-    ...(profiler.timestampWrites === undefined
-      ? {}
-      : { timestampWrites: profiler.timestampWrites }),
-  };
-  const state: RendererState = {
-    device,
-    surface,
-    pipeline,
-    pipelineCache,
-    meshes,
-    cameraBuffer,
-    instanceBuffer,
-    bindGroup,
-    profiler,
-    colorAttachment,
-    depthAttachment,
-    passDescriptor,
-    submissions: [undefined as unknown as GPUCommandBuffer],
-    drawCalls: 0,
-    submittedInstances: 0,
-    bufferUploadCpuTimeMs: 0,
-    framePreparationCpuTimeMs: 0,
-    disposed: false,
-  };
-  const frameGraph = createRendererFrameGraph();
-  const frameContext: RendererFrameContext = {
-    state,
-    frame: undefined as unknown as RenderFrame,
-    preparationStart: 0,
-  };
+    surface = createSurface(device, canvas, size, options.alphaMode ?? "opaque");
+    const pipeline = await getMeshPipeline(device, pipelineCache, surface.format);
+    meshes = createMeshRegistry(device, BUILTIN_MESHES);
+    profiler = createGpuTimestampProfiler(device);
+    cameraBuffer = device.createBuffer({
+      label: "Lume camera uniform",
+      size: CAMERA_BYTES,
+      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+    });
+    instanceBuffer = device.createBuffer({
+      label: "Lume render instances",
+      size: instanceBytes,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    });
+    const bindGroup = device.createBindGroup({
+      label: "Lume frame bind group",
+      layout: pipeline.getBindGroupLayout(0),
+      entries: [
+        { binding: 0, resource: { buffer: cameraBuffer } },
+        { binding: 1, resource: { buffer: instanceBuffer } },
+      ],
+    });
+    device.queue.writeBuffer(cameraBuffer, 0, DEFAULT_CAMERA);
 
-  const renderer: MeshRenderer = {
-    device,
-    execute(frame) {
-      if (state.disposed) return;
-      frameContext.frame = frame;
-      frameContext.preparationStart = performance.now();
-      executeFrameGraph(frameGraph, frameContext);
-    },
-    resize: (nextSize) => resize(state, nextSize),
-    stats: () => ({
-      gpuBufferBytes:
-        state.meshes.gpuBytes +
-        state.cameraBuffer.size +
-        state.instanceBuffer.size +
-        state.profiler.gpuBytes,
-      drawCalls: state.drawCalls,
-      submittedInstances: state.submittedInstances,
-      bufferUploadCpuTimeMs: state.bufferUploadCpuTimeMs,
-      framePreparationCpuTimeMs: state.framePreparationCpuTimeMs,
-      gpuTimeMs: state.profiler.gpuTimeMs,
-    }),
-    dispose: () => dispose(state),
-  };
-  return Object.freeze(renderer);
+    const colorAttachment: GPURenderPassColorAttachment = {
+      view: undefined as unknown as GPUTextureView,
+      clearValue: options.clearColor ?? { r: 0.018, g: 0.024, b: 0.04, a: 1 },
+      loadOp: "clear",
+      storeOp: "store",
+    };
+    const depthAttachment: GPURenderPassDepthStencilAttachment = {
+      view: surface.depthView,
+      depthClearValue: 1,
+      depthLoadOp: "clear",
+      depthStoreOp: "discard",
+    };
+    const passDescriptor: GPURenderPassDescriptor = {
+      label: "Lume main render pass",
+      colorAttachments: [colorAttachment],
+      depthStencilAttachment: depthAttachment,
+      ...(profiler.timestampWrites === undefined
+        ? {}
+        : { timestampWrites: profiler.timestampWrites }),
+    };
+    const state: RendererState = {
+      device,
+      surface,
+      pipeline,
+      pipelineCache,
+      meshes,
+      cameraBuffer,
+      instanceBuffer,
+      bindGroup,
+      profiler,
+      colorAttachment,
+      depthAttachment,
+      passDescriptor,
+      submissions: [undefined as unknown as GPUCommandBuffer],
+      drawCalls: 0,
+      submittedInstances: 0,
+      bufferUploadCpuTimeMs: 0,
+      framePreparationCpuTimeMs: 0,
+      disposed: false,
+    };
+    const frameGraph = createRendererFrameGraph();
+    const frameContext: RendererFrameContext = {
+      state,
+      frame: undefined as unknown as RenderFrame,
+      preparationStart: 0,
+    };
+
+    const renderer: MeshRenderer = {
+      lost: device.lost,
+      execute(frame) {
+        if (state.disposed) return;
+        frameContext.frame = frame;
+        frameContext.preparationStart = performance.now();
+        executeFrameGraph(frameGraph, frameContext);
+      },
+      resize: (nextSize) => resize(state, nextSize),
+      stats: () => ({
+        gpuBufferBytes:
+          state.meshes.gpuBytes +
+          state.cameraBuffer.size +
+          state.instanceBuffer.size +
+          state.profiler.gpuBytes,
+        drawCalls: state.drawCalls,
+        submittedInstances: state.submittedInstances,
+        bufferUploadCpuTimeMs: state.bufferUploadCpuTimeMs,
+        framePreparationCpuTimeMs: state.framePreparationCpuTimeMs,
+        gpuTimeMs: state.profiler.gpuTimeMs,
+      }),
+      dispose: () => dispose(state),
+    };
+    return Object.freeze(renderer);
+  } catch (error) {
+    instanceBuffer?.destroy();
+    cameraBuffer?.destroy();
+    if (profiler !== undefined) destroyGpuTimestampProfiler(profiler);
+    meshes?.dispose();
+    pipelineCache.clear();
+    if (surface !== undefined) destroySurface(surface);
+    device.destroy();
+    throw error;
+  }
 }
 
 function createRendererFrameGraph(): CompiledFrameGraph<RendererFrameContext> {
@@ -336,4 +352,5 @@ function dispose(state: RendererState): void {
   state.instanceBuffer.destroy();
   state.pipelineCache.clear();
   destroySurface(state.surface);
+  state.device.destroy();
 }

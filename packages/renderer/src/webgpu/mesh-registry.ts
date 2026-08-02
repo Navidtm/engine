@@ -23,33 +23,47 @@ export function createMeshRegistry(
   const meshes: Array<GpuMesh | undefined> = new Array(maxHandle + 1);
   let gpuBytes = 0;
 
-  for (const source of sources) {
-    if (source.handle <= 0 || meshes[source.handle] !== undefined) {
-      throw new Error(`Invalid or duplicate mesh handle: ${source.handle}`);
+  try {
+    for (const source of sources) {
+      if (source.handle <= 0 || meshes[source.handle] !== undefined) {
+        throw new Error(`Invalid or duplicate mesh handle: ${source.handle}`);
+      }
+      if (source.vertices.length % 6 !== 0 || source.indices.length === 0) {
+        throw new Error(`Mesh '${source.label}' has an invalid vertex/index layout.`);
+      }
+      const vertexBuffer = createStaticBuffer(
+        device,
+        `${source.label} vertices`,
+        GPUBufferUsage.VERTEX,
+        source.vertices,
+      );
+      let indexBuffer: GPUBuffer;
+      try {
+        indexBuffer = createStaticBuffer(
+          device,
+          `${source.label} indices`,
+          GPUBufferUsage.INDEX,
+          source.indices,
+        );
+      } catch (error) {
+        vertexBuffer.destroy();
+        throw error;
+      }
+      const byteLength = vertexBuffer.size + indexBuffer.size;
+      gpuBytes += byteLength;
+      meshes[source.handle] = Object.freeze({
+        vertexBuffer,
+        indexBuffer,
+        indexCount: source.indices.length,
+        byteLength,
+      });
     }
-    if (source.vertices.length % 6 !== 0 || source.indices.length === 0) {
-      throw new Error(`Mesh '${source.label}' has an invalid vertex/index layout.`);
+  } catch (error) {
+    for (const mesh of meshes) {
+      mesh?.vertexBuffer.destroy();
+      mesh?.indexBuffer.destroy();
     }
-    const vertexBuffer = createStaticBuffer(
-      device,
-      `${source.label} vertices`,
-      GPUBufferUsage.VERTEX,
-      source.vertices,
-    );
-    const indexBuffer = createStaticBuffer(
-      device,
-      `${source.label} indices`,
-      GPUBufferUsage.INDEX,
-      source.indices,
-    );
-    const byteLength = vertexBuffer.size + indexBuffer.size;
-    gpuBytes += byteLength;
-    meshes[source.handle] = Object.freeze({
-      vertexBuffer,
-      indexBuffer,
-      indexCount: source.indices.length,
-      byteLength,
-    });
+    throw error;
   }
 
   let disposed = false;
