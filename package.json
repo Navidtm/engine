@@ -11,6 +11,7 @@
     "dev": "pnpm --filter @lume/example-cube dev",
     "preview": "pnpm --filter @lume/example-cube preview",
     "benchmark": "cargo run --release -p lume-benchmarks -- --output benchmarks/results/internal-latest.json",
+    "benchmark:transport": "pnpm --filter @lume/runtime build && node --expose-gc benchmarks/transport/run.mjs",
     "format": "prettier --write . && cargo fmt --all",
     "format:check": "prettier --check . && cargo fmt --all -- --check",
     "lint": "eslint . && cargo clippy --workspace --all-targets -- -D warnings",

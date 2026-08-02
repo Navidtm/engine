@@ -1,4 +1,8 @@
-import { allocateSharedRuntimeMemory, writeSharedTransform } from "@lume/runtime";
+import {
+  allocateSharedRuntimeMemory,
+  writeSharedCommand,
+  writeSharedTransform,
+} from "@lume/runtime";
 
 declare global {
   interface Window {
@@ -38,9 +42,12 @@ worker.onmessage = (event: MessageEvent<WorkerResult>): void => {
 };
 
 const results: unknown[] = [];
-for (const entities of [10_000, 50_000, 100_000, 500_000]) {
+for (const entities of [10_000, 100_000, 500_000, 1_000_000]) {
   results.push(await benchmarkCommands(entities));
   results.push(await benchmarkSharedMemory(entities));
+}
+for (const commands of [10_000, 100_000, 500_000]) {
+  results.push(await benchmarkStructuralRing(commands));
 }
 const report = {
   schemaVersion: 1,
@@ -106,6 +113,23 @@ async function benchmarkSharedMemory(entities: number) {
     workerCommunicationMs: performance.now() - roundTripStart,
     framePreparationMs: workerResult.workerPreparationMs,
     memoryCopies: 0,
+    estimatedAllocations: 0,
+  };
+}
+
+async function benchmarkStructuralRing(commands: number) {
+  const views = allocateSharedRuntimeMemory(commands);
+  const started = performance.now();
+  for (let entity = 0; entity < commands; entity += 1) {
+    if (!writeSharedCommand(views, { type: "spawn", entity })) {
+      throw new Error("Structural ring overflowed during a capacity-sized benchmark.");
+    }
+  }
+  return {
+    transport: "structural-spsc-ring",
+    commands,
+    updateMs: performance.now() - started,
+    droppedCommands: 0,
     estimatedAllocations: 0,
   };
 }
