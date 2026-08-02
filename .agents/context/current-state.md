@@ -224,10 +224,10 @@ implementations.
 
 |  Entities |   Publish |    Drain | Dirty ranges | Allocations | Bytes staged |
 | --------: | --------: | -------: | -----------: | ----------: | -----------: |
-|    10,000 |   1.48 ms |  1.11 ms |            1 |           0 |      200,008 |
-|   100,000 |   9.44 ms |  7.22 ms |            1 |           0 |    2,000,008 |
-|   500,000 |  46.77 ms | 34.85 ms |            1 |           0 |   10,000,008 |
-| 1,000,000 | 103.09 ms | 67.26 ms |            1 |           0 |   20,000,008 |
+|    10,000 |   1.53 ms |  1.25 ms |            1 |           0 |      200,008 |
+|   100,000 |   9.56 ms |  7.94 ms |            1 |           0 |    2,000,008 |
+|   500,000 |  46.02 ms | 40.61 ms |            1 |           0 |   10,000,008 |
+| 1,000,000 | 100.65 ms | 82.97 ms |            1 |           0 |   20,000,008 |
 
 For this position-only workload, staged bytes are approximately half of the
 legacy full-transform object transport. The legacy object path is faster in
@@ -240,17 +240,17 @@ browser worker latency.
 
 | Commands |  Publish |    Drain | Dropped | Allocations |
 | -------: | -------: | -------: | ------: | ----------: |
-|   10,000 |  0.91 ms |  0.57 ms |       0 |           0 |
-|  100,000 |  4.38 ms |  3.85 ms |       0 |           0 |
-|  500,000 | 33.72 ms | 18.69 ms |       0 |           0 |
+|   10,000 |  0.88 ms |  0.59 ms |       0 |           0 |
+|  100,000 |  4.32 ms |  4.02 ms |       0 |           0 |
+|  500,000 | 23.99 ms | 18.45 ms |       0 |           0 |
 
 ### Generational Entity Lifecycle
 
 |  Entities |  Create | Destroy |   Reuse | Stale rejected |
 | --------: | ------: | ------: | ------: | :------------: |
-|    10,000 | 0.15 ms | 0.19 ms | 0.22 ms |      yes       |
-|   100,000 | 0.92 ms | 0.24 ms | 0.11 ms |      yes       |
-| 1,000,000 | 9.82 ms | 4.76 ms | 1.00 ms |      yes       |
+|    10,000 | 0.15 ms | 0.18 ms | 0.23 ms |      yes       |
+|   100,000 | 0.87 ms | 0.41 ms | 0.12 ms |      yes       |
+| 1,000,000 | 9.72 ms | 1.22 ms | 1.05 ms |      yes       |
 
 The repository also contains Rust ECS/extraction benchmarks and browser
 renderer/comparison/transport harnesses. Controlled Chrome and Edge results on

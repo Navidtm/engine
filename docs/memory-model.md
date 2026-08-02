@@ -25,8 +25,7 @@ The allocation is derived from `entityCapacity`:
 header:              15 × i32
 sequences:           capacity × i32
 dirty flags:         capacity × i32
-generations:         capacity × i32
-field masks:         capacity × i32
+publications:        capacity × i32 (generation + field mask)
 transform queue:     capacity × i32
 transforms:          capacity × 10 × f32
 structural commands: capacity × 16 × i32
@@ -34,8 +33,9 @@ structural commands: capacity × 16 × i32
 
 The structural words also have a `Float32Array` view, so command encoding does
 not allocate or convert payload buffers. Transform slots contain position,
-quaternion and scale. Packed entity indices select slots; their 12-bit
-generation is stored separately.
+quaternion and scale. Packed entity indices select slots. A single atomic
+publication word stores the 12-bit generation and four-bit field mask so masks
+cannot cross a recycled entity generation.
 
 ## Lowest-copy transform path
 
@@ -78,6 +78,12 @@ engine. Transport packs 20 index bits and 12 generation bits into a `u32`.
 Destroy advances the generation and pushes the index onto a fixed TypeScript
 free list. Recreate pops that slot. TypeScript rejects stale or foreign handles
 before publication; Rust validates the packed generation again.
+
+When a producer publishes a transform for a new generation, its mask replaces
+rather than merges with the prior generation's mask. The consumer claims the
+generation and mask as one atomic word and verifies the seqlock again after the
+claim. This prevents both cross-generation field leakage and a same-field write
+from being swallowed during consumption.
 
 Generation wraps after 4096 reuses of the same slot. Applications that retain a
 handle across that many destroy/recreate cycles exceed the protection window of

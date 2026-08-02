@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { allocateSharedRuntimeMemory } from "./allocator.js";
 import { SHARED_TRANSFORM_FLOATS, SharedHeader, TransformField } from "./layout.js";
@@ -19,6 +19,7 @@ describe("shared runtime memory", () => {
     expect(opened.layout.capacity).toBe(8);
     expect(opened.transforms).toHaveLength(8 * SHARED_TRANSFORM_FLOATS);
     expect(opened.layout.sequenceByteOffset).toBeGreaterThanOrEqual(opened.header.byteLength);
+    expect(opened.publications).toHaveLength(8);
   });
 
   it("coalesces repeated writes and drains the latest value", () => {
@@ -57,6 +58,85 @@ describe("shared runtime memory", () => {
       expect(fieldMask).toBe(TransformField.Position | TransformField.Rotation);
       expect([...values.slice(0, 7)]).toEqual([0, 0, 0, 0, 1, 0, 0]);
     });
+  });
+
+  it("discards pending field masks when an entity slot changes generation", () => {
+    const views = allocateSharedRuntimeMemory(4);
+    const oldEntity = (2 << 20) | 1;
+    const replacement = (3 << 20) | 1;
+    expect(
+      writeSharedTransform(
+        views,
+        oldEntity,
+        { ...identity, rotation: [0, 1, 0, 0] },
+        TransformField.Rotation,
+      ),
+    ).toBe(true);
+    expect(
+      writeSharedTransform(
+        views,
+        replacement,
+        { ...identity, position: [7, 8, 9] },
+        TransformField.Position,
+      ),
+    ).toBe(false);
+
+    const scratch = new Float32Array(SHARED_TRANSFORM_FLOATS);
+    const received: Array<{ entity: number; fieldMask: number; values: number[] }> = [];
+    drainSharedTransforms(views, scratch, (entity, fieldMask, values) => {
+      received.push({ entity, fieldMask, values: [...values] });
+    });
+
+    expect(received).toEqual([
+      {
+        entity: replacement,
+        fieldMask: TransformField.Position,
+        values: [7, 8, 9, 0, 1, 0, 0, 0, 0, 0],
+      },
+    ]);
+  });
+
+  it("retries when a same-field write races the publication claim", () => {
+    const views = allocateSharedRuntimeMemory(2);
+    expect(
+      writeSharedTransform(views, 1, { ...identity, position: [1, 2, 3] }, TransformField.Position),
+    ).toBe(true);
+
+    const compareExchange = Atomics.compareExchange.bind(Atomics);
+    let injected = false;
+    vi.spyOn(Atomics, "compareExchange").mockImplementation(((
+      array: Int32Array,
+      index: number,
+      expected: number,
+      replacement: number,
+    ): number => {
+      if (
+        !injected &&
+        array === views.publications &&
+        index === 1 &&
+        expected === TransformField.Position &&
+        replacement === 0
+      ) {
+        injected = true;
+        writeSharedTransform(
+          views,
+          1,
+          { ...identity, position: [4, 5, 6] },
+          TransformField.Position,
+        );
+      }
+      return compareExchange(array, index, expected, replacement);
+    }) as typeof Atomics.compareExchange);
+
+    const scratch = new Float32Array(SHARED_TRANSFORM_FLOATS);
+    const positions: number[][] = [];
+    drainSharedTransforms(views, scratch, (_entity, fieldMask, values) => {
+      expect(fieldMask).toBe(TransformField.Position);
+      positions.push([...values.slice(0, 3)]);
+    });
+
+    expect(injected).toBe(true);
+    expect(positions).toEqual([[4, 5, 6]]);
   });
 
   it("uses the full ring capacity without overflow", () => {

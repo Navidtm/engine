@@ -1,5 +1,5 @@
 export const SHARED_MEMORY_MAGIC = 0x4c55_4d45;
-export const SHARED_MEMORY_VERSION = 3;
+export const SHARED_MEMORY_VERSION = 4;
 export const SHARED_HEADER_INTS = 15;
 export const SHARED_TRANSFORM_FLOATS = 10;
 export const STRUCTURAL_COMMAND_WORDS = 16;
@@ -36,8 +36,7 @@ export interface SharedMemoryLayout {
   readonly headerByteOffset: number;
   readonly sequenceByteOffset: number;
   readonly dirtyByteOffset: number;
-  readonly generationByteOffset: number;
-  readonly fieldMaskByteOffset: number;
+  readonly publicationByteOffset: number;
   readonly queueByteOffset: number;
   readonly transformByteOffset: number;
   readonly commandByteOffset: number;
@@ -52,9 +51,8 @@ export function calculateSharedMemoryLayout(capacity: number): SharedMemoryLayou
   const headerByteOffset = 0;
   const sequenceByteOffset = SHARED_HEADER_INTS * intBytes;
   const dirtyByteOffset = sequenceByteOffset + capacity * intBytes;
-  const generationByteOffset = dirtyByteOffset + capacity * intBytes;
-  const fieldMaskByteOffset = generationByteOffset + capacity * intBytes;
-  const queueByteOffset = fieldMaskByteOffset + capacity * intBytes;
+  const publicationByteOffset = dirtyByteOffset + capacity * intBytes;
+  const queueByteOffset = publicationByteOffset + capacity * intBytes;
   const transformByteOffset = queueByteOffset + capacity * intBytes;
   const commandByteOffset = transformByteOffset + capacity * SHARED_TRANSFORM_FLOATS * floatBytes;
   const byteLength = commandByteOffset + capacity * STRUCTURAL_COMMAND_WORDS * intBytes;
@@ -67,8 +65,7 @@ export function calculateSharedMemoryLayout(capacity: number): SharedMemoryLayou
     headerByteOffset,
     sequenceByteOffset,
     dirtyByteOffset,
-    generationByteOffset,
-    fieldMaskByteOffset,
+    publicationByteOffset,
     queueByteOffset,
     transformByteOffset,
     commandByteOffset,

@@ -47,19 +47,25 @@ The committed Node transport run on Darwin arm64, Node 24.16.0, produced:
 
 | Scenario              | Scale |   Publish |    Drain |
 | --------------------- | ----: | --------: | -------: |
-| partial transform SAB |   10k |   1.48 ms |  1.11 ms |
-| partial transform SAB |  100k |   9.44 ms |  7.22 ms |
-| partial transform SAB |  500k |  46.77 ms | 34.85 ms |
-| partial transform SAB |    1M | 103.09 ms | 67.26 ms |
-| structural SPSC ring  |   10k |   0.91 ms |  0.57 ms |
-| structural SPSC ring  |  100k |   4.38 ms |  3.85 ms |
-| structural SPSC ring  |  500k |  33.72 ms | 18.69 ms |
+| partial transform SAB |   10k |   1.53 ms |  1.25 ms |
+| partial transform SAB |  100k |   9.56 ms |  7.94 ms |
+| partial transform SAB |  500k |  46.02 ms | 40.61 ms |
+| partial transform SAB |    1M | 100.65 ms | 82.97 ms |
+| structural SPSC ring  |   10k |   0.88 ms |  0.59 ms |
+| structural SPSC ring  |  100k |   4.32 ms |  4.02 ms |
+| structural SPSC ring  |  500k |  23.99 ms | 18.45 ms |
 
 Sequential transform runs merged into one dirty range and reported zero hot-path
 allocations. At 1M position updates, estimated staging bytes fell from 40 MB of
 full transform payload to 20,000,008 bytes including masks, generations and the
 range descriptor. Lifecycle create/destroy/reuse at 1M measured 9.82/4.76/1.00
 ms in the typed-array model.
+
+Shared-memory version 4 adds an atomic generation/mask claim and post-claim
+sequence verification. Compared with the prior unguarded drain, the 1M Node
+drain rose from 67.26 ms to 82.97 ms. This is an explicit correctness cost: the
+old result could lose a same-field concurrent write or merge fields across a
+recycled generation.
 
 These numbers isolate transport CPU work in Node and are not browser frame-time
 claims. The browser harness records user agent, logical cores, worker round-trip

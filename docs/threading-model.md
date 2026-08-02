@@ -22,16 +22,18 @@ No ECS object, RenderWorld object or renderer resource crosses the boundary.
 
 ## Transform synchronization
 
-The producer makes a slot sequence odd, writes only selected floats, publishes
-generation and ORs the field mask, then makes the sequence even. A dirty
-compare-and-exchange enqueues the index at most once. Atomics provide the
-publication ordering.
+The producer makes a slot sequence odd, writes only selected floats, and updates
+one atomic publication word containing generation plus field mask before making
+the sequence even. Masks merge only while the generation matches; a recycled
+generation replaces the old mask. A dirty compare-and-exchange enqueues the
+index at most once.
 
-The consumer retries a read if the sequence is odd or changes. It exchanges the
-published mask, releases the dirty flag, and requeues the slot if a producer
-merged another mask during consumption. This closes the clear-versus-write race
-without a lock. The worker drains at frame start and never blocks with
-`Atomics.wait`.
+The consumer reads a stable value snapshot, atomically claims the matching
+generation/mask word, and checks the sequence again. If an idempotent producer
+write changed the sequence without changing the mask bits, the consumer restores
+the claimed bits and retries. After releasing the dirty flag it requeues any
+publication that arrived during consumption. The worker drains at frame start
+and never blocks with `Atomics.wait`.
 
 ## Structural synchronization
 
@@ -57,7 +59,9 @@ spawn(index, generation N+1)
 
 The old handle becomes invalid synchronously on the main thread. FIFO processing
 then changes Rust liveness before any command for the replacement reaches the
-ECS. Both sides validate generations independently.
+ECS. Both sides validate generations independently. A transform publication
+from the old generation is rejected by Rust; if the replacement publishes
+before drain, its generation atomically replaces the old publication mask.
 
 ## Browser requirements
 

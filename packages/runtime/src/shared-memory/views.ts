@@ -15,8 +15,7 @@ export interface SharedRuntimeViews {
   readonly header: Int32Array<SharedArrayBuffer>;
   readonly sequences: Int32Array<SharedArrayBuffer>;
   readonly dirty: Int32Array<SharedArrayBuffer>;
-  readonly generations: Int32Array<SharedArrayBuffer>;
-  readonly fieldMasks: Int32Array<SharedArrayBuffer>;
+  readonly publications: Int32Array<SharedArrayBuffer>;
   readonly queue: Int32Array<SharedArrayBuffer>;
   readonly transforms: Float32Array<SharedArrayBuffer>;
   readonly commandWords: Int32Array<SharedArrayBuffer>;
@@ -38,8 +37,7 @@ export function createSharedRuntimeViews(
     header: new Int32Array(buffer, layout.headerByteOffset, SHARED_HEADER_INTS),
     sequences: new Int32Array(buffer, layout.sequenceByteOffset, layout.capacity),
     dirty: new Int32Array(buffer, layout.dirtyByteOffset, layout.capacity),
-    generations: new Int32Array(buffer, layout.generationByteOffset, layout.capacity),
-    fieldMasks: new Int32Array(buffer, layout.fieldMaskByteOffset, layout.capacity),
+    publications: new Int32Array(buffer, layout.publicationByteOffset, layout.capacity),
     queue: new Int32Array(buffer, layout.queueByteOffset, layout.capacity),
     transforms: new Float32Array(
       buffer,

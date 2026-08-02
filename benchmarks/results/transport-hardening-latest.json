@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
   "benchmark": "transport-hardening",
-  "generatedAt": "2026-08-02T11:24:07.970Z",
+  "generatedAt": "2026-08-02T12:24:54.310Z",
   "environment": {
     "runtime": "node",
     "node": "v24.16.0",
@@ -16,8 +16,8 @@
     {
       "scenario": "legacy_object_transform_transport",
       "entities": 10000,
-      "publishMs": 1.0750409999999988,
-      "drainMs": 0.2307079999999999,
+      "publishMs": 1.0961250000000007,
+      "drainMs": 0.2325840000000028,
       "allocations": 40001,
       "bytesUploaded": 400000,
       "checksum": 50005000
@@ -25,8 +25,8 @@
     {
       "scenario": "shared_partial_transform_transport",
       "entities": 10000,
-      "publishMs": 1.4751249999999985,
-      "drainMs": 1.1052919999999986,
+      "publishMs": 1.5290840000000046,
+      "drainMs": 1.253416999999999,
       "drained": 10000,
       "dirtyRanges": 1,
       "allocations": 0,
@@ -36,8 +36,8 @@
     {
       "scenario": "legacy_object_transform_transport",
       "entities": 100000,
-      "publishMs": 5.622833,
-      "drainMs": 1.2487080000000006,
+      "publishMs": 6.210708000000004,
+      "drainMs": 1.2862500000000026,
       "allocations": 400001,
       "bytesUploaded": 4000000,
       "checksum": 5000050000
@@ -45,8 +45,8 @@
     {
       "scenario": "shared_partial_transform_transport",
       "entities": 100000,
-      "publishMs": 9.443999999999996,
-      "drainMs": 7.222459000000001,
+      "publishMs": 9.563207999999996,
+      "drainMs": 7.937667000000005,
       "drained": 100000,
       "dirtyRanges": 1,
       "allocations": 0,
@@ -56,8 +56,8 @@
     {
       "scenario": "legacy_object_transform_transport",
       "entities": 500000,
-      "publishMs": 30.432916999999996,
-      "drainMs": 1.6038329999999945,
+      "publishMs": 32.75375,
+      "drainMs": 1.6874579999999924,
       "allocations": 2000001,
       "bytesUploaded": 20000000,
       "checksum": 125000250000
@@ -65,8 +65,8 @@
     {
       "scenario": "shared_partial_transform_transport",
       "entities": 500000,
-      "publishMs": 46.76895899999998,
-      "drainMs": 34.846000000000004,
+      "publishMs": 46.015208000000015,
+      "drainMs": 40.610083,
       "drained": 500000,
       "dirtyRanges": 1,
       "allocations": 0,
@@ -76,8 +76,8 @@
     {
       "scenario": "legacy_object_transform_transport",
       "entities": 1000000,
-      "publishMs": 74.53533300000001,
-      "drainMs": 3.2487079999999935,
+      "publishMs": 71.549833,
+      "drainMs": 4.368416999999965,
       "allocations": 4000001,
       "bytesUploaded": 40000000,
       "checksum": 500000500000
@@ -85,8 +85,8 @@
     {
       "scenario": "shared_partial_transform_transport",
       "entities": 1000000,
-      "publishMs": 103.08587500000002,
-      "drainMs": 67.25912500000004,
+      "publishMs": 100.65129100000001,
+      "drainMs": 82.970459,
       "drained": 1000000,
       "dirtyRanges": 1,
       "allocations": 0,
@@ -96,8 +96,8 @@
     {
       "scenario": "structural_spsc_ring",
       "commands": 10000,
-      "publishMs": 0.9145839999999907,
-      "drainMs": 0.5694169999999872,
+      "publishMs": 0.8797079999999937,
+      "drainMs": 0.5859169999999949,
       "drained": 10000,
       "droppedCommands": 0,
       "allocations": 0,
@@ -106,8 +106,8 @@
     {
       "scenario": "structural_spsc_ring",
       "commands": 100000,
-      "publishMs": 4.379292000000021,
-      "drainMs": 3.8497089999999616,
+      "publishMs": 4.321458000000007,
+      "drainMs": 4.021582999999964,
       "drained": 100000,
       "droppedCommands": 0,
       "allocations": 0,
@@ -116,8 +116,8 @@
     {
       "scenario": "structural_spsc_ring",
       "commands": 500000,
-      "publishMs": 33.71670799999998,
-      "drainMs": 18.69120799999996,
+      "publishMs": 23.985666999999978,
+      "drainMs": 18.446666999999934,
       "drained": 500000,
       "droppedCommands": 0,
       "allocations": 0,
@@ -126,27 +126,27 @@
     {
       "scenario": "generational_entity_lifecycle",
       "entities": 10000,
-      "createMs": 0.1517910000000029,
-      "destroyMs": 0.192416000000037,
-      "reuseMs": 0.22374999999999545,
+      "createMs": 0.1538749999999709,
+      "destroyMs": 0.17670799999996234,
+      "reuseMs": 0.23070900000004713,
       "staleRejected": true,
       "runtimeAllocations": 0
     },
     {
       "scenario": "generational_entity_lifecycle",
       "entities": 100000,
-      "createMs": 0.9238330000000019,
-      "destroyMs": 0.24245899999999665,
-      "reuseMs": 0.11312500000002501,
+      "createMs": 0.8728750000000218,
+      "destroyMs": 0.41287500000009913,
+      "reuseMs": 0.11700000000007549,
       "staleRejected": true,
       "runtimeAllocations": 0
     },
     {
       "scenario": "generational_entity_lifecycle",
       "entities": 1000000,
-      "createMs": 9.821750000000009,
-      "destroyMs": 4.76279199999999,
-      "reuseMs": 1.0021249999999782,
+      "createMs": 9.720084000000043,
+      "destroyMs": 1.2244160000000193,
+      "reuseMs": 1.0485840000000053,
       "staleRejected": true,
       "runtimeAllocations": 0
     }

@@ -41,10 +41,12 @@ assigning unchanged transform fields.
 
 ## Transform synchronization
 
-Each transform slot contains a generation, a seqlock sequence, and a field mask.
-The producer makes the sequence odd, writes selected values, ORs their mask, and
-makes the sequence even. It then enqueues the index once using an atomic dirty
-bit. The consumer retries if the sequence changes or is odd.
+Each transform slot contains a seqlock sequence and one atomic publication word
+packing generation plus field mask. The producer makes the sequence odd, writes
+selected values, merges the mask only when the generation matches, and makes the
+sequence even. It then enqueues the index once using an atomic dirty bit. The
+consumer claims the packed publication only after a stable read and verifies the
+sequence again after claiming it.
 
 Field bits are:
 
@@ -57,7 +59,10 @@ Field bits are:
 
 Adjacent drained indices are merged into reusable `{ start, count }` ranges.
 Queue order is preserved; no sort or temporary allocation is allowed. Duplicate
-updates collapse through the dirty bit and field-mask OR operation.
+updates collapse through the dirty bit and generation-aware field-mask merge.
+If a producer repeats the same field while consumption is in progress, the
+post-claim sequence check restores that field for a retry rather than losing the
+new value.
 
 ## Structural command queue
 

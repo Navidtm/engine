@@ -1,6 +1,9 @@
 import { SHARED_TRANSFORM_FLOATS, SharedHeader, TransformField } from "./layout.js";
 import type { SharedRuntimeViews } from "./views.js";
 
+const PUBLICATION_MASK_BITS = 4;
+const PUBLICATION_FIELD_MASK = (1 << PUBLICATION_MASK_BITS) - 1;
+
 export interface SharedTransformValue {
   readonly position: readonly [number, number, number];
   readonly rotation: readonly [number, number, number, number];
@@ -42,8 +45,7 @@ export function writeSharedTransform(
     views.transforms[offset + 8] = value.scale[1];
     views.transforms[offset + 9] = value.scale[2];
   }
-  Atomics.store(views.generations, index, entity >>> 20);
-  Atomics.or(views.fieldMasks, index, fieldMask);
+  publishGenerationAndMask(views, index, entity >>> 20, fieldMask);
   Atomics.add(views.sequences, index, 1);
 
   let enqueued = false;
@@ -81,15 +83,15 @@ export function drainSharedTransforms(
     const index = Atomics.load(views.queue, head);
     Atomics.store(views.header, SharedHeader.QueueHead, (head + 1) % views.layout.capacity);
     Atomics.sub(views.header, SharedHeader.PendingCount, 1);
-    readStableTransform(views, index, scratch);
-    const generation = Atomics.load(views.generations, index);
-    const fieldMask = Atomics.exchange(views.fieldMasks, index, 0);
+    const publication = claimStableTransform(views, index, scratch);
     Atomics.store(views.dirty, index, 0);
-    consume((generation << 20) | index, fieldMask, scratch);
+    if (publication.fieldMask !== 0) {
+      consume((publication.generation << 20) | index, publication.fieldMask, scratch);
+    }
     // A producer may have merged a write while this slot was still marked dirty.
     // Requeue it after releasing the slot so its newly published mask is not lost.
     if (
-      Atomics.load(views.fieldMasks, index) !== 0 &&
+      publicationFieldMask(Atomics.load(views.publications, index)) !== 0 &&
       Atomics.compareExchange(views.dirty, index, 0, 1) === 0
     ) {
       const tail = Atomics.load(views.header, SharedHeader.QueueTail);
@@ -103,21 +105,70 @@ export function drainSharedTransforms(
   return drained;
 }
 
-function readStableTransform(
+function publishGenerationAndMask(
   views: SharedRuntimeViews,
-  entity: number,
-  target: Float32Array<ArrayBuffer>,
+  index: number,
+  generation: number,
+  fieldMask: number,
 ): void {
-  const sourceOffset = entity * SHARED_TRANSFORM_FLOATS;
   while (true) {
-    const before = Atomics.load(views.sequences, entity);
-    if ((before & 1) !== 0) continue;
-    for (let index = 0; index < SHARED_TRANSFORM_FLOATS; index += 1) {
-      target[index] = views.transforms[sourceOffset + index] ?? 0;
-    }
-    const after = Atomics.load(views.sequences, entity);
-    if (before === after && (after & 1) === 0) return;
+    const current = Atomics.load(views.publications, index);
+    const currentGeneration = publicationGeneration(current);
+    const mergedMask =
+      (currentGeneration === generation ? publicationFieldMask(current) : 0) | fieldMask;
+    const next = packPublication(generation, mergedMask);
+    if (Atomics.compareExchange(views.publications, index, current, next) === current) return;
   }
+}
+
+function claimStableTransform(
+  views: SharedRuntimeViews,
+  index: number,
+  target: Float32Array<ArrayBuffer>,
+): { readonly generation: number; readonly fieldMask: number } {
+  const sourceOffset = index * SHARED_TRANSFORM_FLOATS;
+  while (true) {
+    const before = Atomics.load(views.sequences, index);
+    if ((before & 1) !== 0) continue;
+    const publication = Atomics.load(views.publications, index);
+    for (let valueIndex = 0; valueIndex < SHARED_TRANSFORM_FLOATS; valueIndex += 1) {
+      target[valueIndex] = views.transforms[sourceOffset + valueIndex] ?? 0;
+    }
+    const after = Atomics.load(views.sequences, index);
+    if (before !== after || (after & 1) !== 0) continue;
+
+    const generation = publicationGeneration(publication);
+    const fieldMask = publicationFieldMask(publication);
+    const claimed = packPublication(generation, 0);
+    if (Atomics.compareExchange(views.publications, index, publication, claimed) !== publication) {
+      continue;
+    }
+
+    // An idempotent producer OR can leave the publication word unchanged. The
+    // sequence check detects that write; restoring the claimed bits makes the
+    // retry observe it. A generation change cannot be overwritten by this CAS
+    // because the generation occupies the same atomic word.
+    if (Atomics.load(views.sequences, index) !== after) {
+      const current = Atomics.load(views.publications, index);
+      if (publicationGeneration(current) === generation) {
+        Atomics.or(views.publications, index, fieldMask);
+      }
+      continue;
+    }
+    return { generation, fieldMask };
+  }
+}
+
+function packPublication(generation: number, fieldMask: number): number {
+  return (generation << PUBLICATION_MASK_BITS) | fieldMask;
+}
+
+function publicationGeneration(publication: number): number {
+  return publication >>> PUBLICATION_MASK_BITS;
+}
+
+function publicationFieldMask(publication: number): number {
+  return publication & PUBLICATION_FIELD_MASK;
 }
 
 function validateEntity(views: SharedRuntimeViews, entity: number): void {
