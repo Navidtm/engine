@@ -1,12 +1,12 @@
 import type { RenderFrame } from "@lume/renderer";
 
 import type { RuntimeCommand } from "./protocol.js";
-import { SHARED_TRANSFORM_FLOATS } from "./shared-memory/layout.js";
+import { SHARED_TRANSFORM_FLOATS, TransformField } from "./shared-memory/layout.js";
 import { drainSharedCommands, StructuralOpcode } from "./shared-memory/structural.js";
 import { drainSharedTransforms } from "./shared-memory/synchronization.js";
 import { openSharedRuntimeViews } from "./shared-memory/views.js";
 
-const EXPECTED_ABI_VERSION = 4;
+const EXPECTED_ABI_VERSION = 5;
 const INSTANCE_FLOATS = 20;
 const CAMERA_FLOATS = 32;
 
@@ -32,10 +32,12 @@ interface LumeWasmExports extends WebAssembly.Exports {
     sz: number,
   ): number;
   lume_transform_update_capacity(engine: number): number;
-  lume_transform_update_entities_ptr(engine: number): number;
+  lume_transform_update_generations_ptr(engine: number): number;
   lume_transform_update_values_ptr(engine: number): number;
   lume_transform_update_masks_ptr(engine: number): number;
-  lume_engine_apply_transform_updates(engine: number, updateCount: number): number;
+  lume_transform_range_starts_ptr(engine: number): number;
+  lume_transform_range_counts_ptr(engine: number): number;
+  lume_engine_apply_transform_ranges(engine: number, rangeCount: number): number;
   lume_engine_add_material(
     engine: number,
     entity: number,
@@ -91,6 +93,8 @@ export interface WasmStats {
   readonly renderInstances: number;
   readonly visibleObjects: number;
   readonly sharedTransformUpdates: number;
+  readonly dirtyRanges: number;
+  readonly bytesUploaded: number;
   readonly wasmHeapBytes: number;
 }
 
@@ -128,9 +132,11 @@ export async function createWasmCore(
   const instancesPointer = exports.lume_visible_instances_ptr(handle);
   const camerasPointer = exports.lume_render_cameras_ptr(handle);
   const transformUpdateCapacity = exports.lume_transform_update_capacity(handle);
-  const transformUpdateEntitiesPointer = exports.lume_transform_update_entities_ptr(handle);
+  const transformUpdateGenerationsPointer = exports.lume_transform_update_generations_ptr(handle);
   const transformUpdateValuesPointer = exports.lume_transform_update_values_ptr(handle);
   const transformUpdateMasksPointer = exports.lume_transform_update_masks_ptr(handle);
+  const transformRangeStartsPointer = exports.lume_transform_range_starts_ptr(handle);
+  const transformRangeCountsPointer = exports.lume_transform_range_counts_ptr(handle);
   const sharedViews = sharedMemory === undefined ? undefined : openSharedRuntimeViews(sharedMemory);
   if (sharedViews !== undefined && sharedViews.layout.capacity > transformUpdateCapacity) {
     exports.lume_engine_destroy(handle);
@@ -147,9 +153,9 @@ export async function createWasmCore(
     instancesPointer,
     camerasPointer,
   );
-  let transformUpdateEntities = new Uint32Array(
+  let transformUpdateGenerations = new Uint32Array(
     observedMemory,
-    transformUpdateEntitiesPointer,
+    transformUpdateGenerationsPointer,
     transformUpdateCapacity,
   );
   let transformUpdateValues = new Float32Array(
@@ -162,35 +168,93 @@ export async function createWasmCore(
     transformUpdateMasksPointer,
     transformUpdateCapacity,
   );
+  let transformRangeStarts = new Uint32Array(
+    observedMemory,
+    transformRangeStartsPointer,
+    transformUpdateCapacity,
+  );
+  let transformRangeCounts = new Uint32Array(
+    observedMemory,
+    transformRangeCountsPointer,
+    transformUpdateCapacity,
+  );
+  const stagedEpochs = new Uint32Array(transformUpdateCapacity);
   const transformScratch = new Float32Array(SHARED_TRANSFORM_FLOATS);
   let stagedTransformCount = 0;
+  let stagedRangeCount = 0;
+  let stagingEpoch = 0;
+  let previousStagedIndex = -2;
   let lastSharedTransformUpdates = 0;
+  let totalDirtyRanges = 0;
+  let totalBytesUploaded = 0;
   const stageTransform = (
     entity: number,
     fieldMask: number,
     values: Float32Array<ArrayBuffer>,
   ): void => {
-    transformUpdateEntities[stagedTransformCount] = entity;
-    transformUpdateMasks[stagedTransformCount] = fieldMask;
-    transformUpdateValues.set(values, stagedTransformCount * SHARED_TRANSFORM_FLOATS);
+    const index = entity & 0x000f_ffff;
+    const alreadyStaged = stagedEpochs[index] === stagingEpoch;
+    stagedEpochs[index] = stagingEpoch;
+    transformUpdateGenerations[index] = entity >>> 20;
+    transformUpdateMasks[index] = alreadyStaged
+      ? (transformUpdateMasks[index] ?? 0) | fieldMask
+      : fieldMask;
+    const valueOffset = index * SHARED_TRANSFORM_FLOATS;
+    if ((fieldMask & TransformField.Position) !== 0) {
+      transformUpdateValues[valueOffset] = values[0] ?? 0;
+      transformUpdateValues[valueOffset + 1] = values[1] ?? 0;
+      transformUpdateValues[valueOffset + 2] = values[2] ?? 0;
+      totalBytesUploaded += 12;
+    }
+    if ((fieldMask & TransformField.Rotation) !== 0) {
+      transformUpdateValues[valueOffset + 3] = values[3] ?? 0;
+      transformUpdateValues[valueOffset + 4] = values[4] ?? 0;
+      transformUpdateValues[valueOffset + 5] = values[5] ?? 0;
+      transformUpdateValues[valueOffset + 6] = values[6] ?? 0;
+      totalBytesUploaded += 16;
+    }
+    if ((fieldMask & TransformField.Scale) !== 0) {
+      transformUpdateValues[valueOffset + 7] = values[7] ?? 0;
+      transformUpdateValues[valueOffset + 8] = values[8] ?? 0;
+      transformUpdateValues[valueOffset + 9] = values[9] ?? 0;
+      totalBytesUploaded += 12;
+    }
+    totalBytesUploaded += 8;
+    if (alreadyStaged) return;
+    if (index === previousStagedIndex + 1 && stagedRangeCount > 0) {
+      transformRangeCounts[stagedRangeCount - 1] =
+        (transformRangeCounts[stagedRangeCount - 1] ?? 0) + 1;
+    } else {
+      transformRangeStarts[stagedRangeCount] = index;
+      transformRangeCounts[stagedRangeCount] = 1;
+      stagedRangeCount += 1;
+      totalBytesUploaded += 8;
+    }
+    previousStagedIndex = index;
     stagedTransformCount += 1;
   };
   let disposed = false;
   let currentAspect = initialAspect;
+  const applyShared = (
+    opcode: StructuralOpcode,
+    entity: number,
+    offset: number,
+    views: ReturnType<typeof openSharedRuntimeViews>,
+  ): void => {
+    const accepted = applySharedCommand(
+      exports,
+      handle,
+      opcode,
+      entity,
+      offset,
+      views,
+      currentAspect,
+    );
+    if (accepted === 0) throw new Error(`WASM rejected shared structural command ${opcode}.`);
+  };
   const updateSharedCommands = (): void => {
     if (sharedViews === undefined) return;
-    drainSharedCommands(sharedViews, (opcode, entity, offset, views) => {
-      const accepted = applySharedCommand(
-        exports,
-        handle,
-        opcode,
-        entity,
-        offset,
-        views,
-        currentAspect,
-      );
-      if (accepted === 0) throw new Error(`WASM rejected shared structural command ${opcode}.`);
-    });
+    drainSharedCommands(sharedViews, applyShared);
   };
 
   const core: WasmCore = {
@@ -220,9 +284,9 @@ export async function createWasmCore(
         frame.materials = refreshed.materials;
         frame.instanceData = refreshed.instanceData;
         frame.cameraData = refreshed.cameraData;
-        transformUpdateEntities = new Uint32Array(
+        transformUpdateGenerations = new Uint32Array(
           observedMemory,
-          transformUpdateEntitiesPointer,
+          transformUpdateGenerationsPointer,
           transformUpdateCapacity,
         );
         transformUpdateValues = new Float32Array(
@@ -235,19 +299,33 @@ export async function createWasmCore(
           transformUpdateMasksPointer,
           transformUpdateCapacity,
         );
+        transformRangeStarts = new Uint32Array(
+          observedMemory,
+          transformRangeStartsPointer,
+          transformUpdateCapacity,
+        );
+        transformRangeCounts = new Uint32Array(
+          observedMemory,
+          transformRangeCountsPointer,
+          transformUpdateCapacity,
+        );
       }
       if (sharedViews !== undefined) {
         updateSharedCommands();
         stagedTransformCount = 0;
+        stagedRangeCount = 0;
+        previousStagedIndex = -2;
+        stagingEpoch = stagingEpoch === 0xffff_ffff ? 1 : stagingEpoch + 1;
         drainSharedTransforms(sharedViews, transformScratch, stageTransform);
         if (
           stagedTransformCount > 0 &&
-          exports.lume_engine_apply_transform_updates(handle, stagedTransformCount) !==
+          exports.lume_engine_apply_transform_ranges(handle, stagedRangeCount) !==
             stagedTransformCount
         ) {
           throw new Error("WASM rejected one or more shared transform updates.");
         }
         lastSharedTransformUpdates = stagedTransformCount;
+        totalDirtyRanges += stagedRangeCount;
       }
       if (!disposed && exports.lume_engine_update(handle) === 0) {
         throw new Error("WASM world update failed.");
@@ -268,6 +346,8 @@ export async function createWasmCore(
         renderInstances: exports.lume_render_instance_count(handle),
         visibleObjects: exports.lume_visible_count(handle),
         sharedTransformUpdates: lastSharedTransformUpdates,
+        dirtyRanges: totalDirtyRanges,
+        bytesUploaded: totalBytesUploaded,
         wasmHeapBytes: exports.memory.buffer.byteLength,
       };
     },

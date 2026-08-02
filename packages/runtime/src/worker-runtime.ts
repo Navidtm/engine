@@ -22,6 +22,7 @@ interface WorkerRuntimeState {
   lastCpuTimeMs: number;
   previousFrameStart: number;
   sharedMemory: SharedRuntimeViews | undefined;
+  messages: number;
 }
 
 export interface WorkerHost {
@@ -42,6 +43,7 @@ export function createWorkerRuntime(host: WorkerHost): (message: MainToWorkerMes
     lastCpuTimeMs: 0,
     previousFrameStart: 0,
     sharedMemory: undefined,
+    messages: 0,
   };
 
   const report = (error: unknown): void => {
@@ -130,6 +132,7 @@ export function createWorkerRuntime(host: WorkerHost): (message: MainToWorkerMes
 
   return (message): void => {
     if (state.disposed) return;
+    state.messages += 1;
     try {
       switch (message.type) {
         case "init": {
@@ -195,7 +198,12 @@ export function createWorkerRuntime(host: WorkerHost): (message: MainToWorkerMes
                 bufferUploadCpuTime: rendererStats?.bufferUploadCpuTimeMs ?? 0,
                 framePreparationCpuTime: rendererStats?.framePreparationCpuTimeMs ?? 0,
               },
-              transport: transportStats(state.sharedMemory, coreStats?.sharedTransformUpdates ?? 0),
+              transport: transportStats(
+                state.sharedMemory,
+                state.messages,
+                coreStats?.dirtyRanges ?? 0,
+                coreStats?.bytesUploaded ?? 0,
+              ),
             },
           });
           break;
@@ -217,25 +225,31 @@ export function createWorkerRuntime(host: WorkerHost): (message: MainToWorkerMes
 
 function transportStats(
   sharedMemory: SharedRuntimeViews | undefined,
-  appliedTransforms: number,
+  messages: number,
+  dirtyRanges: number,
+  bytesUploaded: number,
 ): EngineStats["transport"] {
   if (sharedMemory === undefined) {
     return {
       kind: "commands",
-      appliedTransforms: 0,
-      pendingTransforms: 0,
-      writeEpoch: 0,
-      readEpoch: 0,
-      overflows: 0,
+      messages,
+      sharedWrites: 0,
+      dirtyRanges: 0,
+      bytesUploaded: 0,
+      queueDepth: 0,
+      droppedCommands: 0,
     };
   }
   return {
     kind: "shared-memory",
-    appliedTransforms,
-    pendingTransforms: Atomics.load(sharedMemory.header, SharedHeader.PendingCount),
-    writeEpoch: Atomics.load(sharedMemory.header, SharedHeader.WriteEpoch),
-    readEpoch: Atomics.load(sharedMemory.header, SharedHeader.ReadEpoch),
-    overflows: Atomics.load(sharedMemory.header, SharedHeader.OverflowCount),
+    messages,
+    sharedWrites: Atomics.load(sharedMemory.header, SharedHeader.SharedWrites),
+    dirtyRanges,
+    bytesUploaded,
+    queueDepth:
+      Atomics.load(sharedMemory.header, SharedHeader.PendingCount) +
+      Atomics.load(sharedMemory.header, SharedHeader.CommandPending),
+    droppedCommands: Atomics.load(sharedMemory.header, SharedHeader.DroppedCommands),
   };
 }
 

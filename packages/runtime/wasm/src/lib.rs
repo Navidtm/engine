@@ -7,7 +7,7 @@ use lume_core::{
     RenderWorld, Transform, VisibleRenderBuffer, World, WorldCapacity,
 };
 
-pub const ABI_VERSION: u32 = 4;
+pub const ABI_VERSION: u32 = 5;
 
 const TRANSFORM_UPDATE_FLOATS: usize = 10;
 
@@ -15,9 +15,11 @@ struct EngineCore {
     world: World,
     render_world: RenderWorld,
     visible: VisibleRenderBuffer,
-    transform_update_entities: Box<[u32]>,
+    transform_update_generations: Box<[u32]>,
     transform_update_values: Box<[[f32; TRANSFORM_UPDATE_FLOATS]]>,
     transform_update_masks: Box<[u32]>,
+    transform_range_starts: Box<[u32]>,
+    transform_range_counts: Box<[u32]>,
 }
 
 #[unsafe(no_mangle)]
@@ -40,9 +42,11 @@ pub extern "C" fn lume_engine_create(entity_capacity: u32) -> *mut c_void {
         world: World::with_capacity(capacity),
         render_world: RenderWorld::with_capacity(entities, 8),
         visible: VisibleRenderBuffer::with_capacity(entities),
-        transform_update_entities: vec![0; entities].into_boxed_slice(),
+        transform_update_generations: vec![0; entities].into_boxed_slice(),
         transform_update_values: vec![[0.0; TRANSFORM_UPDATE_FLOATS]; entities].into_boxed_slice(),
         transform_update_masks: vec![0; entities].into_boxed_slice(),
+        transform_range_starts: vec![0; entities].into_boxed_slice(),
+        transform_range_counts: vec![0; entities].into_boxed_slice(),
     }))
     .cast()
 }
@@ -102,13 +106,18 @@ pub extern "C" fn lume_engine_add_transform(
 
 #[unsafe(no_mangle)]
 pub extern "C" fn lume_transform_update_capacity(engine: *mut c_void) -> u32 {
-    with_engine_value(engine, |core| core.transform_update_entities.len() as u32).unwrap_or(0)
+    with_engine_value(engine, |core| {
+        core.transform_update_generations.len() as u32
+    })
+    .unwrap_or(0)
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn lume_transform_update_entities_ptr(engine: *mut c_void) -> *mut u32 {
-    with_engine_mut_value(engine, |core| core.transform_update_entities.as_mut_ptr())
-        .unwrap_or(core::ptr::null_mut())
+pub extern "C" fn lume_transform_update_generations_ptr(engine: *mut c_void) -> *mut u32 {
+    with_engine_mut_value(engine, |core| {
+        core.transform_update_generations.as_mut_ptr()
+    })
+    .unwrap_or(core::ptr::null_mut())
 }
 
 #[unsafe(no_mangle)]
@@ -126,21 +135,38 @@ pub extern "C" fn lume_transform_update_masks_ptr(engine: *mut c_void) -> *mut u
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn lume_engine_apply_transform_updates(
-    engine: *mut c_void,
-    update_count: u32,
-) -> u32 {
+pub extern "C" fn lume_transform_range_starts_ptr(engine: *mut c_void) -> *mut u32 {
+    with_engine_mut_value(engine, |core| core.transform_range_starts.as_mut_ptr())
+        .unwrap_or(core::ptr::null_mut())
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn lume_transform_range_counts_ptr(engine: *mut c_void) -> *mut u32 {
+    with_engine_mut_value(engine, |core| core.transform_range_counts.as_mut_ptr())
+        .unwrap_or(core::ptr::null_mut())
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn lume_engine_apply_transform_ranges(engine: *mut c_void, range_count: u32) -> u32 {
     with_engine_mut_value(engine, |core| {
-        let count = usize::try_from(update_count)
+        let ranges = usize::try_from(range_count)
             .unwrap_or(usize::MAX)
-            .min(core.transform_update_entities.len());
+            .min(core.transform_range_starts.len());
         let mut applied = 0;
-        for index in 0..count {
-            let entity = Entity::from_raw(core.transform_update_entities[index]);
-            let value = core.transform_update_values[index];
-            let mask = core.transform_update_masks[index];
-            if core.world.update_transform_fields(entity, mask, &value) {
-                applied += 1;
+        for range in 0..ranges {
+            let start = core.transform_range_starts[range] as usize;
+            let end = start
+                .saturating_add(core.transform_range_counts[range] as usize)
+                .min(core.transform_update_generations.len());
+            for index in start..end {
+                let raw = (core.transform_update_generations[index] << 20) | index as u32;
+                let entity = Entity::from_raw(raw);
+                let value = core.transform_update_values[index];
+                let mask = core.transform_update_masks[index];
+                if core.world.update_transform_fields(entity, mask, &value) {
+                    applied += 1;
+                }
+                core.transform_update_masks[index] = 0;
             }
         }
         applied
@@ -404,8 +430,10 @@ mod tests {
         assert_eq!(lume_transform_update_capacity(engine), 16);
         // SAFETY: both staging pointers address initialized storage owned by the live engine.
         unsafe {
-            *lume_transform_update_entities_ptr(engine) = 0;
+            *lume_transform_update_generations_ptr(engine) = 0;
             *lume_transform_update_masks_ptr(engine) = 1;
+            *lume_transform_range_starts_ptr(engine) = 0;
+            *lume_transform_range_counts_ptr(engine) = 2;
             let values = lume_transform_update_values_ptr(engine);
             for (index, value) in [2.0, 3.0, -4.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0]
                 .into_iter()
@@ -413,13 +441,28 @@ mod tests {
             {
                 *values.add(index) = value;
             }
+            *lume_transform_update_generations_ptr(engine).add(1) = 0;
+            *lume_transform_update_masks_ptr(engine).add(1) = 1;
+            *values.add(TRANSFORM_UPDATE_FLOATS) = 8.0;
         }
-        assert_eq!(lume_engine_apply_transform_updates(engine, 1), 1);
+        assert_eq!(
+            lume_engine_add_transform(engine, 1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0),
+            1
+        );
+        assert_eq!(lume_engine_apply_transform_ranges(engine, 1), 2);
         // SAFETY: the pointer is live and exclusively owned by this test.
         let core = unsafe { &*engine.cast::<EngineCore>() };
         let transform = core.world.transforms.get(Entity::from_raw(0)).unwrap();
         assert_eq!(transform.local_position, Vec3::new([2.0, 3.0, -4.0]));
         assert_eq!(transform.scale, Vec3::new([1.0, 1.0, 1.0]));
+        assert_eq!(
+            core.world
+                .transforms
+                .get(Entity::from_raw(1))
+                .unwrap()
+                .local_position,
+            Vec3::new([8.0, 0.0, 0.0])
+        );
         assert_eq!(lume_engine_update(engine), 1);
         // SAFETY: pointer was created above and has not yet been destroyed.
         unsafe { lume_engine_destroy(engine) };
