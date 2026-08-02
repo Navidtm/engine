@@ -1,7 +1,14 @@
 export const SHARED_MEMORY_MAGIC = 0x4c55_4d45;
-export const SHARED_MEMORY_VERSION = 1;
+export const SHARED_MEMORY_VERSION = 2;
 export const SHARED_HEADER_INTS = 9;
 export const SHARED_TRANSFORM_FLOATS = 10;
+
+export enum TransformField {
+  Position = 1,
+  Rotation = 2,
+  Scale = 4,
+  All = 7,
+}
 
 export const enum SharedHeader {
   Magic = 0,
@@ -21,6 +28,8 @@ export interface SharedMemoryLayout {
   readonly headerByteOffset: number;
   readonly sequenceByteOffset: number;
   readonly dirtyByteOffset: number;
+  readonly generationByteOffset: number;
+  readonly fieldMaskByteOffset: number;
   readonly queueByteOffset: number;
   readonly transformByteOffset: number;
 }
@@ -34,7 +43,9 @@ export function calculateSharedMemoryLayout(capacity: number): SharedMemoryLayou
   const headerByteOffset = 0;
   const sequenceByteOffset = SHARED_HEADER_INTS * intBytes;
   const dirtyByteOffset = sequenceByteOffset + capacity * intBytes;
-  const queueByteOffset = dirtyByteOffset + capacity * intBytes;
+  const generationByteOffset = dirtyByteOffset + capacity * intBytes;
+  const fieldMaskByteOffset = generationByteOffset + capacity * intBytes;
+  const queueByteOffset = fieldMaskByteOffset + capacity * intBytes;
   const transformByteOffset = queueByteOffset + capacity * intBytes;
   const byteLength = transformByteOffset + capacity * SHARED_TRANSFORM_FLOATS * floatBytes;
   if (!Number.isSafeInteger(byteLength)) {
@@ -46,6 +57,8 @@ export function calculateSharedMemoryLayout(capacity: number): SharedMemoryLayou
     headerByteOffset,
     sequenceByteOffset,
     dirtyByteOffset,
+    generationByteOffset,
+    fieldMaskByteOffset,
     queueByteOffset,
     transformByteOffset,
   });

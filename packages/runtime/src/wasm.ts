@@ -33,6 +33,7 @@ interface LumeWasmExports extends WebAssembly.Exports {
   lume_transform_update_capacity(engine: number): number;
   lume_transform_update_entities_ptr(engine: number): number;
   lume_transform_update_values_ptr(engine: number): number;
+  lume_transform_update_masks_ptr(engine: number): number;
   lume_engine_apply_transform_updates(engine: number, updateCount: number): number;
   lume_engine_add_material(
     engine: number,
@@ -125,6 +126,7 @@ export async function createWasmCore(
   const transformUpdateCapacity = exports.lume_transform_update_capacity(handle);
   const transformUpdateEntitiesPointer = exports.lume_transform_update_entities_ptr(handle);
   const transformUpdateValuesPointer = exports.lume_transform_update_values_ptr(handle);
+  const transformUpdateMasksPointer = exports.lume_transform_update_masks_ptr(handle);
   const sharedViews = sharedMemory === undefined ? undefined : openSharedRuntimeViews(sharedMemory);
   if (sharedViews !== undefined && sharedViews.layout.capacity > transformUpdateCapacity) {
     exports.lume_engine_destroy(handle);
@@ -151,11 +153,21 @@ export async function createWasmCore(
     transformUpdateValuesPointer,
     transformUpdateCapacity * SHARED_TRANSFORM_FLOATS,
   );
+  let transformUpdateMasks = new Uint32Array(
+    observedMemory,
+    transformUpdateMasksPointer,
+    transformUpdateCapacity,
+  );
   const transformScratch = new Float32Array(SHARED_TRANSFORM_FLOATS);
   let stagedTransformCount = 0;
   let lastSharedTransformUpdates = 0;
-  const stageTransform = (entity: number, values: Float32Array<ArrayBuffer>): void => {
+  const stageTransform = (
+    entity: number,
+    fieldMask: number,
+    values: Float32Array<ArrayBuffer>,
+  ): void => {
     transformUpdateEntities[stagedTransformCount] = entity;
+    transformUpdateMasks[stagedTransformCount] = fieldMask;
     transformUpdateValues.set(values, stagedTransformCount * SHARED_TRANSFORM_FLOATS);
     stagedTransformCount += 1;
   };
@@ -196,6 +208,11 @@ export async function createWasmCore(
           observedMemory,
           transformUpdateValuesPointer,
           transformUpdateCapacity * SHARED_TRANSFORM_FLOATS,
+        );
+        transformUpdateMasks = new Uint32Array(
+          observedMemory,
+          transformUpdateMasksPointer,
+          transformUpdateCapacity,
         );
       }
       if (sharedViews !== undefined) {

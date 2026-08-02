@@ -17,6 +17,7 @@ struct EngineCore {
     visible: VisibleRenderBuffer,
     transform_update_entities: Box<[u32]>,
     transform_update_values: Box<[[f32; TRANSFORM_UPDATE_FLOATS]]>,
+    transform_update_masks: Box<[u32]>,
 }
 
 #[unsafe(no_mangle)]
@@ -41,6 +42,7 @@ pub extern "C" fn lume_engine_create(entity_capacity: u32) -> *mut c_void {
         visible: VisibleRenderBuffer::with_capacity(entities),
         transform_update_entities: vec![0; entities].into_boxed_slice(),
         transform_update_values: vec![[0.0; TRANSFORM_UPDATE_FLOATS]; entities].into_boxed_slice(),
+        transform_update_masks: vec![0; entities].into_boxed_slice(),
     }))
     .cast()
 }
@@ -118,6 +120,12 @@ pub extern "C" fn lume_transform_update_values_ptr(engine: *mut c_void) -> *mut 
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn lume_transform_update_masks_ptr(engine: *mut c_void) -> *mut u32 {
+    with_engine_mut_value(engine, |core| core.transform_update_masks.as_mut_ptr())
+        .unwrap_or(core::ptr::null_mut())
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn lume_engine_apply_transform_updates(
     engine: *mut c_void,
     update_count: u32,
@@ -130,15 +138,8 @@ pub extern "C" fn lume_engine_apply_transform_updates(
         for index in 0..count {
             let entity = Entity::from_raw(core.transform_update_entities[index]);
             let value = core.transform_update_values[index];
-            if core.world.add_transform(
-                entity,
-                Transform {
-                    local_position: Vec3::new([value[0], value[1], value[2]]),
-                    rotation: Quat::new([value[3], value[4], value[5], value[6]]),
-                    scale: Vec3::new([value[7], value[8], value[9]]),
-                    ..Transform::default()
-                },
-            ) {
+            let mask = core.transform_update_masks[index];
+            if core.world.update_transform_fields(entity, mask, &value) {
                 applied += 1;
             }
         }
@@ -392,6 +393,7 @@ mod tests {
         // SAFETY: both staging pointers address initialized storage owned by the live engine.
         unsafe {
             *lume_transform_update_entities_ptr(engine) = 0;
+            *lume_transform_update_masks_ptr(engine) = 1;
             let values = lume_transform_update_values_ptr(engine);
             for (index, value) in [2.0, 3.0, -4.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0]
                 .into_iter()
@@ -401,6 +403,11 @@ mod tests {
             }
         }
         assert_eq!(lume_engine_apply_transform_updates(engine, 1), 1);
+        // SAFETY: the pointer is live and exclusively owned by this test.
+        let core = unsafe { &*engine.cast::<EngineCore>() };
+        let transform = core.world.transforms.get(Entity::from_raw(0)).unwrap();
+        assert_eq!(transform.local_position, Vec3::new([2.0, 3.0, -4.0]));
+        assert_eq!(transform.scale, Vec3::new([1.0, 1.0, 1.0]));
         assert_eq!(lume_engine_update(engine), 1);
         // SAFETY: pointer was created above and has not yet been destroyed.
         unsafe { lume_engine_destroy(engine) };

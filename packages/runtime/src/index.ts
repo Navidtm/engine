@@ -10,6 +10,7 @@ export {
   allocateSharedRuntimeMemory,
   supportsSharedRuntimeMemory,
 } from "./shared-memory/allocator.js";
+export { TransformField } from "./shared-memory/layout.js";
 export type { SharedTransformValue } from "./shared-memory/synchronization.js";
 export { drainSharedTransforms, writeSharedTransform } from "./shared-memory/synchronization.js";
 export type { SharedRuntimeViews } from "./shared-memory/views.js";

@@ -18,7 +18,11 @@ type Request =
 let sharedViews: SharedRuntimeViews | undefined;
 const scratch = new Float32Array(10);
 let checksum = 0;
-const consumeTransform = (entity: number, values: Float32Array<ArrayBuffer>): void => {
+const consumeTransform = (
+  entity: number,
+  _fieldMask: number,
+  values: Float32Array<ArrayBuffer>,
+): void => {
   checksum += entity + (values[0] ?? 0);
 };
 

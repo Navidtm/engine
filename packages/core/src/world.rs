@@ -86,6 +86,30 @@ impl World {
         true
     }
 
+    pub fn update_transform_fields(
+        &mut self,
+        entity: Entity,
+        mask: u32,
+        value: &[f32; 10],
+    ) -> bool {
+        if !self.is_alive(entity) || mask == 0 || mask & !7 != 0 {
+            return false;
+        }
+        let Some(transform) = self.transforms.get_mut(entity) else {
+            return false;
+        };
+        if mask & 1 != 0 {
+            transform.local_position = crate::math::Vec3::new([value[0], value[1], value[2]]);
+        }
+        if mask & 2 != 0 {
+            transform.rotation = crate::math::Quat::new([value[3], value[4], value[5], value[6]]);
+        }
+        if mask & 4 != 0 {
+            transform.scale = crate::math::Vec3::new([value[7], value[8], value[9]]);
+        }
+        true
+    }
+
     pub fn add_mesh_renderer(&mut self, entity: Entity, value: MeshRenderer) -> bool {
         if !self.is_alive(entity) {
             return false;

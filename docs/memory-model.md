@@ -23,13 +23,17 @@ The transport layout is calculated once from `entityCapacity`:
 header:       9 × i32
 sequences:    capacity × i32
 dirty flags:  capacity × i32
+generations:  capacity × i32
+field masks:  capacity × i32
 dirty queue:  capacity × i32
 transforms:   capacity × 10 × f32
 ```
 
 Each transform contains position `[x, y, z]`, quaternion `[x, y, z, w]`, and
-scale `[x, y, z]`. Entity IDs select fixed slots, so publishing an update does
-not allocate or search.
+scale `[x, y, z]`. The packed entity index selects a fixed slot while its
+generation travels beside the values. A three-bit mask marks position, rotation,
+and scale independently, so publishing an update does not allocate, search, or
+copy unchanged fields.
 
 ## Publication and draining
 

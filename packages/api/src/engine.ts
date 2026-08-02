@@ -7,6 +7,7 @@ import {
   type RuntimeCommand,
   type SharedRuntimeViews,
   supportsSharedRuntimeMemory,
+  TransformField,
   type WorkerToMainMessage,
   writeSharedTransform,
 } from "@lume/runtime";
@@ -309,7 +310,11 @@ function createHighLevelApi(
       if (options.position !== undefined) copyVec3(value.position, options.position);
       if (options.rotation !== undefined) copyQuat(value.rotation, options.rotation);
       if (options.scale !== undefined) copyVec3(value.scale, options.scale);
-      publishTransform(state, handle.id, value);
+      let fieldMask = 0;
+      if (options.position !== undefined) fieldMask |= TransformField.Position;
+      if (options.rotation !== undefined) fieldMask |= TransformField.Rotation;
+      if (options.scale !== undefined) fieldMask |= TransformField.Scale;
+      if (fieldMask !== 0) publishTransform(state, handle.id, value, fieldMask);
     },
   });
   return Object.freeze({
@@ -343,10 +348,15 @@ function createSceneHandle<Kind extends "mesh" | "camera">(
   entity: Entity,
   value: MutableTransformValue,
 ): Kind extends "mesh" ? MeshHandle : CameraHandle {
-  const publish = (): void => publishTransform(state, entity, value);
-  const position = createVector3Control(value.position, publish);
-  const rotation = createQuaternionControl(value.rotation, publish);
-  const scale = createVector3Control(value.scale, publish);
+  const position = createVector3Control(value.position, () =>
+    publishTransform(state, entity, value, TransformField.Position),
+  );
+  const rotation = createQuaternionControl(value.rotation, () =>
+    publishTransform(state, entity, value, TransformField.Rotation),
+  );
+  const scale = createVector3Control(value.scale, () =>
+    publishTransform(state, entity, value, TransformField.Scale),
+  );
   return Object.freeze({
     kind,
     id: entity,
@@ -406,12 +416,17 @@ function createQuaternionControl(
   });
 }
 
-function publishTransform(state: EngineState, entity: number, value: MutableTransformValue): void {
+function publishTransform(
+  state: EngineState,
+  entity: number,
+  value: MutableTransformValue,
+  fieldMask: number,
+): void {
   if (state.status === "disposed" || state.status === "failed") {
     throw new Error(`Cannot update a ${state.status} engine.`);
   }
   if (state.sharedMemory !== undefined) {
-    writeSharedTransform(state.sharedMemory, entity, value);
+    writeSharedTransform(state.sharedMemory, entity, value, fieldMask);
     return;
   }
   dispatchCommand(state, {

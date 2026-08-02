@@ -48,12 +48,12 @@ bit. The consumer retries if the sequence changes or is odd.
 
 Field bits are:
 
-| Bit | Field | Float values |
-| --- | --- | ---: |
-| `1` | position | 3 |
-| `2` | rotation | 4 |
-| `4` | scale | 3 |
-| `8` | matrix | reserved for a later renderer-facing path |
+| Bit | Field    |                              Float values |
+| --- | -------- | ----------------------------------------: |
+| `1` | position |                                         3 |
+| `2` | rotation |                                         4 |
+| `4` | scale    |                                         3 |
+| `8` | matrix   | reserved for a later renderer-facing path |
 
 Adjacent drained indices are merged into reusable `{ start, count }` ranges.
 Queue order is preserved; no sort or temporary allocation is allowed. Duplicate
@@ -93,4 +93,3 @@ queue depth:
 
 These values make transport regressions observable without a profiler and are
 also emitted by the benchmark harness.
-
