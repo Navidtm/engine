@@ -2,6 +2,7 @@ node_modules/
 target/
 dist/
 .DS_Store
+.pnpm-store
 examples/triangle/public/lume_core.wasm
 examples/cube/public/lume_core.wasm
 benchmarks/renderer/public/lume_core.wasm

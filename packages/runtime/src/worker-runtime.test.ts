@@ -7,6 +7,7 @@ import {
   type WorkerToMainMessage,
 } from "./protocol.js";
 import type { WasmCore } from "./wasm.js";
+import { createWorkerRuntime, type WorkerHost } from "./worker-runtime.js";
 
 const mocks = vi.hoisted(() => ({
   createMeshRenderer: vi.fn(),
@@ -15,8 +16,6 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@lume/renderer", () => ({ createMeshRenderer: mocks.createMeshRenderer }));
 vi.mock("./wasm.js", () => ({ createWasmCore: mocks.createWasmCore }));
-
-import { createWorkerRuntime, type WorkerHost } from "./worker-runtime.js";
 
 interface Deferred<T> {
   readonly promise: Promise<T>;

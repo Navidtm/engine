@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
+import { createMeshRenderer } from "./mesh-renderer.js";
+
 const mocks = vi.hoisted(() => ({
   destroySurface: vi.fn(),
   getMeshPipeline: vi.fn(),
@@ -26,8 +28,6 @@ vi.mock("./webgpu/surface.js", async (loadOriginal) => {
     destroySurface: mocks.destroySurface,
   };
 });
-
-import { createMeshRenderer } from "./mesh-renderer.js";
 
 describe("mesh renderer initialization ownership", () => {
   it("destroys the surface and device when pipeline creation fails", async () => {
