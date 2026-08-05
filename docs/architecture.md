@@ -18,7 +18,9 @@ Beginning with milestone 2, the renderer-facing data is an explicit
 [milestone-2.md](milestone-2.md) for its fixed-capacity layout and ownership
 contract.
 
-Milestone 3 adds a visibility boundary and reusable FrameGraph. See
+Milestone 3 adds a visibility boundary and reusable FrameGraph. Visibility uses
+fixed-capacity hash buckets to group visible render keys in linear time, then
+orders only the distinct groups for deterministic submission. See
 [milestone-3.md](milestone-3.md) for culling, material grouping, profiling, and
 public authoring API decisions.
 

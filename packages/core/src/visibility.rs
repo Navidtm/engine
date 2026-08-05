@@ -113,6 +113,13 @@ pub struct VisibleRenderBuffer {
     pipelines: Vec<u32>,
     materials: Vec<u32>,
     instances: Vec<GpuInstance>,
+    bucket_heads: Vec<usize>,
+    bucket_tails: Vec<usize>,
+    bucket_pipelines: Vec<u32>,
+    bucket_materials: Vec<u32>,
+    bucket_geometries: Vec<u32>,
+    source_next: Vec<usize>,
+    active_buckets: Vec<usize>,
 }
 
 impl VisibleRenderBuffer {
@@ -125,6 +132,13 @@ impl VisibleRenderBuffer {
             pipelines: Vec::with_capacity(capacity),
             materials: Vec::with_capacity(capacity),
             instances: Vec::with_capacity(capacity),
+            bucket_heads: vec![usize::MAX; capacity],
+            bucket_tails: vec![usize::MAX; capacity],
+            bucket_pipelines: vec![0; capacity],
+            bucket_materials: vec![0; capacity],
+            bucket_geometries: vec![0; capacity],
+            source_next: vec![usize::MAX; capacity],
+            active_buckets: Vec::with_capacity(capacity),
         }
     }
 
@@ -142,25 +156,27 @@ impl VisibleRenderBuffer {
                         capacity: self.capacity,
                     });
                 }
-                self.source_indices.push(index as u32);
+                self.push_source_index(render_world, index)?;
             }
         }
 
-        self.source_indices.sort_unstable_by_key(|index| {
-            let index = *index as usize;
+        self.active_buckets.sort_unstable_by_key(|bucket| {
             (
-                render_world.pipelines()[index],
-                render_world.materials()[index],
-                render_world.geometries()[index],
+                self.bucket_pipelines[*bucket],
+                self.bucket_materials[*bucket],
+                self.bucket_geometries[*bucket],
             )
         });
-
-        for source_index in self.source_indices.iter().copied() {
-            let index = source_index as usize;
-            self.geometries.push(render_world.geometries()[index]);
-            self.pipelines.push(render_world.pipelines()[index]);
-            self.materials.push(render_world.materials()[index]);
-            self.instances.push(render_world.instances()[index]);
+        for bucket in self.active_buckets.iter().copied() {
+            let mut entry = self.bucket_heads[bucket];
+            while entry != usize::MAX {
+                let index = self.source_indices[entry] as usize;
+                self.geometries.push(render_world.geometries()[index]);
+                self.pipelines.push(render_world.pipelines()[index]);
+                self.materials.push(render_world.materials()[index]);
+                self.instances.push(render_world.instances()[index]);
+                entry = self.source_next[entry];
+            }
         }
 
         Ok(VisibilityStats {
@@ -170,11 +186,58 @@ impl VisibleRenderBuffer {
     }
 
     pub fn clear(&mut self) {
+        for bucket in self.active_buckets.drain(..) {
+            self.bucket_heads[bucket] = usize::MAX;
+            self.bucket_tails[bucket] = usize::MAX;
+        }
         self.source_indices.clear();
         self.geometries.clear();
         self.pipelines.clear();
         self.materials.clear();
         self.instances.clear();
+    }
+
+    fn push_source_index(
+        &mut self,
+        render_world: &RenderWorld,
+        source_index: usize,
+    ) -> Result<(), VisibilityError> {
+        let pipeline = render_world.pipelines()[source_index];
+        let material = render_world.materials()[source_index];
+        let geometry = render_world.geometries()[source_index];
+        let mut bucket = hash_render_key(pipeline, material, geometry) % self.capacity;
+        loop {
+            if self.bucket_heads[bucket] == usize::MAX {
+                self.bucket_pipelines[bucket] = pipeline;
+                self.bucket_materials[bucket] = material;
+                self.bucket_geometries[bucket] = geometry;
+                self.active_buckets.push(bucket);
+                break;
+            }
+            if self.bucket_pipelines[bucket] == pipeline
+                && self.bucket_materials[bucket] == material
+                && self.bucket_geometries[bucket] == geometry
+            {
+                break;
+            }
+            bucket = (bucket + 1) % self.capacity;
+        }
+        let entry = self.source_indices.len();
+        if entry == self.capacity {
+            return Err(VisibilityError {
+                capacity: self.capacity,
+            });
+        }
+        self.source_indices.push(source_index as u32);
+        self.source_next[entry] = usize::MAX;
+        let tail = self.bucket_tails[bucket];
+        if tail == usize::MAX {
+            self.bucket_heads[bucket] = entry;
+        } else {
+            self.source_next[tail] = entry;
+        }
+        self.bucket_tails[bucket] = entry;
+        Ok(())
     }
 
     #[must_use]
@@ -231,6 +294,12 @@ impl VisibleRenderBuffer {
     pub fn instances_capacity_ptr(&self) -> *const GpuInstance {
         self.instances.as_ptr()
     }
+}
+
+fn hash_render_key(pipeline: u32, material: u32, geometry: u32) -> usize {
+    (pipeline.wrapping_mul(0x9e37_79b9)
+        ^ material.wrapping_mul(0x85eb_ca6b)
+        ^ geometry.wrapping_mul(0xc2b2_ae35)) as usize
 }
 
 #[cfg(test)]
