@@ -45,38 +45,62 @@ DEFAULT_CAMERA[26] = 1;
 DEFAULT_CAMERA[31] = 1;
 
 export interface RendererOptions {
+  /** Preferred adapter power class. */
   readonly powerPreference?: GPUPowerPreference;
+  /** Canvas alpha-compositing mode. */
   readonly alphaMode?: GPUCanvasAlphaMode;
+  /** Linear clear color for the main pass. */
   readonly clearColor?: GPUColor;
+  /** Features that must be available on the selected device. */
   readonly requiredFeatures?: readonly GPUFeatureName[];
 }
 
+/** Extracted, capacity-backed renderer input for one frame. */
 export interface RenderFrame {
+  /** Number of entries to read from the instance arrays. */
   instanceCount: number;
+  /** Number of camera records to read from `cameraData`. */
   cameraCount: number;
+  /** Geometry handles ordered to match `instanceData`. */
   geometries: Uint32Array<ArrayBuffer>;
+  /** Pipeline handles ordered to match `instanceData`. */
   pipelines: Uint32Array<ArrayBuffer>;
+  /** Material handles ordered to match `instanceData`. */
   materials: Uint32Array<ArrayBuffer>;
+  /** Packed model-matrix/color records. */
   instanceData: Float32Array<ArrayBuffer>;
+  /** Packed view/projection camera records. */
   cameraData: Float32Array<ArrayBuffer>;
 }
 
+/** Measurements collected from the most recently encoded frame. */
 export interface RendererStats {
+  /** Total bytes held by renderer-owned GPU buffers. */
   readonly gpuBufferBytes: number;
+  /** Indexed draw calls submitted for the frame. */
   readonly drawCalls: number;
+  /** Visible instances submitted to WebGPU. */
   readonly submittedInstances: number;
+  /** CPU duration of buffer writes in milliseconds. */
   readonly bufferUploadCpuTimeMs: number;
+  /** CPU duration of extraction-input preparation and encoding in milliseconds. */
   readonly framePreparationCpuTimeMs: number;
+  /** Timestamp-query duration, or null when unsupported/unavailable. */
   readonly gpuTimeMs: number | null;
   /** WebGPU objects necessarily created for the most recently encoded frame. */
   readonly browserObjectsPerFrame: number;
 }
 
 export interface MeshRenderer {
+  /** Resolves when the owned GPU device is lost. */
   readonly lost: Promise<GPUDeviceLostInfo>;
+  /** Uploads and renders one extracted frame. */
   execute(frame: RenderFrame): void;
+  /** Reconfigures the surface and depth attachment if physical size changed. */
   resize(size: SurfaceSize): void;
+  /** Returns the latest renderer measurements. */
   stats(): RendererStats;
+  /** Releases every renderer-owned GPU resource; safe to call repeatedly. */
   dispose(): void;
 }
 
@@ -109,6 +133,11 @@ interface RendererFrameContext {
   preparationStart: number;
 }
 
+/**
+ * Creates a worker-owned WebGPU mesh renderer.
+ *
+ * @throws {RangeError} When `instanceCapacity` exceeds device storage limits.
+ */
 export async function createMeshRenderer(
   canvas: OffscreenCanvas,
   size: SurfaceSize,
