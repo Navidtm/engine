@@ -98,6 +98,11 @@ the same representation used by Rust when crossing the transport boundary.
 Destroyed slots return to a fixed free list; reuse increments the generation so
 stale references fail validation.
 
+All public numeric tuples and camera/bounds values are checked for finite,
+valid ranges before an entity slot is allocated. Material and advanced mesh
+component handles are validated against the owning engine before commands are
+published, so a foreign or stale handle cannot enter the transport stream.
+
 ## Failure model
 
 Initialization is an explicit promise. Renderer and WASM creation run in

@@ -17,6 +17,27 @@ describe("high-level engine API", () => {
     ).toThrow("structuralCommandCapacity");
   });
 
+  it("rejects foreign material handles and invalid options before allocating an entity", () => {
+    const canvas = {} as HTMLCanvasElement;
+    const workerFactory = () =>
+      ({
+        addEventListener: vi.fn(),
+        postMessage: vi.fn(),
+        terminate: vi.fn(),
+      }) as unknown as Worker;
+    const first = createEngine(canvas, { autoResize: false, workerFactory });
+    const second = createEngine(canvas, { autoResize: false, workerFactory });
+    const foreignMaterial = first.create.basicMaterial();
+
+    expect(() => second.create.mesh({ geometry: "cube", material: foreignMaterial })).toThrow(
+      "does not belong",
+    );
+    expect(() => second.create.mesh({ geometry: "cube", position: [Number.NaN, 0, 0] })).toThrow(
+      "position",
+    );
+    expect(second.world.createEntity()).toMatchObject({ index: 0, generation: 0 });
+  });
+
   it("creates a scene without exposing ECS commands", async () => {
     let onMessage: ((event: MessageEvent<WorkerToMainMessage>) => void) | undefined;
     const posted: MainToWorkerMessage[] = [];

@@ -275,6 +275,7 @@ function createHighLevelApi(
   let defaultMaterial: BasicMaterialHandle | undefined;
   const transforms = new WeakMap<SceneHandle, MutableTransformValue>();
   const createBasicMaterial = (options: BasicMaterialOptions = {}): BasicMaterialHandle => {
+    if (options.color !== undefined) validateFiniteTuple("material color", options.color, 4);
     const entity = world.createEntity();
     world.add(entity, material(options));
     return Object.freeze({ kind: "basic-material", id: entity });
@@ -286,6 +287,7 @@ function createHighLevelApi(
   const create: CreateApi = Object.freeze({
     basicMaterial: createBasicMaterial,
     mesh(options: MeshOptions) {
+      validateMeshOptions(state, options);
       const materialHandle =
         options.material === undefined || options.material === "basic"
           ? defaultBasicMaterial()
@@ -308,6 +310,7 @@ function createHighLevelApi(
       return handle;
     },
     perspectiveCamera(options: PerspectiveCameraOptions = {}) {
+      validateCameraOptions(options);
       const entity = world.createEntity();
       const initialTransform = mutableTransform(options);
       world.add(
@@ -366,6 +369,9 @@ function mutableTransform(options: {
   readonly rotation?: Quat;
   readonly scale?: Vec3;
 }): MutableTransformValue {
+  if (options.position !== undefined) validateFiniteTuple("position", options.position, 3);
+  if (options.rotation !== undefined) validateFiniteTuple("rotation", options.rotation, 4);
+  if (options.scale !== undefined) validateFiniteTuple("scale", options.scale, 3);
   const position = options.position ?? [0, 0, 0];
   const rotation = options.rotation ?? [0, 0, 0, 1];
   const scale = options.scale ?? [1, 1, 1];
@@ -415,6 +421,7 @@ function createVector3Control(
       return value[2];
     },
     set(x: number, y: number, z: number) {
+      validateFiniteTuple("vector", [x, y, z], 3);
       value[0] = x;
       value[1] = y;
       value[2] = z;
@@ -441,6 +448,7 @@ function createQuaternionControl(
       return value[3];
     },
     set(x: number, y: number, z: number, w: number) {
+      validateFiniteTuple("quaternion", [x, y, z, w], 4);
       value[0] = x;
       value[1] = y;
       value[2] = z;
@@ -507,7 +515,7 @@ function createWorldApi(state: EngineState): WorldApi {
     },
     add(entity: Entity, component: Component) {
       validateLiveEntity(state, entity);
-      dispatchCommand(state, componentCommand(entity, component));
+      dispatchCommand(state, componentCommand(state, entity, component));
     },
     remove(entity: Entity, component: Component["kind"]) {
       validateLiveEntity(state, entity);
@@ -517,7 +525,12 @@ function createWorldApi(state: EngineState): WorldApi {
   return Object.freeze(world);
 }
 
-function componentCommand(entity: Entity, component: Component): RuntimeCommand {
+function componentCommand(
+  state: EngineState,
+  entity: Entity,
+  component: Component,
+): RuntimeCommand {
+  validateComponent(state, component);
   const packedEntity = packEntity(entity);
   switch (component.kind) {
     case "transform":
@@ -552,6 +565,81 @@ function componentCommand(entity: Entity, component: Component): RuntimeCommand 
         center: component.center,
         radius: component.radius,
       };
+  }
+}
+
+function validateMeshOptions(state: EngineState, options: MeshOptions): void {
+  if (options.geometry !== "cube" && options.geometry !== "triangle") {
+    throw new RangeError("Mesh geometry must be 'cube' or 'triangle'.");
+  }
+  if (options.material !== undefined && options.material !== "basic") {
+    if (options.material.kind !== "basic-material") {
+      throw new TypeError("A mesh requires a basic-material handle.");
+    }
+    validateLiveEntity(state, options.material.id);
+  }
+  if (options.position !== undefined) validateFiniteTuple("position", options.position, 3);
+  if (options.rotation !== undefined) validateFiniteTuple("rotation", options.rotation, 4);
+  if (options.scale !== undefined) validateFiniteTuple("scale", options.scale, 3);
+  if (options.bounds !== undefined) {
+    if (!Number.isFinite(options.bounds.radius) || options.bounds.radius < 0) {
+      throw new RangeError("Mesh bounds radius must be a non-negative finite number.");
+    }
+    if (options.bounds.center !== undefined)
+      validateFiniteTuple("bounds center", options.bounds.center, 3);
+  }
+}
+
+function validateCameraOptions(options: PerspectiveCameraOptions): void {
+  if (options.position !== undefined) validateFiniteTuple("position", options.position, 3);
+  if (options.rotation !== undefined) validateFiniteTuple("rotation", options.rotation, 4);
+  if (
+    options.verticalFov !== undefined &&
+    (!Number.isFinite(options.verticalFov) || options.verticalFov <= 0)
+  ) {
+    throw new RangeError("Camera verticalFov must be a positive finite number.");
+  }
+  if (options.near !== undefined && (!Number.isFinite(options.near) || options.near <= 0)) {
+    throw new RangeError("Camera near must be a positive finite number.");
+  }
+  if (options.far !== undefined && (!Number.isFinite(options.far) || options.far <= 0)) {
+    throw new RangeError("Camera far must be a positive finite number.");
+  }
+  if (options.near !== undefined && options.far !== undefined && options.far <= options.near) {
+    throw new RangeError("Camera far must be greater than near.");
+  }
+}
+
+function validateComponent(state: EngineState, component: Component): void {
+  switch (component.kind) {
+    case "transform":
+      validateFiniteTuple("position", component.position, 3);
+      validateFiniteTuple("rotation", component.rotation, 4);
+      validateFiniteTuple("scale", component.scale, 3);
+      return;
+    case "material":
+      validateFiniteTuple("material color", component.color, 4);
+      return;
+    case "camera":
+      validateCameraOptions(component);
+      return;
+    case "mesh":
+      if (!Number.isSafeInteger(component.geometry.id) || component.geometry.id < 0) {
+        throw new RangeError("Mesh geometry id must be a non-negative safe integer.");
+      }
+      validateLiveEntity(state, component.material);
+      return;
+    case "bounds":
+      validateFiniteTuple("bounds center", component.center, 3);
+      if (!Number.isFinite(component.radius) || component.radius < 0) {
+        throw new RangeError("Bounds radius must be a non-negative finite number.");
+      }
+  }
+}
+
+function validateFiniteTuple(label: string, value: readonly number[], length: number): void {
+  if (value.length !== length || value.some((item) => !Number.isFinite(item))) {
+    throw new RangeError(`${label} must contain exactly ${length} finite numbers.`);
   }
 }
 
