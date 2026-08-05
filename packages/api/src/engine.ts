@@ -26,10 +26,13 @@ import {
   triangleGeometry,
   type Vec3,
 } from "@lume/scene";
-
-const MAX_ENTITY_INDEX = (1 << 20) - 1;
-const MAX_ENTITY_GENERATION = (1 << 12) - 1;
-const ENTITY_OWNER = Symbol("lume-entity-owner");
+import {
+  allocateEntity,
+  packEntity,
+  peekEntityIndex,
+  releaseEntity,
+  validateLiveEntity,
+} from "./entity-lifecycle.js";
 
 export type EngineStatus =
   "new" | "initializing" | "ready" | "running" | "stopped" | "disposed" | "failed";
@@ -177,8 +180,6 @@ interface EngineState {
   nextStatsRequest: number;
   structuralFallback: boolean;
 }
-
-type OwnedEntity = Entity & { readonly [ENTITY_OWNER]: EngineState };
 
 export function createEngine(canvas: HTMLCanvasElement, options?: EngineOptions): Engine;
 export function createEngine(config: EngineConfig): Engine;
@@ -514,19 +515,14 @@ function createWorldApi(state: EngineState): WorldApi {
   const world: WorldApi = {
     createEntity() {
       if (state.status === "disposed") throw new Error("Cannot create an entity after disposal.");
-      const index = allocateEntityIndex(state);
-      const entity = createEntityHandle(state, index, state.entityGenerations[index] ?? 0);
-      state.entityAlive[index] = 1;
+      const entity = allocateEntity(state);
       dispatchCommand(state, { type: "spawn", entity: packEntity(entity) });
       return entity;
     },
     destroyEntity(entity: Entity) {
       validateLiveEntity(state, entity);
       dispatchCommand(state, { type: "despawn", entity: packEntity(entity) });
-      state.entityAlive[entity.index] = 0;
-      state.entityGenerations[entity.index] = (entity.generation + 1) & MAX_ENTITY_GENERATION;
-      state.freeEntities[state.freeEntityCount] = entity.index;
-      state.freeEntityCount += 1;
+      releaseEntity(state, entity);
     },
     add(entity: Entity, component: Component) {
       validateLiveEntity(state, entity);
@@ -659,24 +655,8 @@ function validateFiniteTuple(label: string, value: readonly number[], length: nu
   }
 }
 
-function allocateEntityIndex(state: EngineState): number {
-  if (state.freeEntityCount > 0) {
-    state.freeEntityCount -= 1;
-    return state.freeEntities[state.freeEntityCount] ?? 0;
-  }
-  if (state.nextEntityIndex >= state.entityCapacity || state.nextEntityIndex > MAX_ENTITY_INDEX) {
-    throw new Error("Entity capacity exhausted.");
-  }
-  const index = state.nextEntityIndex;
-  state.nextEntityIndex += 1;
-  return index;
-}
-
 function ensureTransformSlotAvailable(state: EngineState): void {
-  const index =
-    state.freeEntityCount > 0
-      ? (state.freeEntities[state.freeEntityCount - 1] ?? state.entityCapacity)
-      : state.nextEntityIndex;
+  const index = peekEntityIndex(state);
   if (index >= state.transformCapacity) throw new Error("Transform capacity exhausted.");
 }
 
@@ -684,32 +664,6 @@ function validateTransformSlot(state: EngineState, entity: Entity): void {
   if (entity.index >= state.transformCapacity) {
     throw new Error("Entity index exceeds configured transform capacity.");
   }
-}
-
-function createEntityHandle(state: EngineState, index: number, generation: number): OwnedEntity {
-  const entity = { index, generation } as OwnedEntity;
-  Object.defineProperty(entity, ENTITY_OWNER, { value: state });
-  return Object.freeze(entity);
-}
-
-function validateLiveEntity(state: EngineState, entity: Entity): void {
-  if (
-    !Number.isInteger(entity.index) ||
-    !Number.isInteger(entity.generation) ||
-    entity.index < 0 ||
-    entity.index >= state.entityCapacity ||
-    entity.generation < 0 ||
-    entity.generation > MAX_ENTITY_GENERATION ||
-    state.entityAlive[entity.index] !== 1 ||
-    state.entityGenerations[entity.index] !== entity.generation ||
-    (entity as Partial<OwnedEntity>)[ENTITY_OWNER] !== state
-  ) {
-    throw new Error("Entity handle is stale or does not belong to this engine.");
-  }
-}
-
-function packEntity(entity: Entity): number {
-  return ((entity.generation << 20) | entity.index) >>> 0;
 }
 
 function initialize(state: EngineState): Promise<void> {
