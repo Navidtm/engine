@@ -7,17 +7,19 @@ Three.js is pinned to 0.185.1 so saved results remain reproducible.
 Query parameters:
 
 - `implementation=lume|three`
-- `scenario=static|dynamic|large`
 - `count=<positive integer>`
+- `updateRatio=0|0.01|0.1|1`
+- `commit=<full git commit>`
 
-Defaults are 10k static cubes, 50k dynamic objects, and 100k large-scene
-entities. Each page exposes its raw JSON as
+The update ratio controls how many leading instances are updated per frame;
+zero is the static scenario. Each page exposes its raw JSON as
 `window.__LUME_COMPARISON_RESULT__`. Dynamic Lume results intentionally include
 the current public command transport; internal transform-only performance is
 reported separately by the zero-allocation Rust benchmark. This avoids hiding a
 known architectural cost.
 
-For the rendering milestone, capture both implementations at 1k, 10k, 50k,
-and 100k objects in the same browser session. Store the returned objects without
-post-processing so the repository contains raw measurements rather than a
-performance conclusion.
+Capture both implementations at 1k, 10k, 50k, and 100k objects and all four
+update ratios in the same browser session. Reports include raw frame samples,
+p50/p95/p99/max summaries, missed-frame counts, browser/GPU metadata, and the
+tested commit. Store the returned objects without post-processing so the
+repository contains raw measurements rather than a performance conclusion.
