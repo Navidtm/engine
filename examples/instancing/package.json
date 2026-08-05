@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "vite build",
-    "predev": "pnpm --workspace-root build:wasm",
+    "predev": "pnpm --workspace-root prepare:examples",
     "dev": "vite",
     "preview": "vite preview --host 127.0.0.1",
     "test": "vitest run --passWithNoTests",
