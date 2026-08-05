@@ -41,18 +41,27 @@ export type EngineStatus =
 
 /** Full configuration accepted by {@link createEngine}. */
 export interface EngineConfig {
+  /** Canvas transferred to the worker as an OffscreenCanvas during `init()`. */
   readonly canvas: HTMLCanvasElement;
+  /** Raw Lume WASM URL; defaults to `/lume_core.wasm`. */
   readonly wasmUrl?: string | URL;
+  /** Maximum live entity slots, from 1 through 1,048,576. */
   readonly entityCapacity?: number;
   /** Number of entity indices that may publish shared transform updates. */
   readonly transformCapacity?: number;
   /** Maximum structural commands held in the shared ring before ordered fallback. */
   readonly structuralCommandCapacity?: number;
+  /** WebGPU adapter preference. */
   readonly powerPreference?: GPUPowerPreference;
+  /** Canvas compositing mode; opaque by default. */
   readonly alphaMode?: GPUCanvasAlphaMode;
+  /** Main render-pass clear color. */
   readonly clearColor?: GPUColor;
+  /** Set false when the application controls resize timing. */
   readonly autoResize?: boolean;
+  /** Worker factory hook for tests or custom embedding. */
   readonly workerFactory?: () => Worker;
+  /** Receives asynchronous worker, initialization, and device-loss errors. */
   readonly onError?: (error: Error) => void;
 }
 
@@ -61,42 +70,63 @@ export type EngineOptions = Omit<EngineConfig, "canvas">;
 
 /** Opaque handle for a color-only material owned by one engine. */
 export interface BasicMaterialHandle {
+  /** Type discriminant for narrowing engine handles. */
   readonly kind: "basic-material";
+  /** Stable material entity owned by this engine. */
   readonly id: Entity;
 }
 
 /** Mesh handle plus live transform controls. Do not construct this object manually. */
 export interface MeshHandle {
+  /** Type discriminant for narrowing engine handles. */
   readonly kind: "mesh";
+  /** Stable mesh entity owned by this engine. */
   readonly id: Entity;
+  /** Position control; publishes a position-only update. */
   readonly position: Vector3Control;
+  /** Rotation control; publishes a rotation-only update. */
   readonly rotation: QuaternionControl;
+  /** Scale control; publishes a scale-only update. */
   readonly scale: Vector3Control;
 }
 
 /** Perspective-camera handle plus live transform controls. */
 export interface CameraHandle {
+  /** Type discriminant for narrowing engine handles. */
   readonly kind: "camera";
+  /** Stable camera entity owned by this engine. */
   readonly id: Entity;
+  /** Camera position control. */
   readonly position: Vector3Control;
+  /** Camera rotation control. */
   readonly rotation: QuaternionControl;
+  /** Camera scale control. */
   readonly scale: Vector3Control;
 }
 
 /** Mutable position or scale control that publishes only the changed transform field. */
 export interface Vector3Control {
+  /** Current X component. */
   readonly x: number;
+  /** Current Y component. */
   readonly y: number;
+  /** Current Z component. */
   readonly z: number;
+  /** Sets finite XYZ components and publishes this field. */
   set(x: number, y: number, z: number): void;
 }
 
 /** Mutable rotation control using XYZW quaternion components. */
 export interface QuaternionControl {
+  /** Current X component. */
   readonly x: number;
+  /** Current Y component. */
   readonly y: number;
+  /** Current Z component. */
   readonly z: number;
+  /** Current W component. */
   readonly w: number;
+  /** Sets finite, non-zero XYZW components and publishes this field. */
   set(x: number, y: number, z: number, w: number): void;
 }
 
@@ -107,32 +137,47 @@ export type SceneHandle = MeshHandle | CameraHandle;
 
 /** Creation options for a basic linear-RGBA material. */
 export interface BasicMaterialOptions {
+  /** Linear RGBA color; every channel must be finite and within `[0, 1]`. */
   readonly color?: Color;
 }
 
 /** Creation options for a built-in triangle or cube mesh. */
 export interface MeshOptions {
+  /** Built-in mesh geometry. */
   readonly geometry: "cube" | "triangle";
+  /** Material handle, or `"basic"`/omitted for the engine shared default. */
   readonly material?: BasicMaterialHandle | "basic";
+  /** Initial local XYZ position. */
   readonly position?: Vec3;
+  /** Initial local XYZW quaternion. */
   readonly rotation?: Quat;
+  /** Initial local XYZ scale. */
   readonly scale?: Vec3;
+  /** Local bounding sphere for CPU culling. */
   readonly bounds?: { readonly center?: Vec3; readonly radius: number };
 }
 
 /** Creation options for a perspective camera. Angles are in radians. */
 export interface PerspectiveCameraOptions {
+  /** Initial camera XYZ position. */
   readonly position?: Vec3;
+  /** Initial camera XYZW orientation. */
   readonly rotation?: Quat;
+  /** Vertical field of view in radians. */
   readonly verticalFov?: number;
+  /** Positive near clipping plane. */
   readonly near?: number;
+  /** Far clipping plane; must be greater than `near`. */
   readonly far?: number;
 }
 
 /** Convenience authoring functions available as `engine.create`. */
 export interface CreateApi {
+  /** Creates a color-only material handle. */
   basicMaterial(options?: BasicMaterialOptions): BasicMaterialHandle;
+  /** Creates a triangle or cube mesh with transform and mesh components. */
   mesh(options: MeshOptions): MeshHandle;
+  /** Creates a perspective camera with an initial transform. */
   perspectiveCamera(options?: PerspectiveCameraOptions): CameraHandle;
 }
 
@@ -141,8 +186,11 @@ export interface SetApi {
   transform(
     handle: SceneHandle,
     options: {
+      /** Optional replacement local position. */
       readonly position?: Vec3;
+      /** Optional replacement local rotation. */
       readonly rotation?: Quat;
+      /** Optional replacement local scale. */
       readonly scale?: Vec3;
     },
   ): void;
@@ -150,9 +198,13 @@ export interface SetApi {
 
 /** Advanced ECS-style authoring API. Prefer `engine.create` for normal use. */
 export interface WorldApi {
+  /** Allocates a bare entity for advanced component authoring. */
   createEntity(): Entity;
+  /** Despawns an entity and invalidates every handle for its old generation. */
   destroyEntity(entity: Entity): void;
+  /** Adds or replaces one serializable component. */
   add(entity: Entity, component: Component): void;
+  /** Removes one component kind from a live entity. */
   remove(entity: Entity, component: Component["kind"]): void;
 }
 
@@ -167,16 +219,27 @@ export interface WorldApi {
  * engine.start();
  */
 export interface Engine {
+  /** High-level creation API. */
   readonly create: CreateApi;
+  /** Partial transform updates. */
   readonly set: SetApi;
+  /** Advanced component API. */
   readonly world: WorldApi;
+  /** Current lifecycle state. */
   readonly status: EngineStatus;
+  /** Initializes the worker, WASM core, and WebGPU renderer. */
   init(): Promise<void>;
+  /** Starts the worker frame loop after initialization. */
   start(): void;
+  /** Stops the frame loop without destroying resources. */
   stop(): void;
+  /** Publishes the canvas size; normally invoked by the resize observer. */
   resize(): void;
+  /** Requests a worker statistics snapshot. */
   getStats(): Promise<EngineStats>;
+  /** Destroys a high-level handle and recycles its entity slot. */
   destroy(handle: EngineHandle): void;
+  /** Stops the engine and releases worker, WASM, and GPU resources. */
   dispose(): void;
 }
 
