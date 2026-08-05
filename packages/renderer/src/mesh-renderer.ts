@@ -90,9 +90,10 @@ interface RendererState {
   readonly instanceBuffer: GPUBuffer;
   readonly bindGroup: GPUBindGroup;
   readonly profiler: GpuTimestampProfiler;
-  readonly colorAttachment: GPURenderPassColorAttachment;
+  readonly clearColor: GPUColor;
+  colorAttachment: GPURenderPassColorAttachment | undefined;
   readonly depthAttachment: GPURenderPassDepthStencilAttachment;
-  readonly passDescriptor: GPURenderPassDescriptor;
+  passDescriptor: GPURenderPassDescriptor | undefined;
   readonly submissions: GPUCommandBuffer[];
   drawCalls: number;
   submittedInstances: number;
@@ -104,7 +105,7 @@ interface RendererState {
 
 interface RendererFrameContext {
   readonly state: RendererState;
-  frame: RenderFrame;
+  frame: RenderFrame | undefined;
   preparationStart: number;
 }
 
@@ -163,25 +164,11 @@ export async function createMeshRenderer(
     });
     device.queue.writeBuffer(cameraBuffer, 0, DEFAULT_CAMERA);
 
-    const colorAttachment: GPURenderPassColorAttachment = {
-      view: undefined as unknown as GPUTextureView,
-      clearValue: options.clearColor ?? { r: 0.018, g: 0.024, b: 0.04, a: 1 },
-      loadOp: "clear",
-      storeOp: "store",
-    };
     const depthAttachment: GPURenderPassDepthStencilAttachment = {
       view: surface.depthView,
       depthClearValue: 1,
       depthLoadOp: "clear",
       depthStoreOp: "discard",
-    };
-    const passDescriptor: GPURenderPassDescriptor = {
-      label: "Lume main render pass",
-      colorAttachments: [colorAttachment],
-      depthStencilAttachment: depthAttachment,
-      ...(profiler.timestampWrites === undefined
-        ? {}
-        : { timestampWrites: profiler.timestampWrites }),
     };
     const state: RendererState = {
       device,
@@ -193,10 +180,11 @@ export async function createMeshRenderer(
       instanceBuffer,
       bindGroup,
       profiler,
-      colorAttachment,
+      clearColor: options.clearColor ?? { r: 0.018, g: 0.024, b: 0.04, a: 1 },
+      colorAttachment: undefined,
       depthAttachment,
-      passDescriptor,
-      submissions: [undefined as unknown as GPUCommandBuffer],
+      passDescriptor: undefined,
+      submissions: new Array<GPUCommandBuffer>(1),
       drawCalls: 0,
       submittedInstances: 0,
       bufferUploadCpuTimeMs: 0,
@@ -207,7 +195,7 @@ export async function createMeshRenderer(
     const frameGraph = createRendererFrameGraph();
     const frameContext: RendererFrameContext = {
       state,
-      frame: undefined as unknown as RenderFrame,
+      frame: undefined,
       preparationStart: 0,
     };
 
@@ -277,6 +265,7 @@ function createRendererFrameGraph(): CompiledFrameGraph<RendererFrameContext> {
 
 function uploadFrame(context: RendererFrameContext): void {
   const { state, frame } = context;
+  if (frame === undefined) throw new Error("Renderer frame context is not initialized.");
   const uploadStart = performance.now();
   const instanceCount = frame.instanceCount;
   if (instanceCount > 0) {
@@ -302,11 +291,29 @@ function uploadFrame(context: RendererFrameContext): void {
 
 function encodeMainPass(context: RendererFrameContext): void {
   const { state, frame } = context;
+  if (frame === undefined) throw new Error("Renderer frame context is not initialized.");
   const instanceCount = frame.instanceCount;
-  state.colorAttachment.view = state.surface.context.getCurrentTexture().createView();
+  const colorView = state.surface.context.getCurrentTexture().createView();
+  const colorAttachment = state.colorAttachment ?? {
+    view: colorView,
+    clearValue: state.clearColor,
+    loadOp: "clear",
+    storeOp: "store",
+  };
+  state.colorAttachment = colorAttachment;
+  colorAttachment.view = colorView;
   state.depthAttachment.view = state.surface.depthView;
+  const passDescriptor = state.passDescriptor ?? {
+    label: "Lume main render pass",
+    colorAttachments: [colorAttachment],
+    depthStencilAttachment: state.depthAttachment,
+    ...(state.profiler.timestampWrites === undefined
+      ? {}
+      : { timestampWrites: state.profiler.timestampWrites }),
+  };
+  state.passDescriptor = passDescriptor;
   const encoder = state.device.createCommandEncoder({ label: "Lume frame commands" });
-  const pass = encoder.beginRenderPass(state.passDescriptor);
+  const pass = encoder.beginRenderPass(passDescriptor);
   // WebGPU mandates these frame-scoped objects: surface texture/view, command
   // encoder, render pass encoder, and command buffer. Engine-owned arrays and
   // descriptors remain reusable and are deliberately not included.
