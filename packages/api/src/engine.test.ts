@@ -27,6 +27,17 @@ describe("high-level engine API", () => {
     ).toThrow("transport.transformCapacity");
   });
 
+  it("validates engine camera configuration before creating a worker", () => {
+    const workerFactory = vi.fn(() => ({}) as Worker);
+    expect(() =>
+      createEngine({} as HTMLCanvasElement, {
+        camera: { near: 10, far: 1 },
+        workerFactory,
+      }),
+    ).toThrow("Camera far");
+    expect(workerFactory).not.toHaveBeenCalled();
+  });
+
   it("rejects foreign material handles and invalid options before allocating an entity", () => {
     const canvas = {} as HTMLCanvasElement;
     const workerFactory = () =>
@@ -45,7 +56,7 @@ describe("high-level engine API", () => {
     expect(() => second.create.mesh({ geometry: "cube", position: [Number.NaN, 0, 0] })).toThrow(
       "position",
     );
-    expect(second.world.createEntity()).toMatchObject({ index: 0, generation: 0 });
+    expect(second.world.createEntity()).toMatchObject({ index: 1, generation: 0 });
   });
 
   it("creates a scene without exposing ECS commands", async () => {
@@ -78,13 +89,15 @@ describe("high-level engine API", () => {
     });
     const blue = engine.create.basicMaterial({ color: [0.2, 0.4, 1, 1] });
     const cube = engine.create.mesh({ geometry: "cube", material: blue, position: [0, 0, -5] });
-    engine.create.perspectiveCamera();
 
     expect(cube.kind).toBe("mesh");
+    expect(engine.camera.position.z).toBe(3);
     const initialization = engine.init();
     expect(posted[0]?.type).toBe("init");
     if (posted[0]?.type === "init") {
       expect(posted[0].value.renderer.powerPreference).toBe("high-performance");
+      expect(posted[0].value.entityCapacity).toBe(4_097);
+      expect(posted[0].value.transformCapacity).toBe(4_097);
     }
     onMessage?.({ data: { type: "ready" } } as MessageEvent<WorkerToMainMessage>);
     await initialization;
@@ -94,13 +107,13 @@ describe("high-level engine API", () => {
     if (batch?.type === "batch") {
       expect(batch.value.map((command) => command.type)).toEqual([
         "spawn",
+        "add-transform",
+        "add-camera",
+        "spawn",
         "add-material",
         "spawn",
         "add-transform",
         "add-mesh",
-        "spawn",
-        "add-transform",
-        "add-camera",
       ]);
     }
     const messagesBeforeTransform = posted.length;

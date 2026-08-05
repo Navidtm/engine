@@ -14,6 +14,7 @@ const engine = createEngine({
   wasmUrl: "/lume_core.wasm",
   powerPreference: "high",
   entityCapacity: 4_096,
+  camera: { position: [0, 0, 3], near: 0.1, far: 100 },
   clearColor: { r: 0.012, g: 0.017, b: 0.032, a: 1 },
   onError(error) {
     status.textContent = error.message;
@@ -28,7 +29,6 @@ const cube = engine.create.mesh({
   rotation: [0.18, 0.32, 0, 0.93],
 });
 cube.position.set(0, 0, -2);
-engine.create.perspectiveCamera({ position: [0, 0, 3], near: 0.1, far: 100 });
 
 try {
   await engine.init();

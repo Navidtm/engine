@@ -55,7 +55,7 @@ advanced compatibility layer. Milestone 3 adds a functional authoring layer:
 createEngine(canvas)
 engine.create.basicMaterial(...)
 engine.create.mesh(...)
-engine.create.perspectiveCamera(...)
+engine.camera.setPerspective(...)
 engine.set.transform(handle, ...)
 engine.destroy(handle)
 ```

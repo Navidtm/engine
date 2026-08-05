@@ -90,11 +90,14 @@ Detailed byte layout and browser-thread responsibilities are documented in
 ## Public API
 
 `createEngine(canvas, options?)` returns a plain record of functions and state
-adapters. `engine.create`, `engine.set`, and immutable handles cover normal
-authoring without exposing ECS vocabulary. No mutable class hierarchy or
-singleton is exposed. The `world` surface and `@lume/api/advanced` component
-helpers remain an explicit advanced compatibility layer; `world.add` converts
-their serializable descriptions into versioned worker commands.
+adapters. Every engine owns one active perspective camera, exposed as
+`engine.camera`; it is created before authoring entities and is not part of the
+application's entity budget. `engine.create`, `engine.set`, and readonly handles
+cover normal authoring without exposing ECS vocabulary. No mutable class
+hierarchy or singleton is exposed. The `world` surface and
+`@lume/api/advanced` component helpers remain an explicit advanced compatibility
+layer; `world.add` converts their serializable descriptions into versioned worker
+commands.
 
 Entity handles are allocated synchronously on the main thread so authoring
 remains ergonomic. Each handle carries an index and generation and is packed to

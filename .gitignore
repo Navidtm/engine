@@ -8,5 +8,6 @@ examples/cube/public/lume_core.wasm
 examples/instancing/public/lume_core.wasm
 examples/transform-controls/public/lume_core.wasm
 examples/lifecycle/public/lume_core.wasm
+examples/camera/public/lume_core.wasm
 benchmarks/renderer/public/lume_core.wasm
 benchmarks/comparison/public/lume_core.wasm

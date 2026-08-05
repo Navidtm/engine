@@ -15,6 +15,7 @@ const engine = createEngine({
   canvas,
   wasmUrl: "/lume_core.wasm",
   entityCapacity: 8,
+  camera: { position: [0, 0, 3], far: 100 },
   clearColor: { r: 0.018, g: 0.012, b: 0.03, a: 1 },
 });
 const blue = engine.create.basicMaterial({ color: [0.35, 0.55, 1, 1] });
@@ -27,7 +28,6 @@ function replaceCube(): void {
 }
 
 replaceCube();
-engine.create.perspectiveCamera({ position: [0, 0, 3], far: 100 });
 replace.addEventListener("click", replaceCube);
 
 try {

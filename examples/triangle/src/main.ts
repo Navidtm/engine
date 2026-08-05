@@ -10,6 +10,7 @@ const engine = createEngine({
   canvas,
   wasmUrl: "/lume_core.wasm",
   powerPreference: "high",
+  camera: { position: [0, 0, 3] },
   clearColor: { r: 0.015, g: 0.02, b: 0.035, a: 1 },
   onError(error) {
     status.textContent = error.message;
@@ -19,7 +20,6 @@ const engine = createEngine({
 
 const violet = engine.create.basicMaterial({ color: [0.5, 0.3, 1, 1] });
 engine.create.mesh({ geometry: "triangle", material: violet, position: [0, 0, -2] });
-engine.create.perspectiveCamera({ position: [0, 0, 3] });
 
 try {
   await engine.init();

@@ -35,16 +35,20 @@ window.__LUME_COMPARISON_RESULT__ = report;
 output.textContent = JSON.stringify(report, null, 2);
 
 async function runLume(target: HTMLCanvasElement, selectedScenario: string, entities: number) {
+  const side = Math.ceil(Math.sqrt(entities));
   const engine = createEngine({
     canvas: target,
     wasmUrl: "/lume_core.wasm",
     entityCapacity: entities + 2,
     autoResize: false,
     powerPreference: "high",
+    camera: {
+      position: [0, 0, Math.max(3, side * 1.15)],
+      far: Math.max(100, side * 3),
+    },
   });
   const blue = engine.create.basicMaterial({ color: [0.31, 0.56, 1, 1] });
   const entityHandles: MeshHandle[] = new Array(entities);
-  const side = Math.ceil(Math.sqrt(entities));
   for (let index = 0; index < entities; index += 1) {
     entityHandles[index] = engine.create.mesh({
       geometry: "cube",
@@ -52,10 +56,6 @@ async function runLume(target: HTMLCanvasElement, selectedScenario: string, enti
       position: gridPosition(index, side, 0),
     });
   }
-  engine.create.perspectiveCamera({
-    position: [0, 0, Math.max(3, side * 1.15)],
-    far: Math.max(100, side * 3),
-  });
   const startup = performance.now();
   await engine.init();
   engine.start();

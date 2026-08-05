@@ -20,6 +20,7 @@ const parameters = new URLSearchParams(location.search);
 const count = Math.max(1, Number(parameters.get("count") ?? 10_000));
 const warmupFrames = 60;
 const sampleFrames = 180;
+const side = Math.ceil(Math.sqrt(count));
 
 const engine = createEngine({
   canvas,
@@ -27,9 +28,13 @@ const engine = createEngine({
   entityCapacity: count + 2,
   autoResize: false,
   powerPreference: "high",
+  camera: {
+    position: [0, 0, Math.max(3, side * 1.15)],
+    near: 0.1,
+    far: Math.max(100, side * 3),
+  },
 });
 const blue = engine.create.basicMaterial({ color: [0.31, 0.56, 1, 1] });
-const side = Math.ceil(Math.sqrt(count));
 for (let index = 0; index < count; index += 1) {
   const x = (index % side) - side * 0.5;
   const y = Math.floor(index / side) - side * 0.5;
@@ -39,11 +44,6 @@ for (let index = 0; index < count; index += 1) {
     position: [x * 1.2, y * 1.2, 0],
   });
 }
-engine.create.perspectiveCamera({
-  position: [0, 0, Math.max(3, side * 1.15)],
-  near: 0.1,
-  far: Math.max(100, side * 3),
-});
 
 const initializationStart = performance.now();
 await engine.init();

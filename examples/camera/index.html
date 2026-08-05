@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Lume — Camera Controls</title>
+    <script type="module" src="/src/main.ts"></script>
+  </head>
+  <body>
+    <canvas id="viewport" aria-label="Lume camera controls example"></canvas>
+    <aside>
+      <strong>Engine camera</strong>
+      <label>Position X <input id="x" type="range" min="-5" max="5" step="0.1" value="0" /></label>
+      <label>Yaw <input id="yaw" type="range" min="-35" max="35" step="1" value="0" /></label>
+      <label
+        >Field of view <input id="fov" type="range" min="30" max="100" step="1" value="60"
+      /></label>
+      <output id="status">Initializing…</output>
+    </aside>
+  </body>
+</html>

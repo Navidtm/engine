@@ -57,14 +57,44 @@ export interface EngineTransportOptions {
   readonly structuralCommandCapacity?: number;
 }
 
+/** Perspective parameters that can change without recreating the engine camera. */
+export interface CameraPerspectiveOptions {
+  /** Vertical field of view in radians; it must be positive and finite. */
+  readonly verticalFov?: number;
+  /** Positive distance to the near clipping plane. */
+  readonly near?: number;
+  /** Far clipping-plane distance; it must exceed `near`. */
+  readonly far?: number;
+}
+
+/** Initial configuration for the engine-owned perspective camera. */
+export interface EngineCameraOptions extends CameraPerspectiveOptions {
+  /** Initial camera position. Defaults to `[0, 0, 3]`. */
+  readonly position?: Vec3;
+  /** Initial camera orientation quaternion. Defaults to identity. */
+  readonly rotation?: Quat;
+}
+
+/** Controls for the single active camera used by the current renderer. */
+export interface EngineCamera {
+  /** Mutable camera position. */
+  readonly position: Vector3Control;
+  /** Mutable camera orientation. */
+  readonly rotation: QuaternionControl;
+  /** Updates one or more perspective parameters while preserving unspecified values. */
+  setPerspective(options: CameraPerspectiveOptions): void;
+}
+
 /** Full configuration accepted by {@link createEngine}. */
 export interface EngineConfig {
   /** Canvas transferred to the worker as an OffscreenCanvas during `init()`. */
   readonly canvas: HTMLCanvasElement;
   /** Raw Lume WASM URL; defaults to `/lume_core.wasm`. */
   readonly wasmUrl?: string | URL;
-  /** Maximum live entity slots, from 1 through 1,048,576. */
+  /** Maximum application-owned entity slots, from 1 through 1,048,575. */
   readonly entityCapacity?: number;
+  /** Optional initial state for the engine-owned active camera. */
+  readonly camera?: EngineCameraOptions;
   /** Advanced SharedArrayBuffer and worker transport budgets. */
   readonly transport?: EngineTransportOptions;
   /** Prefers a high-performance (`"high"`) or power-efficient (`"low"`) adapter. */
@@ -106,20 +136,6 @@ export interface MeshHandle {
   readonly scale: Vector3Control;
 }
 
-/** Perspective-camera handle plus live transform controls. */
-export interface CameraHandle {
-  /** Type discriminant for narrowing engine handles. */
-  readonly kind: "camera";
-  /** Stable camera entity owned by this engine. */
-  readonly id: Entity;
-  /** Camera position control. */
-  readonly position: Vector3Control;
-  /** Camera rotation control. */
-  readonly rotation: QuaternionControl;
-  /** Camera scale control. */
-  readonly scale: Vector3Control;
-}
-
 /** Mutable position or scale control that publishes only the changed transform field. */
 export interface Vector3Control {
   /** Current X component. */
@@ -147,9 +163,9 @@ export interface QuaternionControl {
 }
 
 /** Any high-level resource handle that can be passed to {@link Engine.destroy}. */
-export type EngineHandle = BasicMaterialHandle | MeshHandle | CameraHandle;
-/** A high-level handle that has a transform. */
-export type SceneHandle = MeshHandle | CameraHandle;
+export type EngineHandle = BasicMaterialHandle | MeshHandle;
+/** A high-level handle with a user-authored transform. */
+export type SceneHandle = MeshHandle;
 
 /** Creation options for a basic linear-RGBA material. */
 export interface BasicMaterialOptions {
@@ -173,28 +189,12 @@ export interface MeshOptions {
   readonly bounds?: { readonly center?: Vec3; readonly radius: number };
 }
 
-/** Creation options for a perspective camera. Angles are in radians. */
-export interface PerspectiveCameraOptions {
-  /** Initial camera XYZ position. */
-  readonly position?: Vec3;
-  /** Initial camera XYZW orientation. */
-  readonly rotation?: Quat;
-  /** Vertical field of view in radians. */
-  readonly verticalFov?: number;
-  /** Positive near clipping plane. */
-  readonly near?: number;
-  /** Far clipping plane; must be greater than `near`. */
-  readonly far?: number;
-}
-
 /** Convenience authoring functions available as `engine.create`. */
 export interface CreateApi {
   /** Creates a color-only material handle. */
   basicMaterial(options?: BasicMaterialOptions): BasicMaterialHandle;
   /** Creates a triangle or cube mesh with transform and mesh components. */
   mesh(options: MeshOptions): MeshHandle;
-  /** Creates a perspective camera with an initial transform. */
-  perspectiveCamera(options?: PerspectiveCameraOptions): CameraHandle;
 }
 
 /** Batched transform setter available as `engine.set`. */
@@ -230,7 +230,7 @@ export interface WorldApi {
  * @example
  * const engine = createEngine(canvas);
  * engine.create.mesh({ geometry: "cube" });
- * engine.create.perspectiveCamera({ position: [0, 0, 3] });
+ * engine.camera.position.set(0, 0, 3);
  * await engine.init();
  * engine.start();
  */
@@ -241,6 +241,8 @@ export interface Engine {
   readonly set: SetApi;
   /** Advanced component API. */
   readonly world: WorldApi;
+  /** Engine-owned active perspective camera. */
+  readonly camera: EngineCamera;
   /** Current lifecycle state. */
   readonly status: EngineStatus;
   /** Initializes the worker, WASM core, and WebGPU renderer. */
@@ -300,31 +302,38 @@ export function createEngine(
 ): Engine {
   const config: EngineConfig =
     "canvas" in canvasOrConfig ? canvasOrConfig : { ...options, canvas: canvasOrConfig };
-  const entityCapacity = config.entityCapacity ?? 4_096;
-  if (!Number.isSafeInteger(entityCapacity) || entityCapacity <= 0 || entityCapacity > 1 << 20) {
-    throw new RangeError("entityCapacity must be an integer between 1 and 1,048,576.");
-  }
-  const transformCapacity = config.transport?.transformCapacity ?? entityCapacity;
+  const userEntityCapacity = config.entityCapacity ?? 4_096;
   if (
-    !Number.isSafeInteger(transformCapacity) ||
-    transformCapacity <= 0 ||
-    transformCapacity > entityCapacity
+    !Number.isSafeInteger(userEntityCapacity) ||
+    userEntityCapacity <= 0 ||
+    userEntityCapacity >= 1 << 20
+  ) {
+    throw new RangeError("entityCapacity must be an integer between 1 and 1,048,575.");
+  }
+  const userTransformCapacity = config.transport?.transformCapacity ?? userEntityCapacity;
+  if (
+    !Number.isSafeInteger(userTransformCapacity) ||
+    userTransformCapacity <= 0 ||
+    userTransformCapacity > userEntityCapacity
   ) {
     throw new RangeError(
       "transport.transformCapacity must be an integer between 1 and entityCapacity.",
     );
   }
   const structuralCommandCapacity =
-    config.transport?.structuralCommandCapacity ?? Math.min(entityCapacity, 1_024);
+    config.transport?.structuralCommandCapacity ?? Math.min(userEntityCapacity, 1_024);
   if (
     !Number.isSafeInteger(structuralCommandCapacity) ||
     structuralCommandCapacity <= 0 ||
-    structuralCommandCapacity > entityCapacity
+    structuralCommandCapacity > userEntityCapacity
   ) {
     throw new RangeError(
       "transport.structuralCommandCapacity must be an integer between 1 and entityCapacity.",
     );
   }
+  validateEngineCameraOptions(config.camera);
+  const entityCapacity = userEntityCapacity + 1;
+  const transformCapacity = userTransformCapacity + 1;
   const state: EngineState = {
     config,
     worker: (config.workerFactory ?? createDefaultWorker)(),
@@ -349,6 +358,7 @@ export function createEngine(
     structuralFallback: false,
   };
   const world = createWorldApi(state);
+  const engineCamera = createEngineCamera(state, world, config.camera);
   const highLevel = createHighLevelApi(state, world);
 
   state.worker.addEventListener("message", (event: MessageEvent<WorkerToMainMessage>) => {
@@ -362,6 +372,7 @@ export function createEngine(
     create: highLevel.create,
     set: highLevel.set,
     world,
+    camera: engineCamera,
     get status() {
       return state.status;
     },
@@ -388,6 +399,56 @@ interface MutableTransformValue {
   readonly position: [number, number, number];
   readonly rotation: [number, number, number, number];
   readonly scale: [number, number, number];
+}
+
+interface CameraPerspective {
+  verticalFov: number;
+  near: number;
+  far: number;
+}
+
+const DEFAULT_CAMERA_POSITION: Vec3 = [0, 0, 3];
+const DEFAULT_CAMERA_ROTATION: Quat = [0, 0, 0, 1];
+const DEFAULT_CAMERA_PERSPECTIVE: CameraPerspective = {
+  verticalFov: Math.PI / 3,
+  near: 0.1,
+  far: 1_000,
+};
+
+function createEngineCamera(
+  state: EngineState,
+  world: WorldApi,
+  options: EngineCameraOptions | undefined,
+): EngineCamera {
+  const entity = world.createEntity();
+  const transformValue = mutableTransform({
+    position: options?.position ?? DEFAULT_CAMERA_POSITION,
+    rotation: options?.rotation ?? DEFAULT_CAMERA_ROTATION,
+  });
+  const perspective = resolveCameraPerspective(options, DEFAULT_CAMERA_PERSPECTIVE);
+  world.add(
+    entity,
+    transform({ position: transformValue.position, rotation: transformValue.rotation }),
+  );
+  world.add(entity, camera(perspective));
+  return {
+    position: createVector3Control(transformValue.position, () =>
+      publishTransform(state, entity, transformValue, TransformField.Position),
+    ),
+    rotation: createQuaternionControl(transformValue.rotation, () =>
+      publishTransform(state, entity, transformValue, TransformField.Rotation),
+    ),
+    setPerspective(next: CameraPerspectiveOptions) {
+      if (state.status === "disposed" || state.status === "failed") {
+        throw new Error(`Cannot update a ${state.status} engine.`);
+      }
+      const resolved = resolveCameraPerspective(next, perspective);
+      perspective.verticalFov = resolved.verticalFov;
+      perspective.near = resolved.near;
+      perspective.far = resolved.far;
+      world.add(entity, camera(perspective));
+    },
+  };
 }
 
 function createHighLevelApi(
@@ -432,31 +493,7 @@ function createHighLevelApi(
       const geometry = options.geometry === "cube" ? boxGeometry() : triangleGeometry();
       world.add(entity, mesh(geometry, materialHandle.id));
       if (options.bounds !== undefined) world.add(entity, bounds(options.bounds));
-      const handle = createSceneHandle(state, "mesh", entity, initialTransform);
-      transforms.set(handle, initialTransform);
-      return handle;
-    },
-    perspectiveCamera(options: PerspectiveCameraOptions = {}) {
-      validateCameraOptions(options);
-      ensureTransformSlotAvailable(state);
-      const entity = world.createEntity();
-      const initialTransform = mutableTransform(options);
-      world.add(
-        entity,
-        transform({
-          ...(options.position === undefined ? {} : { position: options.position }),
-          ...(options.rotation === undefined ? {} : { rotation: options.rotation }),
-        }),
-      );
-      world.add(
-        entity,
-        camera({
-          ...(options.verticalFov === undefined ? {} : { verticalFov: options.verticalFov }),
-          ...(options.near === undefined ? {} : { near: options.near }),
-          ...(options.far === undefined ? {} : { far: options.far }),
-        }),
-      );
-      const handle = createSceneHandle(state, "camera", entity, initialTransform);
+      const handle = createMeshHandle(state, entity, initialTransform);
       transforms.set(handle, initialTransform);
       return handle;
     },
@@ -510,12 +547,30 @@ function mutableTransform(options: {
   };
 }
 
-function createSceneHandle<Kind extends "mesh" | "camera">(
+function validateEngineCameraOptions(options: EngineCameraOptions | undefined): void {
+  if (options?.position !== undefined) validateFiniteTuple("camera position", options.position, 3);
+  if (options?.rotation !== undefined) validateQuaternion(options.rotation);
+  resolveCameraPerspective(options, DEFAULT_CAMERA_PERSPECTIVE);
+}
+
+function resolveCameraPerspective(
+  options: CameraPerspectiveOptions | undefined,
+  current: CameraPerspective,
+): CameraPerspective {
+  const resolved = {
+    verticalFov: options?.verticalFov ?? current.verticalFov,
+    near: options?.near ?? current.near,
+    far: options?.far ?? current.far,
+  };
+  validateCameraPerspective(resolved);
+  return resolved;
+}
+
+function createMeshHandle(
   state: EngineState,
-  kind: Kind,
   entity: Entity,
   value: MutableTransformValue,
-): Kind extends "mesh" ? MeshHandle : CameraHandle {
+): MeshHandle {
   const position = createVector3Control(value.position, () =>
     publishTransform(state, entity, value, TransformField.Position),
   );
@@ -526,12 +581,12 @@ function createSceneHandle<Kind extends "mesh" | "camera">(
     publishTransform(state, entity, value, TransformField.Scale),
   );
   return {
-    kind,
+    kind: "mesh",
     id: entity,
     position,
     rotation,
     scale,
-  } as unknown as Kind extends "mesh" ? MeshHandle : CameraHandle;
+  };
 }
 
 function createVector3Control(
@@ -715,22 +770,17 @@ function validateMeshOptions(state: EngineState, options: MeshOptions): void {
   }
 }
 
-function validateCameraOptions(options: PerspectiveCameraOptions): void {
-  if (options.position !== undefined) validateFiniteTuple("position", options.position, 3);
-  if (options.rotation !== undefined) validateFiniteTuple("rotation", options.rotation, 4);
-  if (
-    options.verticalFov !== undefined &&
-    (!Number.isFinite(options.verticalFov) || options.verticalFov <= 0)
-  ) {
+function validateCameraPerspective(options: CameraPerspective): void {
+  if (!Number.isFinite(options.verticalFov) || options.verticalFov <= 0) {
     throw new RangeError("Camera verticalFov must be a positive finite number.");
   }
-  if (options.near !== undefined && (!Number.isFinite(options.near) || options.near <= 0)) {
+  if (!Number.isFinite(options.near) || options.near <= 0) {
     throw new RangeError("Camera near must be a positive finite number.");
   }
-  if (options.far !== undefined && (!Number.isFinite(options.far) || options.far <= 0)) {
+  if (!Number.isFinite(options.far) || options.far <= 0) {
     throw new RangeError("Camera far must be a positive finite number.");
   }
-  if (options.near !== undefined && options.far !== undefined && options.far <= options.near) {
+  if (options.far <= options.near) {
     throw new RangeError("Camera far must be greater than near.");
   }
 }
@@ -746,7 +796,7 @@ function validateComponent(state: EngineState, component: Component): void {
       validateColor(component.color);
       return;
     case "camera":
-      validateCameraOptions(component);
+      validateCameraPerspective(component);
       return;
     case "mesh":
       if (!Number.isSafeInteger(component.geometry.id) || component.geometry.id < 0) {
@@ -821,7 +871,7 @@ function initialize(state: EngineState): Promise<void> {
       protocolVersion: RUNTIME_PROTOCOL_VERSION,
       canvas,
       wasmUrl: String(state.config.wasmUrl ?? new URL("/lume_core.wasm", document.baseURI)),
-      entityCapacity: state.config.entityCapacity ?? 4_096,
+      entityCapacity: state.entityCapacity,
       transformCapacity: state.transformCapacity,
       size: {
         width: rect.width,

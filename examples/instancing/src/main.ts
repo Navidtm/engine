@@ -9,6 +9,7 @@ const engine = createEngine({
   canvas,
   wasmUrl: "/lume_core.wasm",
   entityCapacity: 1_024,
+  camera: { position: [0, 0, 5], far: 100 },
   clearColor: { r: 0.01, g: 0.015, b: 0.03, a: 1 },
 });
 const material = engine.create.basicMaterial({ color: [0.2, 0.72, 1, 1] });
@@ -19,7 +20,6 @@ for (let index = 0; index < 256; index += 1) {
     position: [(index % 16) - 7.5, Math.floor(index / 16) - 7.5, -18],
   });
 }
-engine.create.perspectiveCamera({ position: [0, 0, 5], far: 100 });
 await engine.init();
 engine.start();
 const stats = await engine.getStats();

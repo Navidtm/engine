@@ -23,11 +23,14 @@ staging offsets; normal engine operation must not require one.
 ## Shared allocation and budget
 
 The allocation has three explicit, immutable budgets: public `entityCapacity`
-for ECS and rendering, advanced `transport.transformCapacity` for transform
-slots and WASM staging, and `transport.structuralCommandCapacity` for the SPSC
-command ring. `transport.transformCapacity` defaults to `entityCapacity`; it
-can be lower when transform-bearing entities are allocated in the lower entity
-index range. The command budget defaults to `min(entityCapacity, 1,024)`, because short structural bursts
+for application ECS entities and rendering, advanced
+`transport.transformCapacity` for transform slots and WASM staging, and
+`transport.structuralCommandCapacity` for the SPSC command ring. The engine
+adds one internal entity and transform slot for its active camera, so this does
+not reduce the public entity budget. `transport.transformCapacity` defaults to
+`entityCapacity`; it can be lower when transform-bearing entities are allocated
+in the lower entity index range. The command budget defaults to
+`min(entityCapacity, 1,024)`, because short structural bursts
 do not justify reserving 64 bytes per entity. Overflow preserves ordering by
 switching subsequent structural commands to the message fallback.
 
