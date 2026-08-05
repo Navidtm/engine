@@ -22,11 +22,17 @@ export interface TransformOptions {
 }
 
 export function transform(options: TransformOptions = {}): TransformComponent {
+  const position = options.position ?? ZERO;
+  const rotation = options.rotation ?? IDENTITY_ROTATION;
+  const scale = options.scale ?? ONE;
+  validateFiniteTuple("transform position", position, 3);
+  validateFiniteTuple("transform scale", scale, 3);
+  validateQuaternion(rotation);
   return Object.freeze({
     kind: "transform",
-    position: options.position ?? ZERO,
-    rotation: options.rotation ?? IDENTITY_ROTATION,
-    scale: options.scale ?? ONE,
+    position,
+    rotation,
+    scale,
   });
 }
 
@@ -35,7 +41,12 @@ export interface MaterialOptions {
 }
 
 export function material(options: MaterialOptions = {}): MaterialComponent {
-  return Object.freeze({ kind: "material", color: options.color ?? WHITE });
+  const color = options.color ?? WHITE;
+  validateFiniteTuple("material color", color, 4);
+  if (color.some((channel) => channel < 0 || channel > 1)) {
+    throw new RangeError("material color channels must be between 0 and 1");
+  }
+  return Object.freeze({ kind: "material", color });
 }
 
 export interface CameraOptions {
@@ -70,9 +81,23 @@ export function bounds(options: BoundsOptions): BoundsComponent {
   if (!Number.isFinite(options.radius) || options.radius < 0) {
     throw new RangeError("bounds radius must be a finite non-negative number");
   }
+  const center = options.center ?? ZERO;
+  validateFiniteTuple("bounds center", center, 3);
   return Object.freeze({
     kind: "bounds",
-    center: options.center ?? ZERO,
+    center,
     radius: options.radius,
   });
+}
+
+function validateQuaternion(value: Quat): void {
+  validateFiniteTuple("transform rotation", value, 4);
+  const squaredLength = value.reduce((sum, component) => sum + component * component, 0);
+  if (squaredLength === 0) throw new RangeError("transform rotation must be non-zero");
+}
+
+function validateFiniteTuple(label: string, value: readonly number[], length: number): void {
+  if (value.length !== length || value.some((component) => !Number.isFinite(component))) {
+    throw new RangeError(`${label} must contain exactly ${length} finite numbers`);
+  }
 }

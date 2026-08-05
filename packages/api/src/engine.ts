@@ -288,7 +288,7 @@ function createHighLevelApi(
   let defaultMaterial: BasicMaterialHandle | undefined;
   const transforms = new WeakMap<SceneHandle, MutableTransformValue>();
   const createBasicMaterial = (options: BasicMaterialOptions = {}): BasicMaterialHandle => {
-    if (options.color !== undefined) validateFiniteTuple("material color", options.color, 4);
+    if (options.color !== undefined) validateColor(options.color);
     const entity = world.createEntity();
     world.add(entity, material(options));
     return Object.freeze({ kind: "basic-material", id: entity });
@@ -385,7 +385,7 @@ function mutableTransform(options: {
   readonly scale?: Vec3;
 }): MutableTransformValue {
   if (options.position !== undefined) validateFiniteTuple("position", options.position, 3);
-  if (options.rotation !== undefined) validateFiniteTuple("rotation", options.rotation, 4);
+  if (options.rotation !== undefined) validateQuaternion(options.rotation);
   if (options.scale !== undefined) validateFiniteTuple("scale", options.scale, 3);
   const position = options.position ?? [0, 0, 0];
   const rotation = options.rotation ?? [0, 0, 0, 1];
@@ -591,7 +591,7 @@ function validateMeshOptions(state: EngineState, options: MeshOptions): void {
     validateLiveEntity(state, options.material.id);
   }
   if (options.position !== undefined) validateFiniteTuple("position", options.position, 3);
-  if (options.rotation !== undefined) validateFiniteTuple("rotation", options.rotation, 4);
+  if (options.rotation !== undefined) validateQuaternion(options.rotation);
   if (options.scale !== undefined) validateFiniteTuple("scale", options.scale, 3);
   if (options.bounds !== undefined) {
     if (!Number.isFinite(options.bounds.radius) || options.bounds.radius < 0) {
@@ -626,11 +626,11 @@ function validateComponent(state: EngineState, component: Component): void {
   switch (component.kind) {
     case "transform":
       validateFiniteTuple("position", component.position, 3);
-      validateFiniteTuple("rotation", component.rotation, 4);
+      validateQuaternion(component.rotation);
       validateFiniteTuple("scale", component.scale, 3);
       return;
     case "material":
-      validateFiniteTuple("material color", component.color, 4);
+      validateColor(component.color);
       return;
     case "camera":
       validateCameraOptions(component);
@@ -652,6 +652,20 @@ function validateComponent(state: EngineState, component: Component): void {
 function validateFiniteTuple(label: string, value: readonly number[], length: number): void {
   if (value.length !== length || value.some((item) => !Number.isFinite(item))) {
     throw new RangeError(`${label} must contain exactly ${length} finite numbers.`);
+  }
+}
+
+function validateQuaternion(value: Quat): void {
+  validateFiniteTuple("rotation", value, 4);
+  if (value.every((component) => component === 0)) {
+    throw new RangeError("rotation must be non-zero.");
+  }
+}
+
+function validateColor(value: Color): void {
+  validateFiniteTuple("material color", value, 4);
+  if (value.some((channel) => channel < 0 || channel > 1)) {
+    throw new RangeError("material color channels must be between 0 and 1.");
   }
 }
 

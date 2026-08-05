@@ -106,6 +106,9 @@ All public numeric tuples and camera/bounds values are checked for finite,
 valid ranges before an entity slot is allocated. Material and advanced mesh
 component handles are validated against the owning engine before commands are
 published, so a foreign or stale handle cannot enter the transport stream.
+Scene constructors enforce the same contract for advanced authoring: transform
+vectors must be finite, quaternions must be finite and non-zero, and linear
+RGBA color channels must be finite values in the inclusive `[0, 1]` range.
 
 ## Failure model
 

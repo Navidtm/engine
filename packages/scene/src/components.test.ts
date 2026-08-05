@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { bounds, camera, transform } from "./components.js";
+import { bounds, camera, material, transform } from "./components.js";
 
 describe("component constructors", () => {
   it("creates immutable transform values with stable defaults", () => {
@@ -15,5 +15,12 @@ describe("component constructors", () => {
 
   it("rejects negative bounding spheres", () => {
     expect(() => bounds({ radius: -1 })).toThrow(RangeError);
+  });
+
+  it("rejects non-finite transforms, zero quaternions, and out-of-range colors", () => {
+    expect(() => transform({ position: [Number.NaN, 0, 0] })).toThrow(RangeError);
+    expect(() => transform({ rotation: [0, 0, 0, 0] })).toThrow(RangeError);
+    expect(() => material({ color: [1, 0, 0, Number.POSITIVE_INFINITY] })).toThrow(RangeError);
+    expect(() => material({ color: [1.1, 0, 0, 1] })).toThrow(RangeError);
   });
 });
