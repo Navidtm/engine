@@ -8,7 +8,7 @@ an evidence-based snapshot, not a description of intended future architecture.
 ## Executive Status
 
 The engine has completed its runtime-foundation and transport-hardening work.
-The actual implementation is ready to move from Roadmap Phase 4 into Phase 5,
+The actual implementation is ready to move from Milestone 5 into Milestone 6,
 Renderer Scalability, with controlled browser validation retained as an
 acceptance task.
 
@@ -285,7 +285,7 @@ main-thread/worker/WASM/WebGPU path are not yet part of CI.
 | 2. Render Architecture        | Completed     | Implemented                                                              |
 | 3. Performance Infrastructure | Completed     | Implemented                                                              |
 | 4. Transport Hardening        | Completed     | Implemented; browser validation remains an acceptance activity           |
-| 5. Renderer Scalability       | Planned       | Baseline CPU instancing exists; scalable GPU-driven work has not started |
+| 6. Renderer Scalability       | Planned       | Baseline CPU instancing exists; scalable GPU-driven work has not started |
 | 6. Asset Pipeline             | Planned       | Not implemented                                                          |
 | 7. Advanced Graphics          | Planned       | Not implemented                                                          |
 | 8. Developer Ecosystem        | Planned       | Not implemented                                                          |

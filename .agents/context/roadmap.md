@@ -209,7 +209,7 @@ measurement remains an acceptance activity, not unfinished transport design.
 
 ---
 
-# Phase 5: Renderer Scalability
+# Milestone 6: Renderer Scalability
 
 ## Status
 

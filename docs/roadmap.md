@@ -33,10 +33,11 @@ rendering at 1k, 10k, 50k, and 100k objects; and controlled raw Three.js data.
 ## Milestone 4 — high-throughput transport (implemented)
 
 Moves hot transform state to a versioned `SharedArrayBuffer` layout when
-cross-origin isolation is available. Structural commands remain messages, and
-the command transform path remains a compatibility mode. The worker drains a
-coalescing dirty-index ring into preallocated WASM staging and applies each
-frame's batch with one boundary crossing.
+cross-origin isolation is available. Milestone 5 subsequently replaces normal
+runtime structural messages with a bounded SPSC ring and ordered message
+overflow fallback. The worker drains a coalescing dirty-index ring into
+preallocated WASM staging and applies each frame's batch with one boundary
+crossing.
 
 Benchmark focus: main-to-worker latency, structured-clone bytes, ring pressure,
 and missed-frame rate under input load.
