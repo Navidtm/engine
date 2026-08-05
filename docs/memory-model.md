@@ -48,6 +48,20 @@ transforms:          capacity × 10 × f32
 structural commands: commandCapacity × 16 × i32
 ```
 
+Reference transport budgets (excluding ECS, RenderWorld, visibility, JS entity
+metadata, and GPU buffers) use the default 1,024 command records:
+
+| Entity capacity | Transform capacity |      SAB | WASM staging | Transport total |
+| --------------: | -----------------: | -------: | -----------: | --------------: |
+|          10,000 |             10,000 | 0.60 MiB |     0.53 MiB |        1.13 MiB |
+|         100,000 |            100,000 | 5.40 MiB |     5.34 MiB |       10.74 MiB |
+|       1,000,000 |            100,000 | 5.40 MiB |     5.34 MiB |       10.74 MiB |
+
+The browser benchmark must record `performance.memory.usedJSHeapSize` when the
+browser exposes it, together with the configured capacities. It is a
+browser-specific peak measurement; the deterministic table above is the memory
+budget used before a scene is created.
+
 The structural words also have a `Float32Array` view, so command encoding does
 not allocate or convert payload buffers. Transform slots contain position,
 quaternion and scale. Packed entity indices select slots. A single atomic
