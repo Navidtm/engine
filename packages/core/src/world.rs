@@ -3,13 +3,20 @@ use crate::ecs::{Entity, EntityAllocator, SparseSet};
 use crate::material::{BasicMaterial, MaterialHandle, MaterialRegistry};
 use crate::systems::{update_cameras, update_transforms};
 
+/// Independent fixed capacities for entities and each component store.
 #[derive(Clone, Copy, Debug)]
 pub struct WorldCapacity {
+    /// Maximum number of concurrently live entity slots.
     pub entities: usize,
+    /// Maximum number of entities with a transform.
     pub transforms: usize,
+    /// Maximum number of mesh renderer components.
     pub mesh_renderers: usize,
+    /// Maximum number of camera components.
     pub cameras: usize,
+    /// Maximum number of basic material components.
     pub materials: usize,
+    /// Maximum number of explicit or implicit bounds components.
     pub bounds: usize,
 }
 
@@ -26,16 +33,26 @@ impl Default for WorldCapacity {
     }
 }
 
+/// Fixed-capacity ECS simulation world.
+///
+/// `World` owns component storage. Rendering receives only extracted snapshots
+/// through [`crate::RenderWorld`], so renderer state never mutates this world.
 pub struct World {
     entities: EntityAllocator,
+    /// Transform component storage, exposed for allocation-free engine systems.
     pub transforms: SparseSet<Transform>,
+    /// Mesh renderer component storage.
     pub mesh_renderers: SparseSet<MeshRenderer>,
+    /// Camera component storage.
     pub cameras: SparseSet<Camera>,
+    /// Local bounds component storage.
     pub bounds: SparseSet<Bounds>,
+    /// Basic material component storage.
     pub materials: MaterialRegistry,
 }
 
 impl World {
+    /// Constructs a world whose storage will not grow past `capacity`.
     #[must_use]
     pub fn with_capacity(capacity: WorldCapacity) -> Self {
         Self {
@@ -48,14 +65,17 @@ impl World {
         }
     }
 
+    /// Allocates an entity, returning `None` when the entity capacity is full.
     pub fn spawn(&mut self) -> Option<Entity> {
         self.entities.spawn()
     }
 
+    /// Claims an externally allocated entity identity for the worker bridge.
     pub fn claim(&mut self, entity: Entity) -> bool {
         self.entities.claim(entity)
     }
 
+    /// Despawns a live entity and removes all of its components atomically.
     pub fn despawn(&mut self, entity: Entity) -> bool {
         if !self.entities.despawn(entity) {
             return false;
@@ -68,16 +88,19 @@ impl World {
         true
     }
 
+    /// Returns whether `entity` has a live matching generation.
     #[must_use]
     pub fn is_alive(&self, entity: Entity) -> bool {
         self.entities.is_alive(entity)
     }
 
+    /// Returns the number of currently live entities.
     #[must_use]
     pub fn entity_count(&self) -> usize {
         self.entities.len()
     }
 
+    /// Adds or replaces an entity's transform when capacity and liveness allow it.
     pub fn add_transform(&mut self, entity: Entity, value: Transform) -> bool {
         if !self.is_alive(entity) {
             return false;
@@ -85,6 +108,10 @@ impl World {
         self.transforms.insert(entity, value).is_ok()
     }
 
+    /// Applies the transport field mask (`position=1`, `rotation=2`, `scale=4`).
+    ///
+    /// Bit 8 is accepted as a matrix-dirty marker but does not copy matrix data;
+    /// the next [`Self::update`] recomputes it from the local fields.
     pub fn update_transform_fields(
         &mut self,
         entity: Entity,
@@ -109,6 +136,9 @@ impl World {
         true
     }
 
+    /// Adds or replaces a mesh renderer and ensures default bounds exist.
+    ///
+    /// The preflight capacity check makes the implicit-bounds addition atomic.
     pub fn add_mesh_renderer(&mut self, entity: Entity, value: MeshRenderer) -> bool {
         if !self.is_alive(entity) {
             return false;
@@ -124,6 +154,7 @@ impl World {
         mesh_added && bounds_added
     }
 
+    /// Adds or replaces a camera component.
     pub fn add_camera(&mut self, entity: Entity, value: Camera) -> bool {
         if !self.is_alive(entity) {
             return false;
@@ -131,6 +162,7 @@ impl World {
         self.cameras.insert(entity, value).is_ok()
     }
 
+    /// Adds or replaces bounds when the radius is non-negative.
     pub fn add_bounds(&mut self, entity: Entity, value: Bounds) -> bool {
         if !self.is_alive(entity) || value.radius < 0.0 {
             return false;
@@ -138,6 +170,7 @@ impl World {
         self.bounds.insert(entity, value).is_ok()
     }
 
+    /// Adds or replaces the basic material owned by `entity`.
     pub fn add_material(&mut self, entity: Entity, value: BasicMaterial) -> bool {
         if !self.is_alive(entity) {
             return false;
@@ -147,6 +180,10 @@ impl World {
             .is_ok()
     }
 
+    /// Removes a component selected by the stable transport component ID.
+    ///
+    /// IDs are `1=transform`, `2=material`, `3=camera`, `4=mesh renderer`, and
+    /// `5=bounds`. Unknown IDs return `false`.
     pub fn remove_component(&mut self, entity: Entity, component: u32) -> bool {
         if !self.is_alive(entity) {
             return false;
@@ -164,6 +201,7 @@ impl World {
         }
     }
 
+    /// Updates every camera's positive viewport aspect ratio in place.
     pub fn set_camera_aspect(&mut self, aspect: f32) {
         if aspect <= 0.0 {
             return;

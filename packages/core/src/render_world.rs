@@ -7,7 +7,9 @@ use crate::world::World;
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 #[repr(C, align(16))]
 pub struct GpuInstance {
+    /// Model-to-world matrix uploaded to instance storage.
     pub world_matrix: Mat4,
+    /// Material color paired with this instance.
     pub color: Color,
 }
 
@@ -15,7 +17,9 @@ pub struct GpuInstance {
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 #[repr(C, align(16))]
 pub struct GpuCamera {
+    /// World-to-view matrix.
     pub view: Mat4,
+    /// View-to-clip projection matrix.
     pub projection: Mat4,
 }
 
@@ -23,19 +27,27 @@ pub struct GpuCamera {
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 #[repr(C, align(16))]
 pub struct GpuBounds {
+    /// World-space center in `xyz` and conservative radius in `w`.
     pub center_radius: [f32; 4],
 }
 
+/// Counts produced by one [`RenderWorld::extract`] call.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct ExtractionStats {
+    /// Number of extracted renderable instances.
     pub instances: usize,
+    /// Number of extracted cameras.
     pub cameras: usize,
+    /// Meshes skipped because a required transform or material was absent.
     pub skipped_meshes: usize,
 }
 
+/// Fixed-capacity extraction failure; no storage is grown to recover.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ExtractionError {
+    /// Renderable instance capacity was exhausted.
     InstanceCapacity { capacity: usize },
+    /// Camera capacity was exhausted.
     CameraCapacity { capacity: usize },
 }
 
@@ -73,6 +85,7 @@ pub struct RenderWorld {
 }
 
 impl RenderWorld {
+    /// Allocates reusable renderer-facing storage with independent capacities.
     #[must_use]
     pub fn with_capacity(entity_capacity: usize, camera_capacity: usize) -> Self {
         Self {
@@ -89,6 +102,10 @@ impl RenderWorld {
         }
     }
 
+    /// Rebuilds this snapshot from `world` without allocating on success.
+    ///
+    /// Meshes missing a transform or material are counted and skipped. Capacity
+    /// errors leave a partial snapshot which the caller must not submit.
     pub fn extract(&mut self, world: &World) -> Result<ExtractionStats, ExtractionError> {
         self.clear();
         let mut skipped_meshes = 0;
@@ -140,6 +157,7 @@ impl RenderWorld {
         })
     }
 
+    /// Clears logical contents while retaining all allocated storage.
     pub fn clear(&mut self) {
         self.entities.clear();
         self.geometries.clear();
@@ -151,71 +169,88 @@ impl RenderWorld {
         self.cameras.clear();
     }
 
+    /// Returns the maximum number of renderable instances.
     #[must_use]
     pub const fn entity_capacity(&self) -> usize {
         self.entity_capacity
     }
 
+    /// Returns the maximum number of extracted cameras.
     #[must_use]
     pub const fn camera_capacity(&self) -> usize {
         self.camera_capacity
     }
 
+    /// Returns entity IDs in the same order as all instance-side slices.
     #[must_use]
     pub fn entities(&self) -> &[u32] {
         &self.entities
     }
 
+    /// Returns geometry IDs in extracted instance order.
     #[must_use]
     pub fn geometries(&self) -> &[u32] {
         &self.geometries
     }
 
+    /// Returns packed GPU instance records in extracted order.
     #[must_use]
     pub fn instances(&self) -> &[GpuInstance] {
         &self.instances
     }
 
+    /// Returns pipeline IDs in extracted instance order.
     #[must_use]
     pub fn pipelines(&self) -> &[u32] {
         &self.pipelines
     }
 
+    /// Returns material handles in extracted instance order.
     #[must_use]
     pub fn materials(&self) -> &[u32] {
         &self.materials
     }
 
+    /// Returns world-space bounds in extracted instance order.
     #[must_use]
     pub fn bounds(&self) -> &[GpuBounds] {
         &self.bounds
     }
 
+    /// Returns camera records in extracted camera order.
     #[must_use]
     pub fn cameras(&self) -> &[GpuCamera] {
         &self.cameras
     }
 
+    /// Returns entity IDs that own the returned [`Self::cameras`].
     #[must_use]
     pub fn camera_entities(&self) -> &[u32] {
         &self.camera_entities
     }
 
+    /// Returns the stable allocation pointer for entity IDs.
+    ///
+    /// The pointer stays valid until this `RenderWorld` is dropped because
+    /// extraction never grows the vector beyond its configured capacity.
     #[must_use]
     pub fn entities_capacity_ptr(&self) -> *const u32 {
         self.entities.as_ptr()
     }
 
+    /// Returns the stable allocation pointer for geometry IDs.
     #[must_use]
     pub fn geometries_capacity_ptr(&self) -> *const u32 {
         self.geometries.as_ptr()
     }
 
+    /// Returns the stable allocation pointer for GPU instances.
     #[must_use]
     pub fn instances_capacity_ptr(&self) -> *const GpuInstance {
         self.instances.as_ptr()
     }
 
+    /// Returns the stable allocation pointer for GPU cameras.
     #[must_use]
     pub fn cameras_capacity_ptr(&self) -> *const GpuCamera {
         self.cameras.as_ptr()
