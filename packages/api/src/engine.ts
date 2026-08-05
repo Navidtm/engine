@@ -26,6 +26,7 @@ import {
   triangleGeometry,
   type Vec3,
 } from "@lume/scene";
+
 import {
   allocateEntity,
   packEntity,
