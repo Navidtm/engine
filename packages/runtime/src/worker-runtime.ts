@@ -190,7 +190,7 @@ export function createWorkerRuntime(host: WorkerHost): (message: MainToWorkerMes
               frameTime: state.lastFrameTimeMs,
               cpuTime: state.lastCpuTimeMs,
               gpuTime: rendererStats?.gpuTimeMs ?? null,
-              allocationsPerFrame: 0,
+              allocationsPerFrame: rendererStats?.browserObjectsPerFrame ?? 0,
               render: {
                 drawCalls: rendererStats?.drawCalls ?? 0,
                 visibleObjects: coreStats?.visibleObjects ?? 0,

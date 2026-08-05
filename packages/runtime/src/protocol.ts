@@ -6,6 +6,7 @@ export interface EngineStats {
   readonly frameTime: number;
   readonly cpuTime: number;
   readonly gpuTime: number | null;
+  /** Frame-scoped WebGPU objects; reusable engine allocations are excluded. */
   readonly allocationsPerFrame: number;
   readonly render: {
     readonly drawCalls: number;

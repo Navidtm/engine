@@ -80,7 +80,9 @@ Detailed byte layout and browser-thread responsibilities are documented in
 - Math APIs write into caller-provided values and never allocate.
 - Render-pass descriptors, attachment arrays, clear values, and submission
   arrays are reused. WebGPU-mandated per-frame handles (the current texture,
-  view, encoder, pass, and command buffer) are the remaining JS objects.
+  view, encoder, pass, and command buffer) are the remaining JS objects and
+  are reported as `getStats().allocationsPerFrame`; this is not a heap-allocation
+  counter.
 - Pipeline and shader creation is confined to initialization/cache misses.
 
 ## Public API

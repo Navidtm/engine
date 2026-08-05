@@ -68,6 +68,8 @@ export interface RendererStats {
   readonly bufferUploadCpuTimeMs: number;
   readonly framePreparationCpuTimeMs: number;
   readonly gpuTimeMs: number | null;
+  /** WebGPU objects necessarily created for the most recently encoded frame. */
+  readonly browserObjectsPerFrame: number;
 }
 
 export interface MeshRenderer {
@@ -96,6 +98,7 @@ interface RendererState {
   submittedInstances: number;
   bufferUploadCpuTimeMs: number;
   framePreparationCpuTimeMs: number;
+  browserObjectsPerFrame: number;
   disposed: boolean;
 }
 
@@ -198,6 +201,7 @@ export async function createMeshRenderer(
       submittedInstances: 0,
       bufferUploadCpuTimeMs: 0,
       framePreparationCpuTimeMs: 0,
+      browserObjectsPerFrame: 0,
       disposed: false,
     };
     const frameGraph = createRendererFrameGraph();
@@ -227,6 +231,7 @@ export async function createMeshRenderer(
         bufferUploadCpuTimeMs: state.bufferUploadCpuTimeMs,
         framePreparationCpuTimeMs: state.framePreparationCpuTimeMs,
         gpuTimeMs: state.profiler.gpuTimeMs,
+        browserObjectsPerFrame: state.browserObjectsPerFrame,
       }),
       dispose: () => dispose(state),
     };
@@ -302,6 +307,10 @@ function encodeMainPass(context: RendererFrameContext): void {
   state.depthAttachment.view = state.surface.depthView;
   const encoder = state.device.createCommandEncoder({ label: "Lume frame commands" });
   const pass = encoder.beginRenderPass(state.passDescriptor);
+  // WebGPU mandates these frame-scoped objects: surface texture/view, command
+  // encoder, render pass encoder, and command buffer. Engine-owned arrays and
+  // descriptors remain reusable and are deliberately not included.
+  state.browserObjectsPerFrame = 5;
   pass.setPipeline(state.pipeline);
   pass.setBindGroup(0, state.bindGroup);
 
