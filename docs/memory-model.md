@@ -51,11 +51,13 @@ structural commands: commandCapacity × 16 × i32
 Reference transport budgets (excluding ECS, RenderWorld, visibility, JS entity
 metadata, and GPU buffers) use the default 1,024 command records:
 
-| Entity capacity | Transform capacity |      SAB | WASM staging | Transport total |
-| --------------: | -----------------: | -------: | -----------: | --------------: |
-|          10,000 |             10,000 | 0.60 MiB |     0.53 MiB |        1.13 MiB |
-|         100,000 |            100,000 | 5.40 MiB |     5.34 MiB |       10.74 MiB |
-|       1,000,000 |            100,000 | 5.40 MiB |     5.34 MiB |       10.74 MiB |
+| Entity capacity | Transform capacity |       SAB | WASM staging | Transport total |
+| --------------: | -----------------: | --------: | -----------: | --------------: |
+|          10,000 |             10,000 |  0.60 MiB |     0.53 MiB |        1.13 MiB |
+|         100,000 |            100,000 |  5.40 MiB |     5.34 MiB |       10.74 MiB |
+|         500,000 |            500,000 | 26.77 MiB |    26.70 MiB |       53.47 MiB |
+|       1,000,000 |          1,000,000 | 53.47 MiB |    53.41 MiB |      106.88 MiB |
+|       1,000,000 |            100,000 |  5.40 MiB |     5.34 MiB |       10.74 MiB |
 
 The browser benchmark must record `performance.memory.usedJSHeapSize` when the
 browser exposes it, together with the configured capacities. It is a
@@ -120,14 +122,29 @@ Generation wraps after 4096 reuses of the same slot. Applications that retain a
 handle across that many destroy/recreate cycles exceed the protection window of
 the compact format.
 
-## Capacity and fallback
+## Capacity, allocation failure, and fallback
 
-The transform queue is bounded by `entityCapacity`; dirty-bit coalescing means
+The transform queue is bounded by `transformCapacity`; dirty-bit coalescing means
 it cannot exceed one pending entry per slot. The structural queue is separately
 bounded by `structuralCommandCapacity`.
 Structural overflow increments `droppedCommands`; the attempted command and all
 later structural commands switch to ordered `postMessage` fallback, so scene
 operations are not semantically dropped.
+
+Capacity is a contract, not a request to grow storage:
+
+| Condition                                           | Observable behavior                                                                                                                                                                        |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Invalid capacity configuration                      | `createEngine` throws `RangeError` before allocating a worker or shared memory.                                                                                                            |
+| Entity or transform capacity exhausted              | The public API throws before publishing the command.                                                                                                                                       |
+| Rust component capacity exhausted                   | The structural command is rejected by Rust; the worker reports an error and the engine transitions to failed rather than silently growing WASM storage.                                    |
+| SAB allocation fails due to browser memory pressure | Browser allocation throws during engine creation; no worker initialization starts. The application must choose a smaller budget or run in the message-transport compatibility environment. |
+| GPU storage-buffer/device limit is exceeded         | Renderer initialization rejects, disposes resources created so far, and initialization rejects.                                                                                            |
+
+JavaScript has no portable API to reserve or query a browser process memory
+limit. The deterministic budget above is therefore the preflight mechanism;
+`performance.memory.usedJSHeapSize`, where exposed, is diagnostic peak data and
+not an admission-control signal.
 
 Without cross-origin isolation, the engine selects the versioned message path.
 Production hosting must provide COOP and COEP headers to enable shared transport.
