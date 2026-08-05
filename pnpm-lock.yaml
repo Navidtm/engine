@@ -136,6 +136,44 @@ importers:
         specifier: 'catalog:'
         version: 3.2.7
 
+  examples/instancing:
+    dependencies:
+      '@lume/api':
+        specifier: workspace:*
+        version: link:../../packages/api
+    devDependencies:
+      '@webgpu/types':
+        specifier: 'catalog:'
+        version: 0.1.71
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+      vite:
+        specifier: 'catalog:'
+        version: 7.3.6
+      vitest:
+        specifier: 'catalog:'
+        version: 3.2.7
+
+  examples/transform-controls:
+    dependencies:
+      '@lume/api':
+        specifier: workspace:*
+        version: link:../../packages/api
+    devDependencies:
+      '@webgpu/types':
+        specifier: 'catalog:'
+        version: 0.1.71
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+      vite:
+        specifier: 'catalog:'
+        version: 7.3.6
+      vitest:
+        specifier: 'catalog:'
+        version: 3.2.7
+
   examples/triangle:
     dependencies:
       '@lume/api':

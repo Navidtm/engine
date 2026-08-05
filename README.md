@@ -23,6 +23,13 @@ The repository currently contains five completed foundation milestones:
 See [the architecture notes](docs/architecture.md) and
 [the implementation roadmap](docs/roadmap.md) before extending the runtime.
 
+## Examples
+
+- `examples/triangle` — minimal worker/WebGPU/WASM setup.
+- `examples/cube` — one indexed mesh with renderer statistics.
+- `examples/instancing` — 256 cubes sharing one material and draw batch.
+- `examples/transform-controls` — partial position updates through the public control API.
+
 ## Prerequisites
 
 - Rust 1.85 or newer
