@@ -38,6 +38,29 @@ the claimed bits and retries. After releasing the dirty flag it requeues any
 publication that arrived during consumption. The worker drains at frame start
 and never blocks with `Atomics.wait`.
 
+The publication invariant is: one atomic word always identifies both the
+generation and the fields that belong to that generation. A consumer may apply
+only the generation returned by its successful claim; it never combines a mask
+read from one generation with floats published for another.
+
+```text
+producer (N)       producer (N+1)             consumer
+------------       --------------             --------
+seq odd; write N
+publish (N, R)                              reads stable snapshot
+                     seq odd; write N+1
+                     publish (N+1, P)        claim N fails; retries
+                     seq even                claims (N+1, P)
+                                               verifies unchanged seq
+                                               applies only N+1/P
+```
+
+For a same-field write that leaves the OR-ed mask numerically unchanged, the
+post-claim sequence check detects the write, restores the claimed mask only if
+the publication still names the same generation, and retries. A newer generation
+cannot be restored over the old one because generation and mask share the CAS
+word.
+
 ## Structural synchronization
 
 Structural records are fixed at 16 words and cover spawn, despawn, add component
@@ -65,6 +88,17 @@ then changes Rust liveness before any command for the replacement reaches the
 ECS. Both sides validate generations independently. A transform publication
 from the old generation is rejected by Rust; if the replacement publishes
 before drain, its generation atomically replaces the old publication mask.
+
+The worker drains structural commands before transform ranges in every frame:
+
+```text
+main:   despawn N -> spawn N+1 -> publish transform N+1
+worker: drain despawn -> drain spawn -> claim/apply transform N+1
+```
+
+This makes the replacement live in Rust before its transform can apply. An old
+publication is either replaced by the newer packed generation or rejected by
+Rust liveness validation.
 
 ## Browser requirements
 

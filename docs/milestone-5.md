@@ -64,6 +64,14 @@ If a producer repeats the same field while consumption is in progress, the
 post-claim sequence check restores that field for a retry rather than losing the
 new value.
 
+Generation and field mask are inseparable at publication and claim time: the
+consumer claims one packed `(generation, mask)` word after a stable seqlock
+snapshot, then verifies the sequence again. A replacement generation overwrites
+the prior generation's mask instead of merging with it. If a same-generation
+write races the claim without changing the mask value, the changed sequence
+causes a restore-and-retry; the restore is conditional on the generation still
+matching, so it cannot overwrite a replacement publication.
+
 ## Structural command queue
 
 Create, destroy, add-component, and remove-component operations use a separate
