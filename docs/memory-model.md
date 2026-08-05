@@ -22,12 +22,12 @@ staging offsets; normal engine operation must not require one.
 
 ## Shared allocation and budget
 
-The allocation has three explicit, immutable budgets: `entityCapacity` for ECS
-and rendering, `transformCapacity` for transform slots and WASM staging, and
-`structuralCommandCapacity` for the SPSC command ring. `transformCapacity`
-defaults to `entityCapacity` for compatibility but can be lower when many
-entities do not need transforms. The command budget defaults to
-`min(entityCapacity, 1,024)`, because short structural bursts
+The allocation has three explicit, immutable budgets: public `entityCapacity`
+for ECS and rendering, advanced `transport.transformCapacity` for transform
+slots and WASM staging, and `transport.structuralCommandCapacity` for the SPSC
+command ring. `transport.transformCapacity` defaults to `entityCapacity`; it
+can be lower when transform-bearing entities are allocated in the lower entity
+index range. The command budget defaults to `min(entityCapacity, 1,024)`, because short structural bursts
 do not justify reserving 64 bytes per entity. Overflow preserves ordering by
 switching subsequent structural commands to the message fallback.
 
@@ -125,9 +125,9 @@ the compact format.
 
 ## Capacity, allocation failure, and fallback
 
-The transform queue is bounded by `transformCapacity`; dirty-bit coalescing means
-it cannot exceed one pending entry per slot. The structural queue is separately
-bounded by `structuralCommandCapacity`.
+The transform queue is bounded by `transport.transformCapacity`; dirty-bit
+coalescing means it cannot exceed one pending entry per slot. The structural
+queue is separately bounded by `transport.structuralCommandCapacity`.
 Structural overflow increments `droppedCommands`; the attempted command and all
 later structural commands switch to ordered `postMessage` fallback, so scene
 operations are not semantically dropped.

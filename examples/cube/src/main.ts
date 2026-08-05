@@ -12,7 +12,7 @@ if (canvas === null || status === null || statsOutput === null) {
 const engine = createEngine({
   canvas,
   wasmUrl: "/lume_core.wasm",
-  powerPreference: "high-performance",
+  powerPreference: "high",
   entityCapacity: 4_096,
   clearColor: { r: 0.012, g: 0.017, b: 0.032, a: 1 },
   onError(error) {

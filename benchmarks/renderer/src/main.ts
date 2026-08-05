@@ -26,7 +26,7 @@ const engine = createEngine({
   wasmUrl: "/lume_core.wasm",
   entityCapacity: count + 2,
   autoResize: false,
-  powerPreference: "high-performance",
+  powerPreference: "high",
 });
 const blue = engine.create.basicMaterial({ color: [0.31, 0.56, 1, 1] });
 const side = Math.ceil(Math.sqrt(count));
@@ -84,7 +84,7 @@ const report = {
     resolution: [1280, 720],
     warmupFrames,
     sampleFrames,
-    powerPreference: "high-performance",
+    powerPreference: "high",
   },
   measurements: {
     initializationMs,

@@ -39,6 +39,24 @@ import {
 export type EngineStatus =
   "new" | "initializing" | "ready" | "running" | "stopped" | "disposed" | "failed";
 
+/** Simple application-level preference mapped to the WebGPU adapter preference. */
+export type PowerPreference = "high" | "low";
+
+/** Advanced fixed budgets for the worker transport. */
+export interface EngineTransportOptions {
+  /**
+   * Upper exclusive entity index that may publish shared transform updates.
+   * Defaults to `entityCapacity`; lower it only when transform-bearing entities
+   * are allocated before non-transform entities.
+   */
+  readonly transformCapacity?: number;
+  /**
+   * Maximum structural commands held in the shared SPSC ring before fallback.
+   * Defaults to `min(entityCapacity, 1,024)`.
+   */
+  readonly structuralCommandCapacity?: number;
+}
+
 /** Full configuration accepted by {@link createEngine}. */
 export interface EngineConfig {
   /** Canvas transferred to the worker as an OffscreenCanvas during `init()`. */
@@ -47,12 +65,10 @@ export interface EngineConfig {
   readonly wasmUrl?: string | URL;
   /** Maximum live entity slots, from 1 through 1,048,576. */
   readonly entityCapacity?: number;
-  /** Number of entity indices that may publish shared transform updates. */
-  readonly transformCapacity?: number;
-  /** Maximum structural commands held in the shared ring before ordered fallback. */
-  readonly structuralCommandCapacity?: number;
-  /** WebGPU adapter preference. */
-  readonly powerPreference?: GPUPowerPreference;
+  /** Advanced SharedArrayBuffer and worker transport budgets. */
+  readonly transport?: EngineTransportOptions;
+  /** Prefers a high-performance (`"high"`) or power-efficient (`"low"`) adapter. */
+  readonly powerPreference?: PowerPreference;
   /** Canvas compositing mode; opaque by default. */
   readonly alphaMode?: GPUCanvasAlphaMode;
   /** Main render-pass clear color. */
@@ -288,23 +304,25 @@ export function createEngine(
   if (!Number.isSafeInteger(entityCapacity) || entityCapacity <= 0 || entityCapacity > 1 << 20) {
     throw new RangeError("entityCapacity must be an integer between 1 and 1,048,576.");
   }
-  const transformCapacity = config.transformCapacity ?? entityCapacity;
+  const transformCapacity = config.transport?.transformCapacity ?? entityCapacity;
   if (
     !Number.isSafeInteger(transformCapacity) ||
     transformCapacity <= 0 ||
     transformCapacity > entityCapacity
   ) {
-    throw new RangeError("transformCapacity must be an integer between 1 and entityCapacity.");
+    throw new RangeError(
+      "transport.transformCapacity must be an integer between 1 and entityCapacity.",
+    );
   }
   const structuralCommandCapacity =
-    config.structuralCommandCapacity ?? Math.min(entityCapacity, 1_024);
+    config.transport?.structuralCommandCapacity ?? Math.min(entityCapacity, 1_024);
   if (
     !Number.isSafeInteger(structuralCommandCapacity) ||
     structuralCommandCapacity <= 0 ||
     structuralCommandCapacity > entityCapacity
   ) {
     throw new RangeError(
-      "structuralCommandCapacity must be an integer between 1 and entityCapacity.",
+      "transport.structuralCommandCapacity must be an integer between 1 and entityCapacity.",
     );
   }
   const state: EngineState = {
@@ -793,7 +811,7 @@ function initialize(state: EngineState): Promise<void> {
   const renderer = {
     ...(state.config.powerPreference === undefined
       ? {}
-      : { powerPreference: state.config.powerPreference }),
+      : { powerPreference: webGpuPowerPreference(state.config.powerPreference) }),
     ...(state.config.alphaMode === undefined ? {} : { alphaMode: state.config.alphaMode }),
     ...(state.config.clearColor === undefined ? {} : { clearColor: state.config.clearColor }),
   };
@@ -821,6 +839,10 @@ function initialize(state: EngineState): Promise<void> {
     state.resizeObserver.observe(state.config.canvas);
   }
   return state.initPromise;
+}
+
+function webGpuPowerPreference(preference: PowerPreference): GPUPowerPreference {
+  return preference === "high" ? "high-performance" : "low-power";
 }
 
 function handleWorkerMessage(state: EngineState, message: WorkerToMainMessage): void {

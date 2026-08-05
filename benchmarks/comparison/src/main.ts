@@ -40,7 +40,7 @@ async function runLume(target: HTMLCanvasElement, selectedScenario: string, enti
     wasmUrl: "/lume_core.wasm",
     entityCapacity: entities + 2,
     autoResize: false,
-    powerPreference: "high-performance",
+    powerPreference: "high",
   });
   const blue = engine.create.basicMaterial({ color: [0.31, 0.56, 1, 1] });
   const entityHandles: MeshHandle[] = new Array(entities);

@@ -11,20 +11,20 @@ describe("high-level engine API", () => {
     expect(() =>
       createEngine(canvas, {
         entityCapacity: 4,
-        structuralCommandCapacity: 5,
+        transport: { structuralCommandCapacity: 5 },
         workerFactory: () => ({}) as Worker,
       }),
-    ).toThrow("structuralCommandCapacity");
+    ).toThrow("transport.structuralCommandCapacity");
   });
 
   it("rejects transform capacity beyond the entity budget", () => {
     expect(() =>
       createEngine({} as HTMLCanvasElement, {
         entityCapacity: 4,
-        transformCapacity: 5,
+        transport: { transformCapacity: 5 },
         workerFactory: () => ({}) as Worker,
       }),
-    ).toThrow("transformCapacity");
+    ).toThrow("transport.transformCapacity");
   });
 
   it("rejects foreign material handles and invalid options before allocating an entity", () => {
@@ -74,6 +74,7 @@ describe("high-level engine API", () => {
       autoResize: false,
       workerFactory: () => worker,
       wasmUrl: "/lume_core.wasm",
+      powerPreference: "high",
     });
     const blue = engine.create.basicMaterial({ color: [0.2, 0.4, 1, 1] });
     const cube = engine.create.mesh({ geometry: "cube", material: blue, position: [0, 0, -5] });
@@ -82,6 +83,9 @@ describe("high-level engine API", () => {
     expect(cube.kind).toBe("mesh");
     const initialization = engine.init();
     expect(posted[0]?.type).toBe("init");
+    if (posted[0]?.type === "init") {
+      expect(posted[0].value.renderer.powerPreference).toBe("high-performance");
+    }
     onMessage?.({ data: { type: "ready" } } as MessageEvent<WorkerToMainMessage>);
     await initialization;
 
