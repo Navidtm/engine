@@ -1,7 +1,9 @@
 import type { RendererOptions, SurfaceSize } from "@lume/renderer";
 
+/** Version checked before a main thread and worker exchange runtime messages. */
 export const RUNTIME_PROTOCOL_VERSION = 5;
 
+/** Snapshot returned by {@link Engine.getStats} through the worker boundary. */
 export interface EngineStats {
   readonly frameTime: number;
   readonly cpuTime: number;
@@ -33,6 +35,7 @@ export interface EngineStats {
   };
 }
 
+/** Compact structural command understood by the worker and Rust/WASM core. */
 export type RuntimeCommand =
   | { readonly type: "spawn"; readonly entity: number }
   | { readonly type: "despawn"; readonly entity: number }
@@ -73,6 +76,7 @@ export type RuntimeCommand =
       readonly component: "transform" | "material" | "camera" | "mesh" | "bounds";
     };
 
+/** One-time worker initialization payload. This is runtime-internal, not a public authoring API. */
 export interface RuntimeInit {
   readonly protocolVersion: number;
   readonly canvas: OffscreenCanvas;
@@ -84,6 +88,7 @@ export interface RuntimeInit {
   readonly sharedMemory?: SharedArrayBuffer;
 }
 
+/** Versioned messages sent from the main-thread API to the runtime worker. */
 export type MainToWorkerMessage =
   | { readonly type: "init"; readonly value: RuntimeInit }
   | { readonly type: "command"; readonly value: RuntimeCommand }
@@ -94,6 +99,7 @@ export type MainToWorkerMessage =
   | { readonly type: "get-stats"; readonly requestId: number }
   | { readonly type: "dispose" };
 
+/** Versioned lifecycle, statistics, and error messages returned by the worker. */
 export type WorkerToMainMessage =
   | { readonly type: "ready" }
   | { readonly type: "stopped" }

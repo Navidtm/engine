@@ -24,6 +24,7 @@ export type SharedCommandConsumer = (
   views: SharedRuntimeViews,
 ) => void;
 
+/** Publishes one fixed-width structural command; false means the bounded ring is full. */
 export function writeSharedCommand(views: SharedRuntimeViews, command: RuntimeCommand): boolean {
   if (Atomics.load(views.header, SharedHeader.CommandPending) >= views.layout.commandCapacity) {
     Atomics.add(views.header, SharedHeader.DroppedCommands, 1);
@@ -39,6 +40,7 @@ export function writeSharedCommand(views: SharedRuntimeViews, command: RuntimeCo
   return true;
 }
 
+/** Drains structural commands in FIFO order on the worker. */
 export function drainSharedCommands(
   views: SharedRuntimeViews,
   consume: SharedCommandConsumer,

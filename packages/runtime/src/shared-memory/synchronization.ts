@@ -4,6 +4,7 @@ import type { SharedRuntimeViews } from "./views.js";
 const PUBLICATION_MASK_BITS = 4;
 const PUBLICATION_FIELD_MASK = (1 << PUBLICATION_MASK_BITS) - 1;
 
+/** Complete transform value; only fields named by the mask are read on write. */
 export interface SharedTransformValue {
   readonly position: readonly [number, number, number];
   readonly rotation: readonly [number, number, number, number];
@@ -16,6 +17,11 @@ export type SharedTransformConsumer = (
   values: Float32Array<ArrayBuffer>,
 ) => void;
 
+/**
+ * Publishes selected transform fields into a seqlock slot.
+ * Returns true only when this write newly enqueues the entity; repeated writes
+ * coalesce while preserving the newest generation and mask.
+ */
 export function writeSharedTransform(
   views: SharedRuntimeViews,
   entity: number,
@@ -68,6 +74,7 @@ export function writeSharedTransform(
   return enqueued;
 }
 
+/** Drains stable transform publications on the single worker consumer. */
 export function drainSharedTransforms(
   views: SharedRuntimeViews,
   scratch: Float32Array<ArrayBuffer>,

@@ -6,10 +6,17 @@ import {
 } from "./layout.js";
 import { createSharedRuntimeViews, type SharedRuntimeViews } from "./views.js";
 
+/** Returns whether this page can use SharedArrayBuffer transport. */
 export function supportsSharedRuntimeMemory(): boolean {
   return typeof SharedArrayBuffer !== "undefined" && globalThis.crossOriginIsolated === true;
 }
 
+/**
+ * Allocates and initializes the transport SAB.
+ *
+ * `capacity` is the transform-slot budget; `commandCapacity` bounds structural
+ * records independently. Both values are immutable for the engine lifetime.
+ */
 export function allocateSharedRuntimeMemory(
   capacity: number,
   commandCapacity: number = capacity,
