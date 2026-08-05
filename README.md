@@ -5,7 +5,7 @@ product experiences. Phase 1 deliberately keeps the surface area small: a
 data-oriented Rust core compiled to WebAssembly, a worker-owned WebGPU renderer,
 and a functional TypeScript API.
 
-The repository currently contains the first four foundation milestones:
+The repository currently contains five completed foundation milestones:
 
 - a generational-entity, sparse-set ECS in Rust;
 - allocation-free math primitives and reusable frame memory;
@@ -16,6 +16,8 @@ The repository currently contains the first four foundation milestones:
 - allocation-free CPU frustum culling and grouped visible render buffers;
 - a reusable FrameGraph and optional real GPU timestamp profiling;
 - SharedArrayBuffer transform transport with a bulk WASM update boundary;
+- generation-safe partial transform publication, a structural SPSC ring, and
+  transport metrics;
 - a high-level functional TypeScript API plus Vite triangle and cube examples.
 
 See [the architecture notes](docs/architecture.md) and

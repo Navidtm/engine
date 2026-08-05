@@ -67,7 +67,9 @@ new value.
 ## Structural command queue
 
 Create, destroy, add-component, and remove-component operations use a separate
-bounded SPSC ring in the same shared allocation. Each slot is a fixed-width
+bounded SPSC ring in the same shared allocation. Its capacity is independently
+configured as `structuralCommandCapacity` (default `min(entityCapacity, 1,024)`),
+so short structural bursts do not reserve one command record per entity. Each slot is a fixed-width
 command record. Publishing the tail is the release point; consuming the head is
 the acquire point. Commands are applied in FIFO order before transform ranges so
 a newly created entity exists before its component data arrives.

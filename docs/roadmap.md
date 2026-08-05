@@ -50,11 +50,12 @@ handles, entity slot recycling, transport metrics, and scale benchmarks.
 Benchmark focus: 10k through 1M shared updates, 10k through 500k structural
 commands, lifecycle reuse, staging bytes, ranges, and overflow visibility.
 
-## Milestone 6 — rendering scalability
+## Milestone 6 — rendering scalability (planned)
 
-Introduce bind-group layouts, shader/material variants, pipeline prewarming,
-texture streaming, GPU culling, instancing, clustered lighting, and render-graph
-resource lifetime analysis.
+Introduce persistent GPU instance storage, dirty-range uploads, indirect command
+storage, GPU culling, scalable instancing, and render-graph resource lifetime
+analysis. Textures, lighting, material variants, and asset streaming remain out
+of scope until this scalability baseline is measured and stable.
 
 Benchmark focus: pipeline-cache hit rate, bind-group churn, transient GPU memory,
 draw/dispatch counts, and GPU frame time.

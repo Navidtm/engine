@@ -1,6 +1,6 @@
 # Current Project State
 
-Last verified: 2026-08-02 at commit `306d35a`
+Last verified: 2026-08-05 at commit `be38b28`
 
 This document records the implementation that exists in the repository. It is
 an evidence-based snapshot, not a description of intended future architecture.
@@ -12,10 +12,10 @@ The actual implementation is ready to move from Roadmap Phase 4 into Phase 5,
 Renderer Scalability, with controlled browser validation retained as an
 acceptance task.
 
-The roadmap currently labels Transport Hardening as **In Progress**. That label
-is stale: all listed Phase 4 mechanisms are implemented, tested, documented, and
-covered by a committed Node benchmark result. The roadmap itself is not changed
-by this snapshot.
+Transport Hardening is complete. All Phase 4 mechanisms are implemented,
+tested, documented, and covered by a committed Node benchmark result. Controlled
+browser validation remains an acceptance activity, not a transport architecture
+gap.
 
 Current boundary:
 
@@ -51,10 +51,9 @@ The implementation follows the project architecture rules:
   capacity-bounded and reused. Capacity exhaustion is explicit rather than
   silently growing frame-time storage.
 
-No architecture-rule violation was found in the inspected implementation.
-There is documentation drift in ADR 003: it still describes structural changes
-as message-based, while the current primary path is the shared structural SPSC
-ring with an ordered message fallback.
+No architecture-rule violation was found in the inspected implementation. ADR
+003 records the shared structural SPSC ring as the primary path and the ordered
+message path as overflow/initialization fallback.
 
 ## Implemented Subsystems
 
@@ -68,6 +67,8 @@ Implemented:
   addition/removal.
 - Immutable engine-owned entity handles shaped as `{ index, generation }`.
 - Validation of handle ownership, liveness, index, and generation before use.
+- Validation of authoring tuples, camera/bounds ranges, and foreign material
+  handles before an entity slot is allocated or a command is published.
 - Fixed-capacity entity allocation, free-list reuse, and stale-handle rejection.
 - Declarative scene components for transform, mesh, bounds, camera, and basic
   material data.
@@ -79,7 +80,8 @@ geometry plus a color-only basic material.
 
 Implemented:
 
-- Sparse-set component storage with generational entity validation.
+- Sparse-set component storage with generational entity validation and hard
+  entity/component capacity limits; normal operation does not grow WASM memory.
 - A 32-bit packed handle: 20-bit index and 12-bit generation.
 - Safe destroy/recycle behavior in both TypeScript and Rust allocators.
 - Data-oriented stores for transforms, mesh renderers, cameras, bounds, and
@@ -282,7 +284,7 @@ main-thread/worker/WASM/WebGPU path are not yet part of CI.
 | 1. Runtime Foundation         | Completed     | Implemented                                                              |
 | 2. Render Architecture        | Completed     | Implemented                                                              |
 | 3. Performance Infrastructure | Completed     | Implemented                                                              |
-| 4. Transport Hardening        | In Progress   | Implemented; browser validation remains                                  |
+| 4. Transport Hardening        | Completed     | Implemented; browser validation remains an acceptance activity            |
 | 5. Renderer Scalability       | Planned       | Baseline CPU instancing exists; scalable GPU-driven work has not started |
 | 6. Asset Pipeline             | Planned       | Not implemented                                                          |
 | 7. Advanced Graphics          | Planned       | Not implemented                                                          |
@@ -307,7 +309,10 @@ transport milestone.
 2. Extraction, frustum culling, and render-key sorting are CPU-side. Visibility
    ordering performs an `O(V log V)` unstable sort each frame.
 3. The renderer uploads the full visible instance buffer every frame instead of
-   retaining GPU-side data and uploading dirty ranges.
+   retaining GPU-side data and uploading dirty ranges. This is explicitly
+   deferred Renderer Scalability work: visible instances are compacted and
+   reordered each frame, so persistent GPU slots require a scene-data and
+   indirect-draw design rather than a local transport patch.
 4. Draw-call reduction depends on consecutive CPU ordering; there are no
    indirect batches or GPU-generated commands.
 5. Large-scale measurements are transport microbenchmarks. Real worker

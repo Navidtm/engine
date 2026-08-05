@@ -64,8 +64,12 @@ Rust/WASM
 Use message passing only for:
 
 - initialization
-- structural commands
-- low-frequency operations
+- ordered structural overflow fallback
+- low-frequency lifecycle and diagnostic operations
+
+Structural create, destroy, add-component, and remove-component commands use a
+fixed-record SPSC ring in the shared allocation during normal runtime. The
+message fallback begins at the first overflow so command order remains intact.
 
 # Synchronization Model
 

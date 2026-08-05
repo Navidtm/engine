@@ -161,7 +161,7 @@ Rules established:
 
 ## Status
 
-In Progress
+Completed
 
 ## Objective
 
@@ -200,6 +200,12 @@ Track:
 - transport latency
 - bytes transferred
 - synchronization cost
+
+Delivered: a versioned shared-memory layout, partial transform masks,
+generation-aware seqlock publication, reusable dirty ranges, a bounded
+structural SPSC ring with ordered fallback, hard capacity limits, generational
+handles, transport metrics, and Node benchmark evidence. Browser end-to-end
+measurement remains an acceptance activity, not unfinished transport design.
 
 ---
 
