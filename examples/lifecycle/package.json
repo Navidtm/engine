@@ -1,0 +1,23 @@
+{
+  "name": "@lume/example-lifecycle",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "predev": "pnpm --workspace-root prepare:examples",
+    "dev": "vite",
+    "preview": "vite preview --host 127.0.0.1",
+    "test": "vitest run --passWithNoTests",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@lume/api": "workspace:*"
+  },
+  "devDependencies": {
+    "@webgpu/types": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vitest": "catalog:"
+  }
+}
