@@ -12,7 +12,7 @@ export interface FrameGraph<Context> {
   compiled: boolean;
 }
 
-/** Immutable execution order generated from a frame graph. */
+/** Readonly-TypeScript execution order generated from a frame graph. */
 export interface CompiledFrameGraph<Context> {
   /** Topologically sorted passes ready for execution. */
   readonly orderedPasses: readonly FramePass<Context>[];
@@ -37,7 +37,7 @@ export function addFramePass<Context>(graph: FrameGraph<Context>, pass: FramePas
   graph.passes.push(pass);
 }
 
-/** Freezes a graph and returns its dependency-safe pass order. */
+/** Marks a graph compiled and returns its dependency-safe pass order. */
 export function compileFrameGraph<Context>(
   graph: FrameGraph<Context>,
 ): CompiledFrameGraph<Context> {
@@ -66,7 +66,7 @@ export function compileFrameGraph<Context>(
   if (ordered.length !== graph.passes.length) {
     throw new Error("Frame graph contains a dependency cycle.");
   }
-  return Object.freeze({ orderedPasses: Object.freeze(ordered) });
+  return { orderedPasses: ordered } satisfies CompiledFrameGraph<Context>;
 }
 
 /** Executes each compiled pass synchronously with one shared context value. */

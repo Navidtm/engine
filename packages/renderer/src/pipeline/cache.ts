@@ -22,5 +22,5 @@ export function createPipelineCache(): PipelineCache {
       pipelines.clear();
     },
   };
-  return Object.freeze(cache);
+  return cache;
 }

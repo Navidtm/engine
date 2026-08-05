@@ -61,12 +61,12 @@ export function createMeshRegistry(
       }
       const byteLength = vertexBuffer.size + indexBuffer.size;
       gpuBytes += byteLength;
-      meshes[source.handle] = Object.freeze({
+      meshes[source.handle] = {
         vertexBuffer,
         indexBuffer,
         indexCount: source.indices.length,
         byteLength,
-      });
+      };
     }
   } catch (error) {
     for (const mesh of meshes) {
@@ -92,5 +92,5 @@ export function createMeshRegistry(
       gpuBytes = 0;
     },
   };
-  return Object.freeze(registry);
+  return registry;
 }

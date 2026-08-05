@@ -6,7 +6,7 @@ Lume has three non-overlapping memory domains:
 
 | Domain            | Owner                                 | Lifetime            | Contents                                               |
 | ----------------- | ------------------------------------- | ------------------- | ------------------------------------------------------ |
-| Authoring         | main-thread TypeScript                | engine lifetime     | immutable entity handles, controls, free list          |
+| Authoring         | main-thread TypeScript                | engine lifetime     | readonly handles, controls, free list                  |
 | Transport         | main thread produces; worker consumes | `init` to `dispose` | transform slots, dirty ring, structural ring, counters |
 | Canonical runtime | Rust/WASM worker                      | `init` to `dispose` | ECS, RenderWorld, visibility and fixed staging arrays  |
 
@@ -106,11 +106,12 @@ staging masks for reuse.
 
 ## Entity lifecycle
 
-Public handles are immutable `{index, generation}` values associated with one
-engine. Transport packs 20 index bits and 12 generation bits into a `u32`.
-Destroy advances the generation and pushes the index onto a fixed TypeScript
-free list. Recreate pops that slot. TypeScript rejects stale or foreign handles
-before publication; Rust validates the packed generation again.
+Public handles are readonly TypeScript `{index, generation}` values associated
+with one engine; ordinary API objects are not runtime-frozen. Transport packs
+20 index bits and 12 generation bits into a `u32`. Destroy advances the
+generation and pushes the index onto a fixed TypeScript free list. Recreate pops
+that slot. TypeScript rejects stale or foreign handles before publication; Rust
+validates the packed generation again.
 
 When a producer publishes a transform for a new generation, its mask replaces
 rather than merges with the prior generation's mask. The consumer claims the

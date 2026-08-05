@@ -10,10 +10,10 @@ import type {
   Vec3,
 } from "./types.js";
 
-const ZERO: Vec3 = Object.freeze([0, 0, 0]);
-const ONE: Vec3 = Object.freeze([1, 1, 1]);
-const IDENTITY_ROTATION: Quat = Object.freeze([0, 0, 0, 1]);
-const WHITE: Color = Object.freeze([1, 1, 1, 1]);
+const ZERO = [0, 0, 0] as const satisfies Vec3;
+const ONE = [1, 1, 1] as const satisfies Vec3;
+const IDENTITY_ROTATION = [0, 0, 0, 1] as const satisfies Quat;
+const WHITE = [1, 1, 1, 1] as const satisfies Color;
 
 /** Optional fields for a local transform. Defaults are origin, identity rotation, and unit scale. */
 export interface TransformOptions {
@@ -26,25 +26,25 @@ export interface TransformOptions {
 }
 
 /**
- * Creates an immutable, validated transform descriptor.
+ * Creates a validated transform descriptor with readonly TypeScript properties.
  *
  * @throws {RangeError} When a value is non-finite or the quaternion is zero.
  * @example
  * engine.world.add(entity, transform({ position: [0, 1, -4] }));
  */
 export function transform(options: TransformOptions = {}): TransformComponent {
-  const position = options.position ?? ZERO;
-  const rotation = options.rotation ?? IDENTITY_ROTATION;
-  const scale = options.scale ?? ONE;
+  const position = options.position ?? ([...ZERO] as Vec3);
+  const rotation = options.rotation ?? ([...IDENTITY_ROTATION] as Quat);
+  const scale = options.scale ?? ([...ONE] as Vec3);
   validateFiniteTuple("transform position", position, 3);
   validateFiniteTuple("transform scale", scale, 3);
   validateQuaternion(rotation);
-  return Object.freeze({
+  return {
     kind: "transform",
     position,
     rotation,
     scale,
-  });
+  } as const satisfies TransformComponent;
 }
 
 /** Options for the current color-only basic material. */
@@ -54,17 +54,17 @@ export interface MaterialOptions {
 }
 
 /**
- * Creates an immutable linear-RGBA material descriptor.
+ * Creates a validated linear-RGBA material descriptor with readonly TypeScript properties.
  *
  * @throws {RangeError} When a channel is non-finite or outside `[0, 1]`.
  */
 export function material(options: MaterialOptions = {}): MaterialComponent {
-  const color = options.color ?? WHITE;
+  const color = options.color ?? ([...WHITE] as Color);
   validateFiniteTuple("material color", color, 4);
   if (color.some((channel) => channel < 0 || channel > 1)) {
     throw new RangeError("material color channels must be between 0 and 1");
   }
-  return Object.freeze({ kind: "material", color });
+  return { kind: "material", color } as const satisfies MaterialComponent;
 }
 
 /** Perspective camera options expressed in radians and world units. */
@@ -78,7 +78,7 @@ export interface CameraOptions {
 }
 
 /**
- * Creates an immutable perspective-camera descriptor.
+ * Creates a validated perspective-camera descriptor with readonly TypeScript properties.
  *
  * @throws {RangeError} When FOV or clipping planes are invalid.
  */
@@ -92,7 +92,7 @@ export function camera(options: CameraOptions = {}): CameraComponent {
   if (!(near > 0 && far > near)) {
     throw new RangeError("camera planes must satisfy 0 < near < far");
   }
-  return Object.freeze({ kind: "camera", verticalFov, near, far });
+  return { kind: "camera", verticalFov, near, far } as const satisfies CameraComponent;
 }
 
 /**
@@ -100,7 +100,7 @@ export function camera(options: CameraOptions = {}): CameraComponent {
  * Ownership of `materialEntity` is checked by `engine.world.add`.
  */
 export function mesh(geometry: MeshComponent["geometry"], materialEntity: Entity): MeshComponent {
-  return Object.freeze({ kind: "mesh", geometry, material: materialEntity });
+  return { kind: "mesh", geometry, material: materialEntity } as const satisfies MeshComponent;
 }
 
 /** Sphere bounds used by CPU visibility culling. */
@@ -112,7 +112,7 @@ export interface BoundsOptions {
 }
 
 /**
- * Creates immutable, finite sphere bounds.
+ * Creates finite sphere bounds with readonly TypeScript properties.
  *
  * @throws {RangeError} When radius is negative/non-finite or center is non-finite.
  */
@@ -120,13 +120,13 @@ export function bounds(options: BoundsOptions): BoundsComponent {
   if (!Number.isFinite(options.radius) || options.radius < 0) {
     throw new RangeError("bounds radius must be a finite non-negative number");
   }
-  const center = options.center ?? ZERO;
+  const center = options.center ?? ([...ZERO] as Vec3);
   validateFiniteTuple("bounds center", center, 3);
-  return Object.freeze({
+  return {
     kind: "bounds",
     center,
     radius: options.radius,
-  });
+  } as const satisfies BoundsComponent;
 }
 
 function validateQuaternion(value: Quat): void {

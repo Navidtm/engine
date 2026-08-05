@@ -3,10 +3,11 @@ import { describe, expect, it } from "vitest";
 import { bounds, camera, material, transform } from "./components.js";
 
 describe("component constructors", () => {
-  it("creates immutable transform values with stable defaults", () => {
-    const value = transform();
-    expect(value.position).toEqual([0, 0, 0]);
-    expect(Object.isFrozen(value)).toBe(true);
+  it("creates typed transform values with independent defaults", () => {
+    const first = transform();
+    const second = transform();
+    expect(first.position).toEqual([0, 0, 0]);
+    expect(first.position).not.toBe(second.position);
   });
 
   it("rejects invalid camera clipping planes", () => {

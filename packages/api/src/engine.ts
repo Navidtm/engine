@@ -363,7 +363,7 @@ export function createEngine(
     destroy: highLevel.destroy,
     dispose: () => dispose(state),
   };
-  return Object.freeze(engine);
+  return engine;
 }
 
 interface MutableTransformValue {
@@ -386,13 +386,13 @@ function createHighLevelApi(
     if (options.color !== undefined) validateColor(options.color);
     const entity = world.createEntity();
     world.add(entity, material(options));
-    return Object.freeze({ kind: "basic-material", id: entity });
+    return { kind: "basic-material", id: entity } as const satisfies BasicMaterialHandle;
   };
   const defaultBasicMaterial = (): BasicMaterialHandle => {
     defaultMaterial ??= createBasicMaterial();
     return defaultMaterial;
   };
-  const create: CreateApi = Object.freeze({
+  const create: CreateApi = {
     basicMaterial: createBasicMaterial,
     mesh(options: MeshOptions) {
       validateMeshOptions(state, options);
@@ -442,8 +442,8 @@ function createHighLevelApi(
       transforms.set(handle, initialTransform);
       return handle;
     },
-  });
-  const set: SetApi = Object.freeze({
+  };
+  const set: SetApi = {
     transform(
       handle: SceneHandle,
       options: {
@@ -463,15 +463,15 @@ function createHighLevelApi(
       if (options.scale !== undefined) fieldMask |= TransformField.Scale;
       if (fieldMask !== 0) publishTransform(state, handle.id, value, fieldMask);
     },
-  });
-  return Object.freeze({
+  };
+  return {
     create,
     set,
     destroy(handle: EngineHandle) {
       world.destroyEntity(handle.id);
       if (handle === defaultMaterial) defaultMaterial = undefined;
     },
-  });
+  };
 }
 
 function mutableTransform(options: {
@@ -507,20 +507,20 @@ function createSceneHandle<Kind extends "mesh" | "camera">(
   const scale = createVector3Control(value.scale, () =>
     publishTransform(state, entity, value, TransformField.Scale),
   );
-  return Object.freeze({
+  return {
     kind,
     id: entity,
     position,
     rotation,
     scale,
-  }) as unknown as Kind extends "mesh" ? MeshHandle : CameraHandle;
+  } as unknown as Kind extends "mesh" ? MeshHandle : CameraHandle;
 }
 
 function createVector3Control(
   value: [number, number, number],
   publish: () => void,
 ): Vector3Control {
-  return Object.freeze({
+  return {
     get x() {
       return value[0];
     },
@@ -537,14 +537,14 @@ function createVector3Control(
       value[2] = z;
       publish();
     },
-  });
+  };
 }
 
 function createQuaternionControl(
   value: [number, number, number, number],
   publish: () => void,
 ): QuaternionControl {
-  return Object.freeze({
+  return {
     get x() {
       return value[0];
     },
@@ -565,7 +565,7 @@ function createQuaternionControl(
       value[3] = w;
       publish();
     },
-  });
+  };
 }
 
 function publishTransform(
@@ -629,7 +629,7 @@ function createWorldApi(state: EngineState): WorldApi {
       dispatchCommand(state, { type: "remove-component", entity: packEntity(entity), component });
     },
   };
-  return Object.freeze(world);
+  return world;
 }
 
 function componentCommand(

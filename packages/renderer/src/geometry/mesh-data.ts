@@ -1,4 +1,4 @@
-/** Immutable CPU-side mesh source accepted by the built-in mesh registry. */
+/** Readonly-TypeScript CPU-side mesh source accepted by the built-in mesh registry. */
 export interface CpuMeshData {
   /** Positive renderer-local geometry identifier. */
   readonly handle: number;
@@ -46,18 +46,18 @@ for (let face = 0; face < 6; face += 1) {
   }
 }
 
-/** Immutable triangle and cube source meshes addressed by scene geometry IDs. */
-export const BUILTIN_MESHES: readonly CpuMeshData[] = Object.freeze([
-  Object.freeze({
+/** Readonly-TypeScript triangle and cube source meshes addressed by scene geometry IDs. */
+export const BUILTIN_MESHES = [
+  {
     handle: 1,
     label: "Lume triangle mesh",
     vertices: TRIANGLE_VERTICES,
     indices: TRIANGLE_INDICES,
-  }),
-  Object.freeze({
+  },
+  {
     handle: 2,
     label: "Lume indexed cube mesh",
     vertices: CUBE_VERTICES,
     indices: CUBE_INDICES,
-  }),
-]);
+  },
+] as const satisfies readonly CpuMeshData[];

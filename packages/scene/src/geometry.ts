@@ -5,10 +5,10 @@ export const TRIANGLE_GEOMETRY_ID = 1;
 /** Renderer identifier for the indexed unit cube. */
 export const BOX_GEOMETRY_ID = 2;
 
-const TRIANGLE: Geometry = Object.freeze({ id: TRIANGLE_GEOMETRY_ID, kind: "triangle" });
-const BOX: Geometry = Object.freeze({ id: BOX_GEOMETRY_ID, kind: "box" });
+const TRIANGLE = { id: TRIANGLE_GEOMETRY_ID, kind: "triangle" } as const satisfies Geometry;
+const BOX = { id: BOX_GEOMETRY_ID, kind: "box" } as const satisfies Geometry;
 
-/** Immutable built-in geometry descriptor; GPU data is owned by the worker. */
+/** Built-in readonly-TypeScript geometry descriptor; GPU data is owned by the worker. */
 /**
  * Returns the built-in triangle geometry descriptor.
  *

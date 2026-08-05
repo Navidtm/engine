@@ -1,8 +1,8 @@
-/** Immutable two-component numeric vector. */
+/** Readonly TypeScript two-component numeric vector. */
 export type Vec2 = readonly [number, number];
-/** Immutable XYZ vector used for positions, scales, and bounds centers. */
+/** Readonly TypeScript XYZ vector used for positions, scales, and bounds centers. */
 export type Vec3 = readonly [number, number, number];
-/** Immutable four-component numeric vector. */
+/** Readonly TypeScript four-component numeric vector. */
 export type Vec4 = readonly [number, number, number, number];
 /** XYZW quaternion. It must be finite and non-zero when used in a transform. */
 export type Quat = Vec4;
@@ -73,7 +73,7 @@ export interface BoundsComponent {
 export type Component =
   TransformComponent | MaterialComponent | CameraComponent | MeshComponent | BoundsComponent;
 
-/** Immutable built-in geometry identifier understood by the renderer. */
+/** Readonly TypeScript built-in geometry identifier understood by the renderer. */
 export interface Geometry {
   /** Stable renderer geometry identifier. */
   readonly id: number;

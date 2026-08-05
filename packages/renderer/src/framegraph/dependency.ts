@@ -56,9 +56,9 @@ export function buildPassDependencies<Context>(
   }
 
   return {
-    incoming: incoming.map((dependencies) => Object.freeze([...dependencies])),
-    outgoing: outgoing.map((dependents) => Object.freeze([...dependents])),
-  };
+    incoming: incoming.map((dependencies) => [...dependencies] as readonly number[]),
+    outgoing: outgoing.map((dependents) => [...dependents] as readonly number[]),
+  } satisfies PassDependencies;
 }
 
 function validateResource(

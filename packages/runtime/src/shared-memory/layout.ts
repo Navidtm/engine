@@ -91,7 +91,7 @@ export function calculateSharedMemoryLayout(
   if (!Number.isSafeInteger(byteLength)) {
     throw new RangeError("Shared-memory layout exceeds JavaScript's safe integer range.");
   }
-  return Object.freeze({
+  return {
     capacity,
     commandCapacity,
     byteLength,
@@ -102,5 +102,5 @@ export function calculateSharedMemoryLayout(
     queueByteOffset,
     transformByteOffset,
     commandByteOffset,
-  });
+  } as const satisfies SharedMemoryLayout;
 }

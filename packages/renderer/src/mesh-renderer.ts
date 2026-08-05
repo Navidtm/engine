@@ -252,7 +252,7 @@ export async function createMeshRenderer(
       }),
       dispose: () => dispose(state),
     };
-    return Object.freeze(renderer);
+    return renderer;
   } catch (error) {
     instanceBuffer?.destroy();
     cameraBuffer?.destroy();

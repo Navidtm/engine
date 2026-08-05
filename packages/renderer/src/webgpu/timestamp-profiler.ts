@@ -73,11 +73,11 @@ export function createGpuTimestampProfiler(device: GPUDevice): GpuTimestampProfi
     resolveBuffer,
     readbackBuffers,
     pending: new Uint8Array(READBACK_BUFFER_COUNT),
-    timestampWrites: Object.freeze({
+    timestampWrites: {
       querySet,
       beginningOfPassWriteIndex: 0,
       endOfPassWriteIndex: 1,
-    }),
+    },
     gpuBytes: QUERY_BYTES * (READBACK_BUFFER_COUNT + 1),
     nextReadback: 0,
     gpuTimeMs: null,

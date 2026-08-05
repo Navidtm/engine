@@ -374,7 +374,7 @@ export async function createWasmCore(
       exports.lume_engine_destroy(handle);
     },
   };
-  return Object.freeze(core);
+  return core;
 }
 
 function createFrameViews(

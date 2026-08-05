@@ -14,8 +14,8 @@ export interface FramePass<Context> {
   readonly execute: (context: Context) => void;
 }
 
-/** Validates and freezes a pass descriptor for use in a frame graph. */
+/** Validates a pass descriptor for use in a frame graph. */
 export function defineFramePass<Context>(pass: FramePass<Context>): FramePass<Context> {
   if (pass.name.length === 0) throw new Error("Frame passes require a name.");
-  return Object.freeze(pass);
+  return pass;
 }

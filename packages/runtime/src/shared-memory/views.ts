@@ -43,7 +43,7 @@ export function createSharedRuntimeViews(
       `Shared-memory byte length mismatch: expected ${layout.byteLength}, received ${buffer.byteLength}.`,
     );
   }
-  return Object.freeze({
+  return {
     buffer,
     layout,
     header: new Int32Array(buffer, layout.headerByteOffset, SHARED_HEADER_INTS),
@@ -66,7 +66,7 @@ export function createSharedRuntimeViews(
       layout.commandByteOffset,
       layout.commandCapacity * STRUCTURAL_COMMAND_WORDS,
     ),
-  });
+  } as const satisfies SharedRuntimeViews;
 }
 
 /** Opens and validates a buffer initialized by `allocateSharedRuntimeMemory`. */

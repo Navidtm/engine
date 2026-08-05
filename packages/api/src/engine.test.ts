@@ -79,7 +79,7 @@ describe("high-level engine API", () => {
     const cube = engine.create.mesh({ geometry: "cube", material: blue, position: [0, 0, -5] });
     engine.create.perspectiveCamera();
 
-    expect(Object.isFrozen(cube)).toBe(true);
+    expect(cube.kind).toBe("mesh");
     const initialization = engine.init();
     expect(posted[0]?.type).toBe("init");
     onMessage?.({ data: { type: "ready" } } as MessageEvent<WorkerToMainMessage>);

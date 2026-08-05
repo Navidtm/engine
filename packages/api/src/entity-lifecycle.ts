@@ -22,13 +22,13 @@ export interface EntityLifecycleState {
 
 type OwnedEntity = Entity & { readonly [ENTITY_OWNER]: EntityLifecycleState };
 
-/** Allocates a frozen, engine-owned generational handle without dynamic growth. */
+/** Allocates a readonly, engine-owned generational handle without dynamic growth. */
 export function allocateEntity(state: EntityLifecycleState): Entity {
   const index = state.freeEntityCount > 0 ? reuseIndex(state) : nextIndex(state);
   const entity = { index, generation: state.entityGenerations[index] ?? 0 } as OwnedEntity;
   Object.defineProperty(entity, ENTITY_OWNER, { value: state });
   state.entityAlive[index] = 1;
-  return Object.freeze(entity);
+  return entity;
 }
 
 /** Releases a live handle, increments its generation, and returns its slot to the free list. */
