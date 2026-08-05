@@ -78,6 +78,7 @@ export interface RuntimeInit {
   readonly canvas: OffscreenCanvas;
   readonly wasmUrl: string;
   readonly entityCapacity: number;
+  readonly transformCapacity: number;
   readonly size: SurfaceSize;
   readonly renderer: RendererOptions;
   readonly sharedMemory?: SharedArrayBuffer;

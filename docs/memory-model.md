@@ -22,14 +22,17 @@ staging offsets; normal engine operation must not require one.
 
 ## Shared allocation and budget
 
-The allocation has two explicit, immutable budgets: `entityCapacity` for
-transform slots and `structuralCommandCapacity` for the SPSC command ring. The
-second defaults to `min(entityCapacity, 1,024)`, because short structural bursts
+The allocation has three explicit, immutable budgets: `entityCapacity` for ECS
+and rendering, `transformCapacity` for transform slots and WASM staging, and
+`structuralCommandCapacity` for the SPSC command ring. `transformCapacity`
+defaults to `entityCapacity` for compatibility but can be lower when many
+entities do not need transforms. The command budget defaults to
+`min(entityCapacity, 1,024)`, because short structural bursts
 do not justify reserving 64 bytes per entity. Overflow preserves ordering by
 switching subsequent structural commands to the message fallback.
 
 ```text
-SAB bytes = 64-byte header + entityCapacity × 56 bytes
+SAB bytes = 64-byte header + transformCapacity × 56 bytes
           + structuralCommandCapacity × 64 bytes
 ```
 

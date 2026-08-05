@@ -98,6 +98,7 @@ export function createWorkerRuntime(host: WorkerHost): (message: MainToWorkerMes
         createWasmCore(
           message.value.wasmUrl,
           message.value.entityCapacity,
+          message.value.transformCapacity,
           message.value.sharedMemory,
           message.value.size.width / Math.max(message.value.size.height, 1),
         ),

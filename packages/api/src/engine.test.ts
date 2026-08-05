@@ -17,6 +17,16 @@ describe("high-level engine API", () => {
     ).toThrow("structuralCommandCapacity");
   });
 
+  it("rejects transform capacity beyond the entity budget", () => {
+    expect(() =>
+      createEngine({} as HTMLCanvasElement, {
+        entityCapacity: 4,
+        transformCapacity: 5,
+        workerFactory: () => ({}) as Worker,
+      }),
+    ).toThrow("transformCapacity");
+  });
+
   it("rejects foreign material handles and invalid options before allocating an entity", () => {
     const canvas = {} as HTMLCanvasElement;
     const workerFactory = () =>

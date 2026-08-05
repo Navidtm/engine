@@ -18,6 +18,7 @@ describe("worker protocol", () => {
         canvas: {} as OffscreenCanvas,
         wasmUrl: "/unused.wasm",
         entityCapacity: 1,
+        transformCapacity: 1,
         size: { width: 1, height: 1, devicePixelRatio: 1 },
         renderer: {},
       },

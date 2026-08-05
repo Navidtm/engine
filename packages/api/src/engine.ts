@@ -38,6 +38,8 @@ export interface EngineConfig {
   readonly canvas: HTMLCanvasElement;
   readonly wasmUrl?: string | URL;
   readonly entityCapacity?: number;
+  /** Number of entity indices that may publish shared transform updates. */
+  readonly transformCapacity?: number;
   /** Maximum structural commands held in the shared ring before ordered fallback. */
   readonly structuralCommandCapacity?: number;
   readonly powerPreference?: GPUPowerPreference;
@@ -155,6 +157,7 @@ interface EngineState {
   readonly sharedMemory: SharedRuntimeViews | undefined;
   status: EngineStatus;
   readonly entityCapacity: number;
+  readonly transformCapacity: number;
   readonly entityGenerations: Uint16Array;
   readonly entityAlive: Uint8Array;
   readonly freeEntities: Uint32Array;
@@ -189,6 +192,14 @@ export function createEngine(
   if (!Number.isSafeInteger(entityCapacity) || entityCapacity <= 0 || entityCapacity > 1 << 20) {
     throw new RangeError("entityCapacity must be an integer between 1 and 1,048,576.");
   }
+  const transformCapacity = config.transformCapacity ?? entityCapacity;
+  if (
+    !Number.isSafeInteger(transformCapacity) ||
+    transformCapacity <= 0 ||
+    transformCapacity > entityCapacity
+  ) {
+    throw new RangeError("transformCapacity must be an integer between 1 and entityCapacity.");
+  }
   const structuralCommandCapacity =
     config.structuralCommandCapacity ?? Math.min(entityCapacity, 1_024);
   if (
@@ -205,10 +216,11 @@ export function createEngine(
     worker: (config.workerFactory ?? createDefaultWorker)(),
     pendingCommands: [],
     sharedMemory: supportsSharedRuntimeMemory()
-      ? allocateSharedRuntimeMemory(entityCapacity, structuralCommandCapacity)
+      ? allocateSharedRuntimeMemory(transformCapacity, structuralCommandCapacity)
       : undefined,
     status: "new",
     entityCapacity,
+    transformCapacity,
     entityGenerations: new Uint16Array(entityCapacity),
     entityAlive: new Uint8Array(entityCapacity),
     freeEntities: new Uint32Array(entityCapacity),
@@ -288,6 +300,7 @@ function createHighLevelApi(
     basicMaterial: createBasicMaterial,
     mesh(options: MeshOptions) {
       validateMeshOptions(state, options);
+      ensureTransformSlotAvailable(state);
       const materialHandle =
         options.material === undefined || options.material === "basic"
           ? defaultBasicMaterial()
@@ -311,6 +324,7 @@ function createHighLevelApi(
     },
     perspectiveCamera(options: PerspectiveCameraOptions = {}) {
       validateCameraOptions(options);
+      ensureTransformSlotAvailable(state);
       const entity = world.createEntity();
       const initialTransform = mutableTransform(options);
       world.add(
@@ -468,6 +482,7 @@ function publishTransform(
     throw new Error(`Cannot update a ${state.status} engine.`);
   }
   validateLiveEntity(state, entity);
+  validateTransformSlot(state, entity);
   const packedEntity = packEntity(entity);
   if (state.sharedMemory !== undefined) {
     writeSharedTransform(state.sharedMemory, packedEntity, value, fieldMask);
@@ -515,6 +530,7 @@ function createWorldApi(state: EngineState): WorldApi {
     },
     add(entity: Entity, component: Component) {
       validateLiveEntity(state, entity);
+      if (component.kind === "transform") validateTransformSlot(state, entity);
       dispatchCommand(state, componentCommand(state, entity, component));
     },
     remove(entity: Entity, component: Component["kind"]) {
@@ -656,6 +672,20 @@ function allocateEntityIndex(state: EngineState): number {
   return index;
 }
 
+function ensureTransformSlotAvailable(state: EngineState): void {
+  const index =
+    state.freeEntityCount > 0
+      ? (state.freeEntities[state.freeEntityCount - 1] ?? state.entityCapacity)
+      : state.nextEntityIndex;
+  if (index >= state.transformCapacity) throw new Error("Transform capacity exhausted.");
+}
+
+function validateTransformSlot(state: EngineState, entity: Entity): void {
+  if (entity.index >= state.transformCapacity) {
+    throw new Error("Entity index exceeds configured transform capacity.");
+  }
+}
+
 function createEntityHandle(state: EngineState, index: number, generation: number): OwnedEntity {
   const entity = { index, generation } as OwnedEntity;
   Object.defineProperty(entity, ENTITY_OWNER, { value: state });
@@ -711,6 +741,7 @@ function initialize(state: EngineState): Promise<void> {
       canvas,
       wasmUrl: String(state.config.wasmUrl ?? new URL("/lume_core.wasm", document.baseURI)),
       entityCapacity: state.config.entityCapacity ?? 4_096,
+      transformCapacity: state.transformCapacity,
       size: {
         width: rect.width,
         height: rect.height,

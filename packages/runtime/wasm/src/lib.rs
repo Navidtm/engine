@@ -7,7 +7,7 @@ use lume_core::{
     RenderWorld, Transform, VisibleRenderBuffer, World, WorldCapacity,
 };
 
-pub const ABI_VERSION: u32 = 5;
+pub const ABI_VERSION: u32 = 6;
 
 const TRANSFORM_UPDATE_FLOATS: usize = 10;
 
@@ -28,8 +28,9 @@ pub extern "C" fn lume_abi_version() -> u32 {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn lume_engine_create(entity_capacity: u32) -> *mut c_void {
+pub extern "C" fn lume_engine_create(entity_capacity: u32, transform_capacity: u32) -> *mut c_void {
     let entities = usize::try_from(entity_capacity.max(1)).unwrap_or(4_096);
+    let transforms = usize::try_from(transform_capacity.max(1)).unwrap_or(4_096);
     let capacity = WorldCapacity {
         entities,
         transforms: entities,
@@ -42,11 +43,12 @@ pub extern "C" fn lume_engine_create(entity_capacity: u32) -> *mut c_void {
         world: World::with_capacity(capacity),
         render_world: RenderWorld::with_capacity(entities, 8),
         visible: VisibleRenderBuffer::with_capacity(entities),
-        transform_update_generations: vec![0; entities].into_boxed_slice(),
-        transform_update_values: vec![[0.0; TRANSFORM_UPDATE_FLOATS]; entities].into_boxed_slice(),
-        transform_update_masks: vec![0; entities].into_boxed_slice(),
-        transform_range_starts: vec![0; entities].into_boxed_slice(),
-        transform_range_counts: vec![0; entities].into_boxed_slice(),
+        transform_update_generations: vec![0; transforms].into_boxed_slice(),
+        transform_update_values: vec![[0.0; TRANSFORM_UPDATE_FLOATS]; transforms]
+            .into_boxed_slice(),
+        transform_update_masks: vec![0; transforms].into_boxed_slice(),
+        transform_range_starts: vec![0; transforms].into_boxed_slice(),
+        transform_range_counts: vec![0; transforms].into_boxed_slice(),
     }))
     .cast()
 }
@@ -402,7 +404,7 @@ mod tests {
 
     #[test]
     fn abi_can_create_update_and_destroy_a_world() {
-        let engine = lume_engine_create(16);
+        let engine = lume_engine_create(16, 16);
         assert!(!engine.is_null());
         assert_eq!(lume_engine_spawn(engine, 0), 1);
         assert_eq!(lume_engine_spawn(engine, 1), 1);

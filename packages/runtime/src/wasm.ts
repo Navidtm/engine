@@ -6,14 +6,14 @@ import { drainSharedCommands, StructuralOpcode } from "./shared-memory/structura
 import { drainSharedTransforms } from "./shared-memory/synchronization.js";
 import { openSharedRuntimeViews } from "./shared-memory/views.js";
 
-const EXPECTED_ABI_VERSION = 5;
+const EXPECTED_ABI_VERSION = 6;
 const INSTANCE_FLOATS = 20;
 const CAMERA_FLOATS = 32;
 
 interface LumeWasmExports extends WebAssembly.Exports {
   readonly memory: WebAssembly.Memory;
   lume_abi_version(): number;
-  lume_engine_create(entityCapacity: number): number;
+  lume_engine_create(entityCapacity: number, transformCapacity: number): number;
   lume_engine_destroy(engine: number): void;
   lume_engine_spawn(engine: number, entity: number): number;
   lume_engine_despawn(engine: number, entity: number): number;
@@ -110,6 +110,7 @@ export interface WasmCore {
 export async function createWasmCore(
   url: string,
   entityCapacity: number,
+  transformCapacity: number,
   sharedMemory?: SharedArrayBuffer,
   initialAspect = 1,
 ): Promise<WasmCore> {
@@ -122,7 +123,7 @@ export async function createWasmCore(
   if (exports.lume_abi_version?.() !== EXPECTED_ABI_VERSION) {
     throw new Error("Lume WASM ABI version does not match the TypeScript runtime.");
   }
-  const handle = exports.lume_engine_create(entityCapacity);
+  const handle = exports.lume_engine_create(entityCapacity, transformCapacity);
   if (handle === 0) throw new Error("Lume WASM core allocation failed.");
   const visibleCapacity = exports.lume_visible_capacity(handle);
   const renderCameraCapacity = exports.lume_render_camera_capacity(handle);
@@ -138,9 +139,9 @@ export async function createWasmCore(
   const transformRangeStartsPointer = exports.lume_transform_range_starts_ptr(handle);
   const transformRangeCountsPointer = exports.lume_transform_range_counts_ptr(handle);
   const sharedViews = sharedMemory === undefined ? undefined : openSharedRuntimeViews(sharedMemory);
-  if (sharedViews !== undefined && sharedViews.layout.capacity > transformUpdateCapacity) {
+  if (sharedViews !== undefined && sharedViews.layout.capacity !== transformUpdateCapacity) {
     exports.lume_engine_destroy(handle);
-    throw new Error("Shared transform capacity exceeds WASM staging capacity.");
+    throw new Error("Shared transform capacity does not match WASM staging capacity.");
   }
   let observedMemory = exports.memory.buffer;
   const frame: RenderFrame = createFrameViews(

@@ -46,6 +46,7 @@ function initMessage(): MainToWorkerMessage {
       canvas: {} as OffscreenCanvas,
       wasmUrl: "/lume_core.wasm",
       entityCapacity: 16,
+      transformCapacity: 16,
       size: { width: 640, height: 360, devicePixelRatio: 1 },
       renderer: {},
     },
