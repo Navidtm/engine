@@ -7,6 +7,7 @@ use lume_core::{
     RenderWorld, Transform, VisibleRenderBuffer, World, WorldCapacity,
 };
 
+/// ABI revision required by the TypeScript runtime before it calls any export.
 pub const ABI_VERSION: u32 = 6;
 
 const TRANSFORM_UPDATE_FLOATS: usize = 10;
@@ -22,11 +23,17 @@ struct EngineCore {
     transform_range_counts: Box<[u32]>,
 }
 
+/// Returns [`ABI_VERSION`] for TypeScript-side compatibility validation.
 #[unsafe(no_mangle)]
 pub extern "C" fn lume_abi_version() -> u32 {
     ABI_VERSION
 }
 
+/// Allocates the complete fixed-capacity simulation and render core.
+///
+/// `entity_capacity` bounds ECS/render storage and `transform_capacity` bounds
+/// WASM staging slots. The returned opaque pointer is owned by the caller and
+/// must be released exactly once with [`lume_engine_destroy`].
 #[unsafe(no_mangle)]
 pub extern "C" fn lume_engine_create(entity_capacity: u32, transform_capacity: u32) -> *mut c_void {
     let entities = usize::try_from(entity_capacity.max(1)).unwrap_or(4_096);
@@ -64,6 +71,7 @@ pub unsafe extern "C" fn lume_engine_destroy(engine: *mut c_void) {
     }
 }
 
+/// Claims the supplied packed generational entity identity; returns `1` on success.
 #[unsafe(no_mangle)]
 pub extern "C" fn lume_engine_spawn(engine: *mut c_void, entity_raw: u32) -> u32 {
     with_engine(engine, |core| {
@@ -71,6 +79,7 @@ pub extern "C" fn lume_engine_spawn(engine: *mut c_void, entity_raw: u32) -> u32
     }) as u32
 }
 
+/// Despawns a matching live entity and all owned components; returns `1` on success.
 #[unsafe(no_mangle)]
 pub extern "C" fn lume_engine_despawn(engine: *mut c_void, entity_raw: u32) -> u32 {
     with_engine(engine, |core| {
@@ -78,6 +87,9 @@ pub extern "C" fn lume_engine_despawn(engine: *mut c_void, entity_raw: u32) -> u
     }) as u32
 }
 
+/// Adds or replaces a transform from position, `xyzw` quaternion, and scale values.
+///
+/// Returns `1` only when the entity is live and component capacity permits it.
 #[unsafe(no_mangle)]
 pub extern "C" fn lume_engine_add_transform(
     engine: *mut c_void,
@@ -106,6 +118,7 @@ pub extern "C" fn lume_engine_add_transform(
     }) as u32
 }
 
+/// Returns the immutable number of WASM transform staging slots.
 #[unsafe(no_mangle)]
 pub extern "C" fn lume_transform_update_capacity(engine: *mut c_void) -> u32 {
     with_engine_value(engine, |core| {
@@ -114,6 +127,10 @@ pub extern "C" fn lume_transform_update_capacity(engine: *mut c_void) -> u32 {
     .unwrap_or(0)
 }
 
+/// Returns mutable staging generations, one `u32` per transform slot.
+///
+/// The pointer remains valid until the engine is destroyed; JS must not retain
+/// typed-array views across WebAssembly memory growth.
 #[unsafe(no_mangle)]
 pub extern "C" fn lume_transform_update_generations_ptr(engine: *mut c_void) -> *mut u32 {
     with_engine_mut_value(engine, |core| {
@@ -122,6 +139,7 @@ pub extern "C" fn lume_transform_update_generations_ptr(engine: *mut c_void) -> 
     .unwrap_or(core::ptr::null_mut())
 }
 
+/// Returns mutable packed staging values, ten `f32` values per transform slot.
 #[unsafe(no_mangle)]
 pub extern "C" fn lume_transform_update_values_ptr(engine: *mut c_void) -> *mut f32 {
     with_engine_mut_value(engine, |core| {
@@ -130,24 +148,31 @@ pub extern "C" fn lume_transform_update_values_ptr(engine: *mut c_void) -> *mut 
     .unwrap_or(core::ptr::null_mut())
 }
 
+/// Returns mutable per-slot transform field masks.
 #[unsafe(no_mangle)]
 pub extern "C" fn lume_transform_update_masks_ptr(engine: *mut c_void) -> *mut u32 {
     with_engine_mut_value(engine, |core| core.transform_update_masks.as_mut_ptr())
         .unwrap_or(core::ptr::null_mut())
 }
 
+/// Returns mutable starts for contiguous staged transform ranges.
 #[unsafe(no_mangle)]
 pub extern "C" fn lume_transform_range_starts_ptr(engine: *mut c_void) -> *mut u32 {
     with_engine_mut_value(engine, |core| core.transform_range_starts.as_mut_ptr())
         .unwrap_or(core::ptr::null_mut())
 }
 
+/// Returns mutable counts paired with [`lume_transform_range_starts_ptr`].
 #[unsafe(no_mangle)]
 pub extern "C" fn lume_transform_range_counts_ptr(engine: *mut c_void) -> *mut u32 {
     with_engine_mut_value(engine, |core| core.transform_range_counts.as_mut_ptr())
         .unwrap_or(core::ptr::null_mut())
 }
 
+/// Applies up to `range_count` caller-written transform ranges and returns accepted updates.
+///
+/// Invalid/stale entities are skipped, and masks are cleared after each visited
+/// slot so one staging epoch cannot be applied twice.
 #[unsafe(no_mangle)]
 pub extern "C" fn lume_engine_apply_transform_ranges(engine: *mut c_void, range_count: u32) -> u32 {
     with_engine_mut_value(engine, |core| {
@@ -176,6 +201,7 @@ pub extern "C" fn lume_engine_apply_transform_ranges(engine: *mut c_void, range_
     .unwrap_or(0)
 }
 
+/// Adds or replaces a linear RGBA basic material; returns `1` on success.
 #[unsafe(no_mangle)]
 pub extern "C" fn lume_engine_add_material(
     engine: *mut c_void,
@@ -196,6 +222,7 @@ pub extern "C" fn lume_engine_add_material(
     }) as u32
 }
 
+/// Adds or replaces a mesh renderer linked to a packed material handle.
 #[unsafe(no_mangle)]
 pub extern "C" fn lume_engine_add_mesh_renderer(
     engine: *mut c_void,
@@ -214,6 +241,7 @@ pub extern "C" fn lume_engine_add_mesh_renderer(
     }) as u32
 }
 
+/// Adds or replaces a local-space bounding sphere with a non-negative radius.
 #[unsafe(no_mangle)]
 pub extern "C" fn lume_engine_add_bounds(
     engine: *mut c_void,
@@ -234,6 +262,7 @@ pub extern "C" fn lume_engine_add_bounds(
     }) as u32
 }
 
+/// Adds or replaces a perspective camera using a radians field of view.
 #[unsafe(no_mangle)]
 pub extern "C" fn lume_engine_add_camera(
     engine: *mut c_void,
@@ -257,6 +286,7 @@ pub extern "C" fn lume_engine_add_camera(
     }) as u32
 }
 
+/// Removes a component selected by transport ID `1..=5`; returns `1` on success.
 #[unsafe(no_mangle)]
 pub extern "C" fn lume_engine_remove_component(
     engine: *mut c_void,
@@ -269,6 +299,9 @@ pub extern "C" fn lume_engine_remove_component(
     }) as u32
 }
 
+/// Advances ECS systems, extracts renderer data, culls it, and returns success as `1`.
+///
+/// Capacity failures return `0`; no fallback allocation occurs in this hot path.
 #[unsafe(no_mangle)]
 pub extern "C" fn lume_engine_update(engine: *mut c_void) -> u32 {
     with_engine(engine, |core| {
@@ -278,6 +311,7 @@ pub extern "C" fn lume_engine_update(engine: *mut c_void) -> u32 {
     }) as u32
 }
 
+/// Updates all cameras to a positive viewport aspect ratio; returns `1` on success.
 #[unsafe(no_mangle)]
 pub extern "C" fn lume_engine_set_camera_aspect(engine: *mut c_void, aspect: f32) -> u32 {
     with_engine(engine, |core| {
@@ -289,83 +323,101 @@ pub extern "C" fn lume_engine_set_camera_aspect(engine: *mut c_void, aspect: f32
     }) as u32
 }
 
+/// Returns the number of live ECS entities, or zero for a null engine pointer.
 #[unsafe(no_mangle)]
 pub extern "C" fn lume_engine_entity_count(engine: *mut c_void) -> u32 {
     with_engine_value(engine, |core| core.world.entity_count() as u32).unwrap_or(0)
 }
 
+/// Returns extracted instance count before visibility culling.
 #[unsafe(no_mangle)]
 pub extern "C" fn lume_render_instance_count(engine: *mut c_void) -> u32 {
     with_engine_value(engine, |core| core.render_world.instances().len() as u32).unwrap_or(0)
 }
 
+/// Returns extracted camera count.
 #[unsafe(no_mangle)]
 pub extern "C" fn lume_render_camera_count(engine: *mut c_void) -> u32 {
     with_engine_value(engine, |core| core.render_world.cameras().len() as u32).unwrap_or(0)
 }
 
+/// Returns the fixed extracted-instance capacity.
 #[unsafe(no_mangle)]
 pub extern "C" fn lume_render_entity_capacity(engine: *mut c_void) -> u32 {
     with_engine_value(engine, |core| core.render_world.entity_capacity() as u32).unwrap_or(0)
 }
 
+/// Returns the fixed extracted-camera capacity.
 #[unsafe(no_mangle)]
 pub extern "C" fn lume_render_camera_capacity(engine: *mut c_void) -> u32 {
     with_engine_value(engine, |core| core.render_world.camera_capacity() as u32).unwrap_or(0)
 }
 
+/// Returns the stable pointer to extracted entity IDs.
+///
+/// Consume at most `lume_render_instance_count` values and recreate views after
+/// WASM memory growth.
 #[unsafe(no_mangle)]
 pub extern "C" fn lume_render_entities_ptr(engine: *mut c_void) -> *const u32 {
     with_engine_value(engine, |core| core.render_world.entities_capacity_ptr())
         .unwrap_or(core::ptr::null())
 }
 
+/// Returns the stable pointer to extracted geometry IDs in instance order.
 #[unsafe(no_mangle)]
 pub extern "C" fn lume_render_geometries_ptr(engine: *mut c_void) -> *const u32 {
     with_engine_value(engine, |core| core.render_world.geometries_capacity_ptr())
         .unwrap_or(core::ptr::null())
 }
 
+/// Returns the stable pointer to extracted `GpuInstance` records.
 #[unsafe(no_mangle)]
 pub extern "C" fn lume_render_instances_ptr(engine: *mut c_void) -> *const GpuInstance {
     with_engine_value(engine, |core| core.render_world.instances_capacity_ptr())
         .unwrap_or(core::ptr::null())
 }
 
+/// Returns the stable pointer to extracted `GpuCamera` records.
 #[unsafe(no_mangle)]
 pub extern "C" fn lume_render_cameras_ptr(engine: *mut c_void) -> *const GpuCamera {
     with_engine_value(engine, |core| core.render_world.cameras_capacity_ptr())
         .unwrap_or(core::ptr::null())
 }
 
+/// Returns the number of visible instances after CPU frustum culling.
 #[unsafe(no_mangle)]
 pub extern "C" fn lume_visible_count(engine: *mut c_void) -> u32 {
     with_engine_value(engine, |core| core.visible.len() as u32).unwrap_or(0)
 }
 
+/// Returns the fixed capacity of the visible-instance buffers.
 #[unsafe(no_mangle)]
 pub extern "C" fn lume_visible_capacity(engine: *mut c_void) -> u32 {
     with_engine_value(engine, |core| core.visible.capacity() as u32).unwrap_or(0)
 }
 
+/// Returns the stable pointer to visible geometry IDs in grouped draw order.
 #[unsafe(no_mangle)]
 pub extern "C" fn lume_visible_geometries_ptr(engine: *mut c_void) -> *const u32 {
     with_engine_value(engine, |core| core.visible.geometries_capacity_ptr())
         .unwrap_or(core::ptr::null())
 }
 
+/// Returns the stable pointer to visible pipeline IDs in grouped draw order.
 #[unsafe(no_mangle)]
 pub extern "C" fn lume_visible_pipelines_ptr(engine: *mut c_void) -> *const u32 {
     with_engine_value(engine, |core| core.visible.pipelines_capacity_ptr())
         .unwrap_or(core::ptr::null())
 }
 
+/// Returns the stable pointer to visible material IDs in grouped draw order.
 #[unsafe(no_mangle)]
 pub extern "C" fn lume_visible_materials_ptr(engine: *mut c_void) -> *const u32 {
     with_engine_value(engine, |core| core.visible.materials_capacity_ptr())
         .unwrap_or(core::ptr::null())
 }
 
+/// Returns the stable pointer to visible `GpuInstance` records in draw order.
 #[unsafe(no_mangle)]
 pub extern "C" fn lume_visible_instances_ptr(engine: *mut c_void) -> *const GpuInstance {
     with_engine_value(engine, |core| core.visible.instances_capacity_ptr())
