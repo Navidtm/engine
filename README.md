@@ -18,7 +18,7 @@ The repository currently contains five completed foundation milestones:
 - SharedArrayBuffer transform transport with a bulk WASM update boundary;
 - generation-safe partial transform publication, a structural SPSC ring, and
   transport metrics;
-- a high-level functional TypeScript API plus Vite triangle and cube examples.
+- a high-level functional TypeScript API plus five focused Vite examples.
 
 See [the architecture notes](docs/architecture.md) and
 [the implementation roadmap](docs/roadmap.md) before extending the runtime.
@@ -29,6 +29,9 @@ See [the architecture notes](docs/architecture.md) and
 - `examples/cube` — one indexed mesh with renderer statistics.
 - `examples/instancing` — 256 cubes sharing one material and draw batch.
 - `examples/transform-controls` — partial position updates through the public control API.
+- `examples/lifecycle` — handle destruction, generation changes, and safe slot recycling.
+
+The [examples guide](examples/README.md) includes an execution command and learning goal for each sample.
 
 ## Prerequisites
 
