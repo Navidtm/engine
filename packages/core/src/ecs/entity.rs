@@ -10,13 +10,19 @@ const MAX_GENERATION: u16 = (1 << (32 - INDEX_BITS)) - 1;
 pub struct Entity(u32);
 
 impl Entity {
+    /// Sentinel raw value that is never allocated by [`EntityAllocator`].
     pub const INVALID: Self = Self(u32::MAX);
 
+    /// Wraps a packed 20-bit-index/12-bit-generation value without validation.
+    ///
+    /// Use [`Self::from_parts`] when the index and generation are available
+    /// separately and should be checked against the packed representation.
     #[must_use]
     pub const fn from_raw(raw: u32) -> Self {
         Self(raw)
     }
 
+    /// Packs validated index and generation fields, or returns `None` on overflow.
     #[must_use]
     pub const fn from_parts(index: u32, generation: u16) -> Option<Self> {
         if index > INDEX_MASK || generation > MAX_GENERATION {
@@ -25,16 +31,19 @@ impl Entity {
         Some(Self(((generation as u32) << INDEX_BITS) | index))
     }
 
+    /// Returns the transport-ready packed representation.
     #[must_use]
     pub const fn raw(self) -> u32 {
         self.0
     }
 
+    /// Returns the sparse-set index portion of the handle.
     #[must_use]
     pub const fn index(self) -> usize {
         (self.0 & INDEX_MASK) as usize
     }
 
+    /// Returns the generation used to reject stale references.
     #[must_use]
     pub const fn generation(self) -> u16 {
         (self.0 >> INDEX_BITS) as u16
@@ -61,6 +70,7 @@ pub struct EntityAllocator {
 }
 
 impl EntityAllocator {
+    /// Creates a fixed-capacity allocator; allocation never grows past this bound.
     #[must_use]
     pub fn with_capacity(capacity: usize) -> Self {
         Self {
@@ -72,6 +82,7 @@ impl EntityAllocator {
         }
     }
 
+    /// Allocates a live entity, reusing a free slot when possible.
     pub fn spawn(&mut self) -> Option<Entity> {
         if let Some(index) = self.free.pop() {
             let index_usize = index as usize;
@@ -92,7 +103,8 @@ impl EntityAllocator {
     }
 
     /// Claims an externally allocated handle. Used by the worker bridge so the
-    /// main-thread API can return entity IDs synchronously.
+    /// main-thread API can return entity IDs synchronously. Returns false for a
+    /// live, stale, or out-of-capacity handle.
     pub fn claim(&mut self, entity: Entity) -> bool {
         let index = entity.index();
         if index > INDEX_MASK as usize || index >= self.capacity {
@@ -110,6 +122,7 @@ impl EntityAllocator {
         true
     }
 
+    /// Despawns a matching live entity and increments its recycled generation.
     pub fn despawn(&mut self, entity: Entity) -> bool {
         if !self.is_alive(entity) {
             return false;
@@ -122,17 +135,20 @@ impl EntityAllocator {
         true
     }
 
+    /// Returns true only when index and generation identify a live slot.
     #[must_use]
     pub fn is_alive(&self, entity: Entity) -> bool {
         self.alive.get(entity.index()).copied().unwrap_or(false)
             && self.generations[entity.index()] == entity.generation()
     }
 
+    /// Number of currently live entities.
     #[must_use]
     pub const fn len(&self) -> usize {
         self.alive_count
     }
 
+    /// Returns whether no entity slots are live.
     #[must_use]
     pub const fn is_empty(&self) -> bool {
         self.alive_count == 0
