@@ -2,11 +2,18 @@ use super::Entity;
 
 const VACANT: usize = usize::MAX;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SparseSetInsertError {
+    EntityCapacity,
+    ComponentCapacity,
+}
+
 /// Sparse entity lookup backed by tightly packed component values.
 pub struct SparseSet<T> {
     sparse: Vec<usize>,
     entities: Vec<Entity>,
     values: Vec<T>,
+    component_capacity: usize,
 }
 
 impl<T> SparseSet<T> {
@@ -16,6 +23,7 @@ impl<T> SparseSet<T> {
             sparse: vec![VACANT; entity_capacity],
             entities: Vec::with_capacity(component_capacity),
             values: Vec::with_capacity(component_capacity),
+            component_capacity,
         }
     }
 
@@ -34,17 +42,28 @@ impl<T> SparseSet<T> {
         self.dense_index(entity).is_some()
     }
 
-    pub fn insert(&mut self, entity: Entity, value: T) -> Option<T> {
-        self.ensure_sparse(entity.index());
+    pub fn insert(&mut self, entity: Entity, value: T) -> Result<Option<T>, SparseSetInsertError> {
+        if entity.index() >= self.sparse.len() {
+            return Err(SparseSetInsertError::EntityCapacity);
+        }
         if let Some(index) = self.dense_index(entity) {
-            return Some(core::mem::replace(&mut self.values[index], value));
+            return Ok(Some(core::mem::replace(&mut self.values[index], value)));
+        }
+        if self.values.len() == self.component_capacity {
+            return Err(SparseSetInsertError::ComponentCapacity);
         }
 
         let dense_index = self.values.len();
         self.sparse[entity.index()] = dense_index;
         self.entities.push(entity);
         self.values.push(value);
-        None
+        Ok(None)
+    }
+
+    #[must_use]
+    pub fn can_insert(&self, entity: Entity) -> bool {
+        entity.index() < self.sparse.len()
+            && (self.contains(entity) || self.values.len() < self.component_capacity)
     }
 
     #[must_use]
@@ -100,12 +119,6 @@ impl<T> SparseSet<T> {
             Some(dense_index)
         }
     }
-
-    fn ensure_sparse(&mut self, index: usize) {
-        if index >= self.sparse.len() {
-            self.sparse.resize(index + 1, VACANT);
-        }
-    }
 }
 
 #[cfg(test)]
@@ -117,8 +130,8 @@ mod tests {
         let a = Entity::from_raw(0);
         let b = Entity::from_raw(1);
         let mut set = SparseSet::with_capacity(2, 2);
-        set.insert(a, 10);
-        set.insert(b, 20);
+        set.insert(a, 10).unwrap();
+        set.insert(b, 20).unwrap();
         assert_eq!(set.remove(a), Some(10));
         assert_eq!(set.get(b), Some(&20));
         assert_eq!(set.entities(), &[b]);
@@ -129,7 +142,21 @@ mod tests {
         let current = Entity::from_parts(0, 1).unwrap();
         let stale = Entity::from_parts(0, 0).unwrap();
         let mut set = SparseSet::with_capacity(1, 1);
-        set.insert(current, 42);
+        set.insert(current, 42).unwrap();
         assert_eq!(set.get(stale), None);
+    }
+
+    #[test]
+    fn insertion_rejects_entity_and_component_capacity_overflow() {
+        let mut set = SparseSet::with_capacity(1, 1);
+        set.insert(Entity::from_raw(0), 1).unwrap();
+        assert_eq!(
+            set.insert(Entity::from_raw(1), 2),
+            Err(SparseSetInsertError::EntityCapacity)
+        );
+        assert_eq!(
+            set.insert(Entity::from_parts(0, 1).unwrap(), 2),
+            Err(SparseSetInsertError::ComponentCapacity)
+        );
     }
 }

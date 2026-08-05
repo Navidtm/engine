@@ -14,8 +14,11 @@ Shared memory is transport state, never the ECS. Rust does not retain references
 into the browser `SharedArrayBuffer`, and JavaScript cannot mutate sparse-set
 storage. This preserves Rust's exclusive mutation and allows ECS relocation.
 
-All hot-path arrays are capacity-sized once. A WASM memory growth refreshes
-JavaScript typed views but does not change the exported staging offsets.
+All ECS and hot-path arrays are capacity-sized once. `WorldCapacity` is a hard
+budget: entity allocation, externally claimed handles, and every component
+sparse set reject capacity overflow instead of growing WASM memory. A WASM
+memory growth refreshes JavaScript typed views but does not change the exported
+staging offsets; normal engine operation must not require one.
 
 ## Shared allocation
 

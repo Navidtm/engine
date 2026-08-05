@@ -1,4 +1,4 @@
-use crate::ecs::{Entity, SparseSet};
+use crate::ecs::{Entity, SparseSet, SparseSetInsertError};
 use crate::math::Color;
 
 pub const BASIC_PIPELINE_ID: PipelineId = PipelineId::from_raw(1);
@@ -80,8 +80,13 @@ impl MaterialRegistry {
         &mut self,
         handle: MaterialHandle,
         material: BasicMaterial,
-    ) -> Option<BasicMaterial> {
+    ) -> Result<Option<BasicMaterial>, SparseSetInsertError> {
         self.storage.insert(handle.entity(), material)
+    }
+
+    #[must_use]
+    pub fn can_insert(&self, handle: MaterialHandle) -> bool {
+        self.storage.can_insert(handle.entity())
     }
 
     #[must_use]
@@ -112,12 +117,17 @@ mod tests {
     fn registry_replaces_and_removes_material_by_handle() {
         let mut registry = MaterialRegistry::with_capacity(8, 4);
         let handle = MaterialHandle::from_raw(3);
-        assert!(registry.insert(handle, BasicMaterial::default()).is_none());
+        assert!(
+            registry
+                .insert(handle, BasicMaterial::default())
+                .unwrap()
+                .is_none()
+        );
         let blue = BasicMaterial {
             color: Color::new([0.0, 0.0, 1.0, 1.0]),
             ..BasicMaterial::default()
         };
-        assert!(registry.insert(handle, blue).is_some());
+        assert!(registry.insert(handle, blue).unwrap().is_some());
         assert_eq!(registry.get(handle), Some(&blue));
         assert_eq!(registry.remove(handle), Some(blue));
         assert!(registry.is_empty());

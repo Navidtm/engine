@@ -73,8 +73,9 @@ Detailed byte layout and browser-thread responsibilities are documented in
 ## Memory model
 
 - Entity and component capacity is chosen in immutable engine configuration.
-- Sparse sets reserve dense storage up front and grow only during structural
-  changes if configured capacity is exceeded.
+- Entity and component capacities are hard limits. Sparse sets reserve every
+  slot up front and reject a structural command that would exceed its explicit
+  entity or component capacity; they never grow at runtime.
 - Component values are `#[repr(C)]`, contiguous, and use GPU-friendly alignment.
 - Math APIs write into caller-provided values and never allocate.
 - Render-pass descriptors, attachment arrays, clear values, and submission

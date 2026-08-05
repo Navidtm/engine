@@ -53,6 +53,7 @@ impl fmt::Debug for Entity {
 
 /// Owns entity liveness and generation recycling.
 pub struct EntityAllocator {
+    capacity: usize,
     generations: Vec<u16>,
     alive: Vec<bool>,
     free: Vec<u32>,
@@ -63,6 +64,7 @@ impl EntityAllocator {
     #[must_use]
     pub fn with_capacity(capacity: usize) -> Self {
         Self {
+            capacity: capacity.min((INDEX_MASK as usize) + 1),
             generations: Vec::with_capacity(capacity),
             alive: Vec::with_capacity(capacity),
             free: Vec::with_capacity(capacity),
@@ -78,6 +80,9 @@ impl EntityAllocator {
             return Entity::from_parts(index, self.generations[index_usize]);
         }
 
+        if self.generations.len() >= self.capacity {
+            return None;
+        }
         let index = u32::try_from(self.generations.len()).ok()?;
         let entity = Entity::from_parts(index, 0)?;
         self.generations.push(0);
@@ -90,7 +95,7 @@ impl EntityAllocator {
     /// main-thread API can return entity IDs synchronously.
     pub fn claim(&mut self, entity: Entity) -> bool {
         let index = entity.index();
-        if index > INDEX_MASK as usize {
+        if index > INDEX_MASK as usize || index >= self.capacity {
             return false;
         }
         if index >= self.generations.len() {
@@ -156,5 +161,15 @@ mod tests {
         let external = Entity::from_parts(3, 0).unwrap();
         assert!(entities.claim(external));
         assert!(!entities.claim(external));
+    }
+
+    #[test]
+    fn capacity_is_a_hard_limit() {
+        let mut entities = EntityAllocator::with_capacity(1);
+        let first = entities.spawn().unwrap();
+        assert!(entities.spawn().is_none());
+        assert!(!entities.claim(Entity::from_parts(1, 0).unwrap()));
+        assert!(entities.despawn(first));
+        assert!(entities.spawn().is_some());
     }
 }

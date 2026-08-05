@@ -82,8 +82,7 @@ impl World {
         if !self.is_alive(entity) {
             return false;
         }
-        self.transforms.insert(entity, value);
-        true
+        self.transforms.insert(entity, value).is_ok()
     }
 
     pub fn update_transform_fields(
@@ -114,27 +113,29 @@ impl World {
         if !self.is_alive(entity) {
             return false;
         }
-        self.mesh_renderers.insert(entity, value);
-        if !self.bounds.contains(entity) {
-            self.bounds.insert(entity, Bounds::default());
+        if !self.mesh_renderers.can_insert(entity)
+            || (!self.bounds.contains(entity) && !self.bounds.can_insert(entity))
+        {
+            return false;
         }
-        true
+        let mesh_added = self.mesh_renderers.insert(entity, value).is_ok();
+        let bounds_added =
+            self.bounds.contains(entity) || self.bounds.insert(entity, Bounds::default()).is_ok();
+        mesh_added && bounds_added
     }
 
     pub fn add_camera(&mut self, entity: Entity, value: Camera) -> bool {
         if !self.is_alive(entity) {
             return false;
         }
-        self.cameras.insert(entity, value);
-        true
+        self.cameras.insert(entity, value).is_ok()
     }
 
     pub fn add_bounds(&mut self, entity: Entity, value: Bounds) -> bool {
         if !self.is_alive(entity) || value.radius < 0.0 {
             return false;
         }
-        self.bounds.insert(entity, value);
-        true
+        self.bounds.insert(entity, value).is_ok()
     }
 
     pub fn add_material(&mut self, entity: Entity, value: BasicMaterial) -> bool {
@@ -142,8 +143,8 @@ impl World {
             return false;
         }
         self.materials
-            .insert(MaterialHandle::from_entity(entity), value);
-        true
+            .insert(MaterialHandle::from_entity(entity), value)
+            .is_ok()
     }
 
     pub fn remove_component(&mut self, entity: Entity, component: u32) -> bool {
@@ -201,5 +202,45 @@ mod tests {
         assert!(world.add_camera(entity, Camera::default()));
         world.set_camera_aspect(16.0 / 9.0);
         assert_eq!(world.cameras.get(entity).unwrap().aspect, 16.0 / 9.0);
+    }
+
+    #[test]
+    fn component_capacity_rejects_new_components_without_growing() {
+        let mut world = World::with_capacity(WorldCapacity {
+            entities: 2,
+            transforms: 1,
+            mesh_renderers: 1,
+            cameras: 1,
+            materials: 1,
+            bounds: 1,
+        });
+        let first = world.spawn().unwrap();
+        let second = world.spawn().unwrap();
+        assert!(world.add_camera(first, Camera::default()));
+        assert!(!world.add_camera(second, Camera::default()));
+        assert_eq!(world.cameras.len(), 1);
+    }
+
+    #[test]
+    fn mesh_renderer_fails_atomically_when_implicit_bounds_are_full() {
+        let mut world = World::with_capacity(WorldCapacity {
+            entities: 2,
+            transforms: 0,
+            mesh_renderers: 1,
+            cameras: 0,
+            materials: 0,
+            bounds: 1,
+        });
+        let first = world.spawn().unwrap();
+        let second = world.spawn().unwrap();
+        assert!(world.add_bounds(first, Bounds::default()));
+        assert!(!world.add_mesh_renderer(
+            second,
+            MeshRenderer {
+                geometry: 0,
+                material: MaterialHandle::from_raw(0),
+            },
+        ));
+        assert!(!world.mesh_renderers.contains(second));
     }
 }
