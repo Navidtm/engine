@@ -2,18 +2,29 @@ const QUERY_COUNT = 2;
 const QUERY_BYTES = QUERY_COUNT * BigUint64Array.BYTES_PER_ELEMENT;
 const READBACK_BUFFER_COUNT = 3;
 
+/** Optional timestamp-query resources and state for one renderer. */
 export interface GpuTimestampProfiler {
+  /** Timestamp query set, absent when the feature is unavailable. */
   readonly querySet: GPUQuerySet | undefined;
+  /** GPU-only resolve buffer, absent when profiling is unavailable. */
   readonly resolveBuffer: GPUBuffer | undefined;
+  /** Rotating CPU-readable result buffers. */
   readonly readbackBuffers: readonly GPUBuffer[];
+  /** Per-readback in-flight flags (`1` while mapping is pending). */
   readonly pending: Uint8Array;
+  /** Pass timestamp attachment, absent when profiling is unavailable. */
   readonly timestampWrites: GPURenderPassTimestampWrites | undefined;
+  /** Total bytes owned by timestamp query buffers. */
   readonly gpuBytes: number;
+  /** Index considered first for the next non-blocking readback. */
   nextReadback: number;
+  /** Latest resolved GPU duration in milliseconds, or `null` before a result. */
   gpuTimeMs: number | null;
+  /** Prevents async callbacks from touching destroyed resources. */
   disposed: boolean;
 }
 
+/** Creates a triple-buffered profiler when `timestamp-query` is available. */
 export function createGpuTimestampProfiler(device: GPUDevice): GpuTimestampProfiler {
   if (!device.features.has("timestamp-query")) {
     return {
@@ -74,6 +85,8 @@ export function createGpuTimestampProfiler(device: GPUDevice): GpuTimestampProfi
   };
 }
 
+/** Encodes query resolve/copy commands and returns the claimed readback index. */
+/** Returns `-1` when profiling is unavailable, disposed, or all buffers are busy. */
 export function encodeGpuTimestampResolve(
   profiler: GpuTimestampProfiler,
   encoder: GPUCommandEncoder,
@@ -99,6 +112,8 @@ export function encodeGpuTimestampResolve(
   return -1;
 }
 
+/** Asynchronously maps one resolved timestamp pair and updates `gpuTimeMs`. */
+/** Calls with a negative or unavailable index are harmless no-ops. */
 export function requestGpuTimestampRead(
   profiler: GpuTimestampProfiler,
   readbackIndex: number,
@@ -125,6 +140,7 @@ export function requestGpuTimestampRead(
   );
 }
 
+/** Idempotently destroys every GPU resource owned by `profiler`. */
 export function destroyGpuTimestampProfiler(profiler: GpuTimestampProfiler): void {
   if (profiler.disposed) return;
   profiler.disposed = true;

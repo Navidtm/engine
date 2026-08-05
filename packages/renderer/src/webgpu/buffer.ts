@@ -1,3 +1,4 @@
+/** Creates and uploads a mapped immutable WebGPU buffer, rolling back on failure. */
 export function createStaticBuffer(
   device: GPUDevice,
   label: string,

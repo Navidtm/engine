@@ -1,6 +1,7 @@
 import { MESH_SHADER } from "../shaders/mesh.wgsl.js";
 import type { PipelineCache } from "./cache.js";
 
+/** Gets the cached built-in indexed mesh pipeline for the target surface format. */
 export function getMeshPipeline(
   device: GPUDevice,
   cache: PipelineCache,

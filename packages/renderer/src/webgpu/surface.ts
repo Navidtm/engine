@@ -1,16 +1,28 @@
+/** Mutable WebGPU canvas resources owned by one mesh renderer. */
 export interface SurfaceState {
+  /** Transferred canvas that owns the presentation surface. */
   readonly canvas: OffscreenCanvas;
+  /** Configured WebGPU canvas context. */
   readonly context: GPUCanvasContext;
+  /** Preferred presentation texture format. */
   readonly format: GPUTextureFormat;
+  /** Owned depth texture; replaced during resize. */
   depthTexture: GPUTexture;
+  /** Current depth attachment view. */
   depthView: GPUTextureView;
+  /** Physical canvas width in pixels. */
   width: number;
+  /** Physical canvas height in pixels. */
   height: number;
 }
 
+/** CSS-space dimensions supplied by the main thread for a surface update. */
 export interface SurfaceSize {
+  /** CSS pixel width. */
   readonly width: number;
+  /** CSS pixel height. */
   readonly height: number;
+  /** Device-pixel scale used to derive physical dimensions. */
   readonly devicePixelRatio: number;
 }
 
@@ -27,6 +39,7 @@ function createDepthTexture(device: GPUDevice, width: number, height: number): G
   });
 }
 
+/** Configures a canvas surface and creates its initial depth attachment. */
 export function createSurface(
   device: GPUDevice,
   canvas: OffscreenCanvas,
@@ -56,6 +69,7 @@ export function createSurface(
   };
 }
 
+/** Recreates depth resources when a surface's physical size changes. */
 export function resizeSurface(
   device: GPUDevice,
   surface: SurfaceState,
@@ -76,6 +90,7 @@ export function resizeSurface(
   return true;
 }
 
+/** Destroys the depth attachment and unconfigures the canvas context. */
 export function destroySurface(surface: SurfaceState): void {
   surface.depthTexture.destroy();
   surface.context.unconfigure();

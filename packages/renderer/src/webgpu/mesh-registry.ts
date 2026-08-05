@@ -1,19 +1,29 @@
 import type { CpuMeshData } from "../geometry/mesh-data.js";
 import { createStaticBuffer } from "./buffer.js";
 
+/** GPU buffers and draw metadata for one immutable indexed mesh. */
 export interface GpuMesh {
+  /** Position/normal vertex buffer. */
   readonly vertexBuffer: GPUBuffer;
+  /** Unsigned 32-bit index buffer. */
   readonly indexBuffer: GPUBuffer;
+  /** Number of indices supplied to `drawIndexed`. */
   readonly indexCount: number;
+  /** Total bytes reserved by both GPU buffers. */
   readonly byteLength: number;
 }
 
+/** Owns the built-in mesh GPU buffers for one renderer lifetime. */
 export interface MeshRegistry {
+  /** Looks up a mesh by its positive scene geometry handle. */
   get(handle: number): GpuMesh | undefined;
+  /** Current total bytes owned by the registry. */
   readonly gpuBytes: number;
+  /** Idempotently destroys all owned GPU buffers. */
   dispose(): void;
 }
 
+/** Uploads validated mesh sources transactionally and returns their owner registry. */
 export function createMeshRegistry(
   device: GPUDevice,
   sources: readonly CpuMeshData[],

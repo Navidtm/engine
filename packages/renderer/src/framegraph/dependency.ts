@@ -1,11 +1,15 @@
 import type { FramePass } from "./pass.js";
 import type { FrameResource } from "./resource.js";
 
+/** Directed dependency lists indexed by frame-pass position. */
 export interface PassDependencies {
+  /** Pass indices that must execute before each pass. */
   readonly incoming: readonly (readonly number[])[];
+  /** Pass indices that become eligible after each pass completes. */
   readonly outgoing: readonly (readonly number[])[];
 }
 
+/** Infers execution dependencies from explicit pass names and resource hazards. */
 export function buildPassDependencies<Context>(
   resources: readonly FrameResource[],
   passes: readonly FramePass<Context>[],

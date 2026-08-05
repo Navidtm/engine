@@ -1,8 +1,12 @@
+/** Immutable CPU-side mesh source accepted by the built-in mesh registry. */
 export interface CpuMeshData {
+  /** Positive renderer-local geometry identifier. */
   readonly handle: number;
+  /** Diagnostic label used for WebGPU resources and validation errors. */
   readonly label: string;
   /** Interleaved position.xyz and normal.xyz values. */
   readonly vertices: Float32Array<ArrayBuffer>;
+  /** Triangle-list indices into `vertices`. */
   readonly indices: Uint32Array<ArrayBuffer>;
 }
 
@@ -42,6 +46,7 @@ for (let face = 0; face < 6; face += 1) {
   }
 }
 
+/** Immutable triangle and cube source meshes addressed by scene geometry IDs. */
 export const BUILTIN_MESHES: readonly CpuMeshData[] = Object.freeze([
   Object.freeze({
     handle: 1,
