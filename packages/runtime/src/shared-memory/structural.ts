@@ -2,6 +2,7 @@ import type { RuntimeCommand } from "../protocol.js";
 import { SharedHeader, STRUCTURAL_COMMAND_WORDS } from "./layout.js";
 import type { SharedRuntimeViews } from "./views.js";
 
+/** Stable binary opcodes for fixed-width structural command records. */
 export const enum StructuralOpcode {
   Spawn = 1,
   Despawn = 2,
@@ -17,6 +18,7 @@ export const enum StructuralOpcode {
   RemoveBounds = 12,
 }
 
+/** Receives one decoded structural ring entry in FIFO worker-consumer order. */
 export type SharedCommandConsumer = (
   opcode: StructuralOpcode,
   entity: number,

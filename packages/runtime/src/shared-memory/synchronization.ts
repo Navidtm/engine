@@ -6,11 +6,15 @@ const PUBLICATION_FIELD_MASK = (1 << PUBLICATION_MASK_BITS) - 1;
 
 /** Complete transform value; only fields named by the mask are read on write. */
 export interface SharedTransformValue {
+  /** Position used only when the position flag is set. */
   readonly position: readonly [number, number, number];
+  /** Unit quaternion used only when the rotation flag is set. */
   readonly rotation: readonly [number, number, number, number];
+  /** Scale used only when the scale flag is set. */
   readonly scale: readonly [number, number, number];
 }
 
+/** Receives one stable transform publication from the single worker consumer. */
 export type SharedTransformConsumer = (
   entity: number,
   fieldMask: number,

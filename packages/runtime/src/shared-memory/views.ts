@@ -9,19 +9,31 @@ import {
   STRUCTURAL_COMMAND_WORDS,
 } from "./layout.js";
 
+/** Typed views over one initialized runtime `SharedArrayBuffer`. */
 export interface SharedRuntimeViews {
+  /** Owned SAB; its size and layout stay immutable for the engine lifetime. */
   readonly buffer: SharedArrayBuffer;
+  /** Validated layout used to construct every other view. */
   readonly layout: SharedMemoryLayout;
+  /** Atomic metadata, queue cursors, and transport counters. */
   readonly header: Int32Array<SharedArrayBuffer>;
+  /** Per-transform seqlock counters, written by the main thread. */
   readonly sequences: Int32Array<SharedArrayBuffer>;
+  /** Per-transform dirty ownership claims. */
   readonly dirty: Int32Array<SharedArrayBuffer>;
+  /** Packed generation plus field mask publication state. */
   readonly publications: Int32Array<SharedArrayBuffer>;
+  /** Bounded SPSC ring of dirty transform indices. */
   readonly queue: Int32Array<SharedArrayBuffer>;
+  /** Position/quaternion/scale slot values. */
   readonly transforms: Float32Array<SharedArrayBuffer>;
+  /** Integer view of the structural command ring. */
   readonly commandWords: Int32Array<SharedArrayBuffer>;
+  /** Float view of the same structural command ring bytes. */
   readonly commandFloats: Float32Array<SharedArrayBuffer>;
 }
 
+/** Creates typed views after checking `buffer.byteLength` against `layout`. */
 export function createSharedRuntimeViews(
   buffer: SharedArrayBuffer,
   layout: SharedMemoryLayout,
@@ -57,6 +69,7 @@ export function createSharedRuntimeViews(
   });
 }
 
+/** Opens and validates a buffer initialized by `allocateSharedRuntimeMemory`. */
 export function openSharedRuntimeViews(buffer: SharedArrayBuffer): SharedRuntimeViews {
   if (buffer.byteLength < SHARED_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT) {
     throw new Error("Shared-memory buffer is too small to contain a runtime header.");

@@ -26,12 +26,17 @@ interface WorkerRuntimeState {
   messages: number;
 }
 
+/** Small worker-global abstraction used by the runtime and deterministic tests. */
 export interface WorkerHost {
+  /** Sends a lifecycle, error, or stats event back to the main thread. */
   postMessage(message: WorkerToMainMessage): void;
+  /** Schedules the next worker render frame. */
   requestAnimationFrame(callback: FrameRequestCallback): number;
+  /** Cancels a previously scheduled worker frame. */
   cancelAnimationFrame(handle: number): void;
 }
 
+/** Creates a stateful worker message handler with transactional initialization. */
 export function createWorkerRuntime(host: WorkerHost): (message: MainToWorkerMessage) => void {
   const state: WorkerRuntimeState = {
     renderer: undefined,

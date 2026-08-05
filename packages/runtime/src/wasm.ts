@@ -88,25 +88,41 @@ interface LumeWasmExports extends WebAssembly.Exports {
   lume_visible_instances_ptr(engine: number): number;
 }
 
+/** Low-level counters sampled from one worker-owned WASM core. */
 export interface WasmStats {
+  /** Number of live ECS entities. */
   readonly entities: number;
+  /** Render-world instances before visibility culling. */
   readonly renderInstances: number;
+  /** Instances retained by visibility culling. */
   readonly visibleObjects: number;
+  /** Transform records applied during the most recent shared-memory update. */
   readonly sharedTransformUpdates: number;
+  /** Dirty ranges staged into WASM since creation. */
   readonly dirtyRanges: number;
+  /** Field bytes and range descriptors copied into WASM staging since creation. */
   readonly bytesUploaded: number;
+  /** Current WebAssembly linear-memory byte length. */
   readonly wasmHeapBytes: number;
 }
 
+/** Worker-only façade over the raw WASM ABI. */
 export interface WasmCore {
+  /** Applies one fallback structural command using the current camera aspect. */
   apply(command: RuntimeCommand, aspect: number): void;
+  /** Drains the shared structural SPSC ring when that transport is active. */
   updateSharedCommands(): void;
+  /** Updates all camera aspects after a valid surface resize. */
   resize(aspect: number): void;
+  /** Drains shared transforms, advances ECS, and returns borrowed render views. */
   update(): RenderFrame;
+  /** Returns non-allocating runtime and transport counters. */
   stats(): WasmStats;
+  /** Idempotently frees the Rust engine allocation. */
   dispose(): void;
 }
 
+/** Instantiates the ABI-matched WASM core and validates fixed transport capacity. */
 export async function createWasmCore(
   url: string,
   entityCapacity: number,
