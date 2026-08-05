@@ -38,6 +38,8 @@ export interface EngineConfig {
   readonly canvas: HTMLCanvasElement;
   readonly wasmUrl?: string | URL;
   readonly entityCapacity?: number;
+  /** Maximum structural commands held in the shared ring before ordered fallback. */
+  readonly structuralCommandCapacity?: number;
   readonly powerPreference?: GPUPowerPreference;
   readonly alphaMode?: GPUCanvasAlphaMode;
   readonly clearColor?: GPUColor;
@@ -187,12 +189,23 @@ export function createEngine(
   if (!Number.isSafeInteger(entityCapacity) || entityCapacity <= 0 || entityCapacity > 1 << 20) {
     throw new RangeError("entityCapacity must be an integer between 1 and 1,048,576.");
   }
+  const structuralCommandCapacity =
+    config.structuralCommandCapacity ?? Math.min(entityCapacity, 1_024);
+  if (
+    !Number.isSafeInteger(structuralCommandCapacity) ||
+    structuralCommandCapacity <= 0 ||
+    structuralCommandCapacity > entityCapacity
+  ) {
+    throw new RangeError(
+      "structuralCommandCapacity must be an integer between 1 and entityCapacity.",
+    );
+  }
   const state: EngineState = {
     config,
     worker: (config.workerFactory ?? createDefaultWorker)(),
     pendingCommands: [],
     sharedMemory: supportsSharedRuntimeMemory()
-      ? allocateSharedRuntimeMemory(entityCapacity)
+      ? allocateSharedRuntimeMemory(entityCapacity, structuralCommandCapacity)
       : undefined,
     status: "new",
     entityCapacity,

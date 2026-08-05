@@ -47,12 +47,12 @@ export function createSharedRuntimeViews(
     commandWords: new Int32Array(
       buffer,
       layout.commandByteOffset,
-      layout.capacity * STRUCTURAL_COMMAND_WORDS,
+      layout.commandCapacity * STRUCTURAL_COMMAND_WORDS,
     ),
     commandFloats: new Float32Array(
       buffer,
       layout.commandByteOffset,
-      layout.capacity * STRUCTURAL_COMMAND_WORDS,
+      layout.commandCapacity * STRUCTURAL_COMMAND_WORDS,
     ),
   });
 }
@@ -69,5 +69,6 @@ export function openSharedRuntimeViews(buffer: SharedArrayBuffer): SharedRuntime
     throw new Error("Shared-memory runtime version does not match.");
   }
   const capacity = Atomics.load(header, SharedHeader.Capacity);
-  return createSharedRuntimeViews(buffer, calculateSharedMemoryLayout(capacity));
+  const commandCapacity = Atomics.load(header, SharedHeader.CommandCapacity);
+  return createSharedRuntimeViews(buffer, calculateSharedMemoryLayout(capacity, commandCapacity));
 }

@@ -14,10 +14,12 @@ const identity = {
 
 describe("shared runtime memory", () => {
   it("opens a validated buffer with non-overlapping typed views", () => {
-    const allocated = allocateSharedRuntimeMemory(8);
+    const allocated = allocateSharedRuntimeMemory(8, 2);
     const opened = openSharedRuntimeViews(allocated.buffer);
     expect(opened.layout.capacity).toBe(8);
+    expect(opened.layout.commandCapacity).toBe(2);
     expect(opened.transforms).toHaveLength(8 * SHARED_TRANSFORM_FLOATS);
+    expect(opened.commandWords).toHaveLength(2 * 16);
     expect(opened.layout.sequenceByteOffset).toBeGreaterThanOrEqual(opened.header.byteLength);
     expect(opened.publications).toHaveLength(8);
   });
@@ -152,7 +154,7 @@ describe("shared runtime memory", () => {
   });
 
   it("publishes structural commands in FIFO order and reports overflow", () => {
-    const views = allocateSharedRuntimeMemory(2);
+    const views = allocateSharedRuntimeMemory(8, 2);
     expect(writeSharedCommand(views, { type: "spawn", entity: 3 })).toBe(true);
     expect(
       writeSharedCommand(views, {

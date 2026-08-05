@@ -25,14 +25,14 @@ export type SharedCommandConsumer = (
 ) => void;
 
 export function writeSharedCommand(views: SharedRuntimeViews, command: RuntimeCommand): boolean {
-  if (Atomics.load(views.header, SharedHeader.CommandPending) >= views.layout.capacity) {
+  if (Atomics.load(views.header, SharedHeader.CommandPending) >= views.layout.commandCapacity) {
     Atomics.add(views.header, SharedHeader.DroppedCommands, 1);
     return false;
   }
   const tail = Atomics.load(views.header, SharedHeader.CommandTail);
   const offset = tail * STRUCTURAL_COMMAND_WORDS;
   encodeCommand(views, offset, command);
-  Atomics.store(views.header, SharedHeader.CommandTail, (tail + 1) % views.layout.capacity);
+  Atomics.store(views.header, SharedHeader.CommandTail, (tail + 1) % views.layout.commandCapacity);
   Atomics.add(views.header, SharedHeader.CommandPending, 1);
   Atomics.add(views.header, SharedHeader.SharedWrites, 1);
   Atomics.notify(views.header, SharedHeader.CommandPending);
@@ -50,7 +50,11 @@ export function drainSharedCommands(
     const opcode = Atomics.load(views.commandWords, offset) as StructuralOpcode;
     const entity = Atomics.load(views.commandWords, offset + 1) >>> 0;
     consume(opcode, entity, offset, views);
-    Atomics.store(views.header, SharedHeader.CommandHead, (head + 1) % views.layout.capacity);
+    Atomics.store(
+      views.header,
+      SharedHeader.CommandHead,
+      (head + 1) % views.layout.commandCapacity,
+    );
     Atomics.sub(views.header, SharedHeader.CommandPending, 1);
     drained += 1;
   }

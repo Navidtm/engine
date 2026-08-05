@@ -20,18 +20,29 @@ sparse set reject capacity overflow instead of growing WASM memory. A WASM
 memory growth refreshes JavaScript typed views but does not change the exported
 staging offsets; normal engine operation must not require one.
 
-## Shared allocation
+## Shared allocation and budget
 
-The allocation is derived from `entityCapacity`:
+The allocation has two explicit, immutable budgets: `entityCapacity` for
+transform slots and `structuralCommandCapacity` for the SPSC command ring. The
+second defaults to `min(entityCapacity, 1,024)`, because short structural bursts
+do not justify reserving 64 bytes per entity. Overflow preserves ordering by
+switching subsequent structural commands to the message fallback.
 
 ```text
-header:              15 × i32
+SAB bytes = 64-byte header + entityCapacity × 56 bytes
+          + structuralCommandCapacity × 64 bytes
+```
+
+The allocation is therefore:
+
+```text
+header:              16 × i32
 sequences:           capacity × i32
 dirty flags:         capacity × i32
 publications:        capacity × i32 (generation + field mask)
 transform queue:     capacity × i32
 transforms:          capacity × 10 × f32
-structural commands: capacity × 16 × i32
+structural commands: commandCapacity × 16 × i32
 ```
 
 The structural words also have a `Float32Array` view, so command encoding does
@@ -94,8 +105,9 @@ the compact format.
 
 ## Capacity and fallback
 
-Transform and structural queues are bounded by `entityCapacity`. Dirty-bit
-coalescing means the transform queue cannot exceed one pending entry per slot.
+The transform queue is bounded by `entityCapacity`; dirty-bit coalescing means
+it cannot exceed one pending entry per slot. The structural queue is separately
+bounded by `structuralCommandCapacity`.
 Structural overflow increments `droppedCommands`; the attempted command and all
 later structural commands switch to ordered `postMessage` fallback, so scene
 operations are not semantically dropped.

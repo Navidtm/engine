@@ -6,6 +6,17 @@ import { createEngine } from "./engine.js";
 afterEach(() => vi.unstubAllGlobals());
 
 describe("high-level engine API", () => {
+  it("rejects structural command budgets outside the entity budget", () => {
+    const canvas = {} as HTMLCanvasElement;
+    expect(() =>
+      createEngine(canvas, {
+        entityCapacity: 4,
+        structuralCommandCapacity: 5,
+        workerFactory: () => ({}) as Worker,
+      }),
+    ).toThrow("structuralCommandCapacity");
+  });
+
   it("creates a scene without exposing ECS commands", async () => {
     let onMessage: ((event: MessageEvent<WorkerToMainMessage>) => void) | undefined;
     const posted: MainToWorkerMessage[] = [];
