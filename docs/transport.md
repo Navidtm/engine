@@ -68,8 +68,11 @@ old result could lose a same-field concurrent write or merge fields across a
 recycled generation.
 
 These numbers isolate transport CPU work in Node and are not browser frame-time
-claims. The browser harness records user agent, logical cores, worker round-trip
-and preparation timing for controlled hardware runs. Raw results are in
+or latency claims. They do not exercise browser worker scheduling, structured
+clone, a real WASM core, or WebGPU submission. The browser harness is only a
+collection tool until controlled Chrome and Edge reports are committed for the
+same hardware, browser versions, scene scale, percentile distribution,
+missed-frame rate, and peak heap. Raw Node results are in
 `benchmarks/results/transport-hardening-latest.json`.
 
 ## Remaining bottlenecks
@@ -80,6 +83,6 @@ and preparation timing for controlled hardware runs. Raw results are in
 4. The 12-bit generation protection window wraps after 4096 slot reuses.
 5. Browser scheduling and worker WebGPU support remain platform-dependent.
 
-The transport contract is now sufficient for rendering scalability work.
-Further optimization should be driven by browser traces, not additional
-communication architecture changes.
+The transport correctness contract is complete, but its latency budget is
+unproven at browser level. Renderer scalability work may proceed in parallel;
+transport performance claims require the controlled browser evidence above.
