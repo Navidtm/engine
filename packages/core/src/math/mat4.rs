@@ -1,6 +1,9 @@
 use super::{Mat4, Quat, Vec3};
 
-/// Writes a column-major TRS matrix without allocating.
+/// Writes a column-major transform matrix from translation, unit quaternion, and scale.
+///
+/// `out` may reuse an existing matrix allocation. `rotation` is expected to be
+/// normalized; this low-level routine deliberately does not validate it.
 pub fn compose(out: &mut Mat4, translation: &Vec3, rotation: &Quat, scale: &Vec3) {
     let [x, y, z, w] = rotation.0;
     let [sx, sy, sz] = scale.0;
@@ -38,6 +41,9 @@ pub fn compose(out: &mut Mat4, translation: &Vec3, rotation: &Quat, scale: &Vec3
 }
 
 /// Writes a WebGPU-compatible right-handed perspective projection.
+///
+/// `vertical_fov` is in radians. In debug builds, invalid aspect and clipping
+/// values trigger an assertion; callers must ensure `far > near > 0`.
 pub fn perspective(out: &mut Mat4, vertical_fov: f32, aspect: f32, near: f32, far: f32) {
     debug_assert!(aspect > 0.0 && near > 0.0 && far > near);
     let focal = 1.0 / (vertical_fov * 0.5).tan();
@@ -63,7 +69,9 @@ pub fn perspective(out: &mut Mat4, vertical_fov: f32, aspect: f32, near: f32, fa
 }
 
 /// Writes the inverse rigid transform used as a camera view matrix.
-/// Camera scale is intentionally ignored.
+///
+/// Camera scale is intentionally ignored. `rotation` must be normalized for a
+/// true inverse rotation.
 pub fn view_from_transform(out: &mut Mat4, translation: &Vec3, rotation: &Quat) {
     let mut world = Mat4::default();
     compose(
@@ -94,7 +102,10 @@ pub fn view_from_transform(out: &mut Mat4, translation: &Vec3, rotation: &Quat) 
     ];
 }
 
-/// Multiplies two column-major matrices into caller-owned storage.
+/// Multiplies `left * right` column-major matrices into caller-owned storage.
+///
+/// The implementation uses a stack-local temporary, so `out` may alias either
+/// input without corrupting the calculation.
 pub fn multiply(out: &mut Mat4, left: &Mat4, right: &Mat4) {
     let a = &left.0;
     let b = &right.0;
