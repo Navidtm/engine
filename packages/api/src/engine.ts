@@ -35,9 +35,11 @@ import {
   validateLiveEntity,
 } from "./entity-lifecycle.js";
 
+/** Lifecycle state exposed by an engine instance. */
 export type EngineStatus =
   "new" | "initializing" | "ready" | "running" | "stopped" | "disposed" | "failed";
 
+/** Full configuration accepted by {@link createEngine}. */
 export interface EngineConfig {
   readonly canvas: HTMLCanvasElement;
   readonly wasmUrl?: string | URL;
@@ -54,13 +56,16 @@ export interface EngineConfig {
   readonly onError?: (error: Error) => void;
 }
 
+/** Configuration for the overload of {@link createEngine} that receives a canvas first. */
 export type EngineOptions = Omit<EngineConfig, "canvas">;
 
+/** Opaque handle for a color-only material owned by one engine. */
 export interface BasicMaterialHandle {
   readonly kind: "basic-material";
   readonly id: Entity;
 }
 
+/** Mesh handle plus live transform controls. Do not construct this object manually. */
 export interface MeshHandle {
   readonly kind: "mesh";
   readonly id: Entity;
@@ -69,6 +74,7 @@ export interface MeshHandle {
   readonly scale: Vector3Control;
 }
 
+/** Perspective-camera handle plus live transform controls. */
 export interface CameraHandle {
   readonly kind: "camera";
   readonly id: Entity;
@@ -77,6 +83,7 @@ export interface CameraHandle {
   readonly scale: Vector3Control;
 }
 
+/** Mutable position or scale control that publishes only the changed transform field. */
 export interface Vector3Control {
   readonly x: number;
   readonly y: number;
@@ -84,6 +91,7 @@ export interface Vector3Control {
   set(x: number, y: number, z: number): void;
 }
 
+/** Mutable rotation control using XYZW quaternion components. */
 export interface QuaternionControl {
   readonly x: number;
   readonly y: number;
@@ -92,13 +100,17 @@ export interface QuaternionControl {
   set(x: number, y: number, z: number, w: number): void;
 }
 
+/** Any high-level resource handle that can be passed to {@link Engine.destroy}. */
 export type EngineHandle = BasicMaterialHandle | MeshHandle | CameraHandle;
+/** A high-level handle that has a transform. */
 export type SceneHandle = MeshHandle | CameraHandle;
 
+/** Creation options for a basic linear-RGBA material. */
 export interface BasicMaterialOptions {
   readonly color?: Color;
 }
 
+/** Creation options for a built-in triangle or cube mesh. */
 export interface MeshOptions {
   readonly geometry: "cube" | "triangle";
   readonly material?: BasicMaterialHandle | "basic";
@@ -108,6 +120,7 @@ export interface MeshOptions {
   readonly bounds?: { readonly center?: Vec3; readonly radius: number };
 }
 
+/** Creation options for a perspective camera. Angles are in radians. */
 export interface PerspectiveCameraOptions {
   readonly position?: Vec3;
   readonly rotation?: Quat;
@@ -116,12 +129,14 @@ export interface PerspectiveCameraOptions {
   readonly far?: number;
 }
 
+/** Convenience authoring functions available as `engine.create`. */
 export interface CreateApi {
   basicMaterial(options?: BasicMaterialOptions): BasicMaterialHandle;
   mesh(options: MeshOptions): MeshHandle;
   perspectiveCamera(options?: PerspectiveCameraOptions): CameraHandle;
 }
 
+/** Batched transform setter available as `engine.set`. */
 export interface SetApi {
   transform(
     handle: SceneHandle,
@@ -133,6 +148,7 @@ export interface SetApi {
   ): void;
 }
 
+/** Advanced ECS-style authoring API. Prefer `engine.create` for normal use. */
 export interface WorldApi {
   createEntity(): Entity;
   destroyEntity(entity: Entity): void;
@@ -140,6 +156,16 @@ export interface WorldApi {
   remove(entity: Entity, component: Component["kind"]): void;
 }
 
+/**
+ * Public engine facade. Create resources before `init`; call `start` after it resolves.
+ *
+ * @example
+ * const engine = createEngine(canvas);
+ * engine.create.mesh({ geometry: "cube" });
+ * engine.create.perspectiveCamera({ position: [0, 0, 3] });
+ * await engine.init();
+ * engine.start();
+ */
 export interface Engine {
   readonly create: CreateApi;
   readonly set: SetApi;
@@ -182,6 +208,11 @@ interface EngineState {
   structuralFallback: boolean;
 }
 
+/**
+ * Creates a worker-owned WebGPU engine. It does not allocate GPU resources until `init()`.
+ *
+ * @throws {RangeError} When capacity budgets are invalid.
+ */
 export function createEngine(canvas: HTMLCanvasElement, options?: EngineOptions): Engine;
 export function createEngine(config: EngineConfig): Engine;
 export function createEngine(
