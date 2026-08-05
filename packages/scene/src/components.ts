@@ -17,8 +17,11 @@ const WHITE: Color = Object.freeze([1, 1, 1, 1]);
 
 /** Optional fields for a local transform. Defaults are origin, identity rotation, and unit scale. */
 export interface TransformOptions {
+  /** Local XYZ translation; defaults to `[0, 0, 0]`. */
   readonly position?: Vec3;
+  /** Local XYZW quaternion; defaults to identity and must be non-zero. */
   readonly rotation?: Quat;
+  /** Local XYZ scale; defaults to `[1, 1, 1]`. */
   readonly scale?: Vec3;
 }
 
@@ -46,6 +49,7 @@ export function transform(options: TransformOptions = {}): TransformComponent {
 
 /** Options for the current color-only basic material. */
 export interface MaterialOptions {
+  /** Linear RGBA color in the inclusive `[0, 1]` range; defaults to white. */
   readonly color?: Color;
 }
 
@@ -65,8 +69,11 @@ export function material(options: MaterialOptions = {}): MaterialComponent {
 
 /** Perspective camera options expressed in radians and world units. */
 export interface CameraOptions {
+  /** Vertical FOV in radians; defaults to `PI / 3`. */
   readonly verticalFov?: number;
+  /** Positive near clipping plane; defaults to `0.1`. */
   readonly near?: number;
+  /** Far clipping plane greater than near; defaults to `1000`. */
   readonly far?: number;
 }
 
@@ -98,7 +105,9 @@ export function mesh(geometry: MeshComponent["geometry"], materialEntity: Entity
 
 /** Sphere bounds used by CPU visibility culling. */
 export interface BoundsOptions {
+  /** Local XYZ sphere center; defaults to the origin. */
   readonly center?: Vec3;
+  /** Finite, non-negative sphere radius. */
   readonly radius: number;
 }
 
