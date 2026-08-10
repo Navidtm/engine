@@ -1,4 +1,4 @@
-export type { WorldApi } from "./engine";
+export type { WorldApi } from "./engine/index.js";
 export type {
   BoundsComponent,
   CameraComponent,

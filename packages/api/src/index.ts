@@ -19,7 +19,7 @@ export type {
   SetApi,
   Vector3Control,
   WorldApi,
-} from "./engine";
-export { createEngine } from "./engine";
+} from "./engine/index.js";
+export { createEngine } from "./engine/index.js";
 export type { EngineStats } from "@lume/runtime";
 export type { Color, Quat, Vec2, Vec3, Vec4 } from "@lume/scene";
