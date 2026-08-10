@@ -16,7 +16,7 @@
     "format": "prettier --write . && cargo fmt --all",
     "format:check": "prettier --check . && cargo fmt --all -- --check",
     "lint": "eslint . && cargo clippy --workspace --all-targets -- -D warnings",
-    "typecheck": "pnpm -r typecheck",
+    "typecheck": "pnpm -r --filter './packages/**' build && pnpm -r typecheck",
     "test": "pnpm test:rust && pnpm test:ts",
     "test:rust": "cargo test --workspace",
     "test:ts": "pnpm -r --filter './packages/**' test"
