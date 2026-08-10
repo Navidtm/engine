@@ -58,8 +58,12 @@ try {
   await writeFile(
     nativeConsumer,
     `import { readFile } from "node:fs/promises";
+import { createEngine } from "@lume/api";
 import { getLumeWasmUrl, LUME_WASM_ABI_VERSION } from "@lume/runtime/wasm-url";
 
+if (typeof createEngine !== "function") {
+  throw new Error("Packaged API does not expose createEngine to native ESM consumers.");
+}
 const url = getLumeWasmUrl();
 const bytes = await readFile(url);
 const { instance } = await WebAssembly.instantiate(bytes, {});
