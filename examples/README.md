@@ -1,6 +1,10 @@
 # Lume examples
 
-Every example is a standalone Vite application. Run one with `pnpm --filter <package-name> dev`; its `predev` hook builds the current packages and copies the matching WASM binary. The dev server supplies the cross-origin-isolation headers required for the shared-memory transport.
+Every example is a standalone Vite application. Run one with
+`pnpm --filter <package-name> dev`; its `predev` hook builds the current packages
+and their version-matched WASM asset. Vite serves that package-owned binary
+without a per-example `public` copy. The dev server supplies the
+cross-origin-isolation headers required for the shared-memory transport.
 
 | Example            | Command                                              | What it demonstrates                                                             |
 | ------------------ | ---------------------------------------------------- | -------------------------------------------------------------------------------- |

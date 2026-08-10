@@ -5,8 +5,8 @@ import { SHARED_TRANSFORM_FLOATS, TransformField } from "./shared-memory/layout.
 import { drainSharedCommands, StructuralOpcode } from "./shared-memory/structural.js";
 import { drainSharedTransforms } from "./shared-memory/synchronization.js";
 import { openSharedRuntimeViews } from "./shared-memory/views.js";
+import { LUME_WASM_ABI_VERSION } from "./wasm-abi.js";
 
-const EXPECTED_ABI_VERSION = 6;
 const INSTANCE_FLOATS = 20;
 const CAMERA_FLOATS = 32;
 
@@ -130,15 +130,49 @@ export async function createWasmCore(
   sharedMemory?: SharedArrayBuffer,
   initialAspect = 1,
 ): Promise<WasmCore> {
-  const response = await fetch(url);
+  let response: Response;
+  try {
+    response = await fetch(url);
+  } catch (cause) {
+    throw new Error(
+      `Failed to fetch Lume WASM from ${describeUrl(url)}. Check the URL, network access, and the page's CSP connect-src policy.`,
+      { cause },
+    );
+  }
   if (!response.ok) {
-    throw new Error(`Failed to load Lume WASM (${response.status} ${response.statusText}).`);
+    throw new Error(
+      `Failed to fetch Lume WASM from ${describeUrl(url)} (${response.status} ${response.statusText}). Verify that the version-matched artifact is deployed at this URL.`,
+    );
   }
-  const module = await WebAssembly.instantiate(await response.arrayBuffer(), {});
+  const contentType = response.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase();
+  if (
+    contentType !== undefined &&
+    contentType !== "application/wasm" &&
+    contentType !== "application/octet-stream"
+  ) {
+    throw new Error(
+      `Lume WASM at ${describeUrl(url)} was served as '${contentType}'. Configure the server to use 'application/wasm'.`,
+    );
+  }
+  let module: WebAssembly.WebAssemblyInstantiatedSource;
+  try {
+    module = await WebAssembly.instantiate(await response.arrayBuffer(), {});
+  } catch (cause) {
+    throw new Error(
+      `Failed to compile Lume WASM from ${describeUrl(url)}. The artifact may be corrupt or blocked by CSP; allow WebAssembly with script-src 'wasm-unsafe-eval' where required.`,
+      { cause },
+    );
+  }
+  const rawExports = module.instance.exports as Record<string, unknown>;
+  const abiVersionExport = rawExports["lume_abi_version"];
+  const actualAbiVersion =
+    typeof abiVersionExport === "function" ? (abiVersionExport() as unknown) : undefined;
+  if (actualAbiVersion !== LUME_WASM_ABI_VERSION) {
+    throw new Error(
+      `Lume WASM ABI mismatch: @lume/runtime expects ${LUME_WASM_ABI_VERSION}, but the artifact reports ${actualAbiVersion ?? "no version"}. Use the artifact shipped with the same @lume/runtime version.`,
+    );
+  }
   const exports = module.instance.exports as LumeWasmExports;
-  if (exports.lume_abi_version?.() !== EXPECTED_ABI_VERSION) {
-    throw new Error("Lume WASM ABI version does not match the TypeScript runtime.");
-  }
   const handle = exports.lume_engine_create(entityCapacity, transformCapacity);
   if (handle === 0) throw new Error("Lume WASM core allocation failed.");
   const visibleCapacity = exports.lume_visible_capacity(handle);
@@ -375,6 +409,19 @@ export async function createWasmCore(
     },
   };
   return core;
+}
+
+function describeUrl(value: string): string {
+  try {
+    const url = new URL(value);
+    url.username = "";
+    url.password = "";
+    url.search = "";
+    url.hash = "";
+    return url.href;
+  } catch {
+    return JSON.stringify(value);
+  }
 }
 
 function createFrameViews(

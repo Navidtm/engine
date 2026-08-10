@@ -6,7 +6,7 @@
   "packageManager": "pnpm@11.17.0",
   "scripts": {
     "build": "pnpm build:wasm && pnpm -r --filter './packages/**' build && pnpm -r --filter './examples/**' build && pnpm -r --filter './benchmarks/**' build",
-    "build:wasm": "cargo build --release --target wasm32-unknown-unknown -p lume-wasm && cp target/wasm32-unknown-unknown/release/lume_wasm.wasm examples/triangle/public/lume_core.wasm && cp target/wasm32-unknown-unknown/release/lume_wasm.wasm examples/cube/public/lume_core.wasm && cp target/wasm32-unknown-unknown/release/lume_wasm.wasm examples/instancing/public/lume_core.wasm && cp target/wasm32-unknown-unknown/release/lume_wasm.wasm examples/transform-controls/public/lume_core.wasm && cp target/wasm32-unknown-unknown/release/lume_wasm.wasm examples/lifecycle/public/lume_core.wasm && cp target/wasm32-unknown-unknown/release/lume_wasm.wasm examples/camera/public/lume_core.wasm && cp target/wasm32-unknown-unknown/release/lume_wasm.wasm benchmarks/renderer/public/lume_core.wasm && cp target/wasm32-unknown-unknown/release/lume_wasm.wasm benchmarks/comparison/public/lume_core.wasm",
+    "build:wasm": "node scripts/build-wasm.mjs",
     "prepare:examples": "pnpm build:wasm && pnpm -r --filter './packages/**' build",
     "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test",
     "dev": "pnpm --filter @lume/example-cube dev",
@@ -18,6 +18,7 @@
     "lint": "eslint . && cargo clippy --workspace --all-targets -- -D warnings",
     "typecheck": "pnpm -r --filter './packages/**' build && pnpm -r typecheck",
     "test": "pnpm test:rust && pnpm test:ts",
+    "test:packaging": "node scripts/test-packaged-consumer.mjs",
     "test:rust": "cargo test --workspace",
     "test:ts": "pnpm -r --filter './packages/**' test"
   },

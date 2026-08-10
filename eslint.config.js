@@ -11,7 +11,7 @@ export default tseslint.config(
   eslint.configs.recommended,
   ...tseslint.configs.strict,
   {
-    files: ["benchmarks/**/*.mjs"],
+    files: ["benchmarks/**/*.mjs", "scripts/**/*.mjs"],
     languageOptions: { globals: globals.node },
   },
   {

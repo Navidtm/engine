@@ -30,6 +30,12 @@ paths, and lets any bundler load the module with `WebAssembly.instantiate`.
 Allocations are permitted during initialization and structural world changes;
 frame updates operate on preallocated storage.
 
+[ADR 005](../.agents/decisions/005-wasm-distribution.md) defines distribution:
+the version-matched raw binary ships beside `@lume/runtime`, a static
+module-relative URL supports native ESM and hashed bundler assets, and the
+runtime validates the binary ABI before using any other export. Applications
+only provide `wasmUrl` when intentionally self-hosting or using a CDN.
+
 WebGPU is intentionally visible in the renderer package. Adapter/device,
 surface, buffers, textures, shader creation, pipeline caching, and command
 encoding are separate modules, but they map directly to WebGPU concepts rather

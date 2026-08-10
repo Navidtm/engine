@@ -73,9 +73,51 @@ hardware, resolution, and configuration before numbers are compared.
 The main-thread/worker transport comparison lives under `benchmarks/transport`.
 See [benchmarking.md](docs/benchmarking.md) for the complete measurement policy.
 
-The examples expect the raw WebAssembly artifact in their `public` directories.
-`pnpm build:wasm` builds and copies that artifact before TypeScript packages are
-built.
+`pnpm build:wasm` builds the raw WebAssembly artifact into the `@lume/runtime`
+package. Examples and benchmarks resolve that version-matched package asset;
+they do not require copies in their `public` directories.
+
+## Package usage
+
+Install the browser-facing package:
+
+```sh
+pnpm add @lume/api
+```
+
+The normal Vite setup needs no WASM copy or URL configuration:
+
+```ts
+import { createEngine } from "@lume/api";
+
+const canvas = document.querySelector("canvas");
+if (canvas === null) throw new Error("Canvas is required.");
+
+const engine = createEngine({ canvas });
+await engine.init();
+engine.start();
+```
+
+Vite emits the package-owned binary as a fingerprinted asset, including for
+applications hosted below a subpath. Native ESM servers must preserve the
+published `@lume/runtime/dist` layout so `lume_core.wasm` remains beside
+`index.js`.
+
+For an application-controlled CDN or self-hosted location, provide a URL copied
+from the same `@lume/runtime` version:
+
+```ts
+const engine = createEngine({
+  canvas,
+  wasmUrl: new URL("./engine-assets/lume_core.wasm", document.baseURI),
+});
+```
+
+Serve the binary as `application/wasm` (`application/octet-stream` is accepted
+by the raw-buffer loader for compatibility). Restrictive Content Security Policies
+must allow its origin in `connect-src` and WebAssembly compilation with
+`script-src 'wasm-unsafe-eval'` where the target browser requires it. ABI
+mismatches fail initialization with the expected and actual versions.
 
 ## Package map
 

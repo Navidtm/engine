@@ -77,7 +77,6 @@ async function runLume(
   const side = Math.ceil(Math.sqrt(entities));
   const engine = createEngine({
     canvas: target,
-    wasmUrl: "/lume_core.wasm",
     entityCapacity: entities + 2,
     autoResize: false,
     powerPreference: "high",

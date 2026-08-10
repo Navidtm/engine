@@ -11,10 +11,15 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
+    "./wasm-url": {
+      "types": "./dist/wasm-url.d.ts",
+      "import": "./dist/wasm-url.js"
+    },
     "./worker": "./dist/worker.js"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "prepack": "pnpm --workspace-root build:wasm && pnpm build",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run --passWithNoTests"
   },

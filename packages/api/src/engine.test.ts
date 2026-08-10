@@ -84,7 +84,7 @@ describe("high-level engine API", () => {
     const engine = createEngine(canvas, {
       autoResize: false,
       workerFactory: () => worker,
-      wasmUrl: "/lume_core.wasm",
+      wasmUrl: "assets/lume_core.wasm",
       powerPreference: "high",
     });
     const blue = engine.create.basicMaterial({ color: [0.2, 0.4, 1, 1] });
@@ -95,6 +95,7 @@ describe("high-level engine API", () => {
     const initialization = engine.init();
     expect(posted[0]?.type).toBe("init");
     if (posted[0]?.type === "init") {
+      expect(posted[0].value.wasmUrl).toBe("https://example.test/assets/lume_core.wasm");
       expect(posted[0].value.renderer.powerPreference).toBe("high-performance");
       expect(posted[0].value.entityCapacity).toBe(4_097);
       expect(posted[0].value.transformCapacity).toBe(4_097);
@@ -130,5 +131,34 @@ describe("high-level engine API", () => {
     expect(recycled).toEqual({ index: cube.id.index, generation: cube.id.generation + 1 });
     expect(() => cube.position.set(0, 0, 0)).toThrow("Entity handle is stale");
     expect(() => engine.world.destroyEntity(cube.id)).toThrow("Entity handle is stale");
+  });
+
+  it("uses the package-owned WASM artifact by default", async () => {
+    const posted: MainToWorkerMessage[] = [];
+    const worker = {
+      addEventListener: vi.fn(),
+      postMessage(message: MainToWorkerMessage) {
+        posted.push(message);
+      },
+      terminate: vi.fn(),
+    } as unknown as Worker;
+    const canvas = {
+      getBoundingClientRect: () => ({ width: 1, height: 1 }),
+      transferControlToOffscreen: () => ({}) as OffscreenCanvas,
+    } as HTMLCanvasElement;
+    vi.stubGlobal("window", { devicePixelRatio: 1 });
+    vi.stubGlobal("crossOriginIsolated", false);
+
+    const engine = createEngine(canvas, { autoResize: false, workerFactory: () => worker });
+    const initialization = engine.init();
+
+    const message = posted[0];
+    expect(message?.type).toBe("init");
+    if (message?.type === "init") {
+      expect(new URL(message.value.wasmUrl).pathname).toMatch(/\/lume_core\.wasm$/);
+      expect(message.value.wasmUrl).not.toContain("/public/");
+    }
+    engine.dispose();
+    await expect(initialization).rejects.toThrow("disposed during initialization");
   });
 });

@@ -17,7 +17,6 @@ const statusOutput = status;
 
 const engine = createEngine({
   canvas,
-  wasmUrl: "/lume_core.wasm",
   camera: { position: [0, 0, 5], verticalFov: Math.PI / 3, near: 0.1, far: 100 },
   clearColor: { r: 0.012, g: 0.018, b: 0.035, a: 1 },
 });

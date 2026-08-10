@@ -8,7 +8,6 @@ if (canvas === null || status === null) throw new Error("Example markup is incom
 
 const engine = createEngine({
   canvas,
-  wasmUrl: "/lume_core.wasm",
   powerPreference: "high",
   camera: { position: [0, 0, 3] },
   clearColor: { r: 0.015, g: 0.02, b: 0.035, a: 1 },
