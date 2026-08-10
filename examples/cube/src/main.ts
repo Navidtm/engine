@@ -11,7 +11,6 @@ if (canvas === null || status === null || statsOutput === null) {
 
 const engine = createEngine({
   canvas,
-  wasmUrl: "/lume_core.wasm",
   powerPreference: "high",
   entityCapacity: 4_096,
   camera: { position: [0, 0, 3], near: 0.1, far: 100 },

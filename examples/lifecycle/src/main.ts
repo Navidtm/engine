@@ -13,7 +13,6 @@ const statusNode = status;
 
 const engine = createEngine({
   canvas,
-  wasmUrl: "/lume_core.wasm",
   entityCapacity: 8,
   camera: { position: [0, 0, 3], far: 100 },
   clearColor: { r: 0.018, g: 0.012, b: 0.03, a: 1 },

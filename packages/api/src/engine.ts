@@ -12,6 +12,7 @@ import {
   writeSharedCommand,
   writeSharedTransform,
 } from "@lume/runtime";
+import { getLumeWasmUrl } from "@lume/runtime/wasm-url";
 import {
   bounds,
   boxGeometry,
@@ -89,7 +90,7 @@ export interface EngineCamera {
 export interface EngineConfig {
   /** Canvas transferred to the worker as an OffscreenCanvas during `init()`. */
   readonly canvas: HTMLCanvasElement;
-  /** Raw Lume WASM URL; defaults to `/lume_core.wasm`. */
+  /** Optional self-hosted/CDN WASM URL; defaults to the artifact shipped by `@lume/runtime`. */
   readonly wasmUrl?: string | URL;
   /** Maximum application-owned entity slots, from 1 through 1,048,575. */
   readonly entityCapacity?: number;
@@ -850,6 +851,12 @@ function initialize(state: EngineState): Promise<void> {
   if (!("transferControlToOffscreen" in state.config.canvas)) {
     return Promise.reject(new Error("OffscreenCanvas transfer is unavailable in this browser."));
   }
+  let wasmUrl: string;
+  try {
+    wasmUrl = resolveWasmUrl(state.config.wasmUrl);
+  } catch (error) {
+    return Promise.reject(error instanceof Error ? error : new Error(String(error)));
+  }
   state.status = "initializing";
   state.initPromise = new Promise<void>((resolve, reject) => {
     state.resolveInit = resolve;
@@ -870,7 +877,7 @@ function initialize(state: EngineState): Promise<void> {
     value: {
       protocolVersion: RUNTIME_PROTOCOL_VERSION,
       canvas,
-      wasmUrl: String(state.config.wasmUrl ?? new URL("/lume_core.wasm", document.baseURI)),
+      wasmUrl,
       entityCapacity: state.entityCapacity,
       transformCapacity: state.transformCapacity,
       size: {
@@ -889,6 +896,18 @@ function initialize(state: EngineState): Promise<void> {
     state.resizeObserver.observe(state.config.canvas);
   }
   return state.initPromise;
+}
+
+function resolveWasmUrl(value: string | URL | undefined): string {
+  if (value === undefined) return getLumeWasmUrl().href;
+  if (value instanceof URL) return value.href;
+  try {
+    return new URL(value, document.baseURI).href;
+  } catch (cause) {
+    throw new TypeError(`wasmUrl must be a valid absolute or document-relative URL: ${value}`, {
+      cause,
+    });
+  }
 }
 
 function webGpuPowerPreference(preference: PowerPreference): GPUPowerPreference {

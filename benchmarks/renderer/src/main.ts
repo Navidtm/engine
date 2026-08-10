@@ -24,7 +24,6 @@ const side = Math.ceil(Math.sqrt(count));
 
 const engine = createEngine({
   canvas,
-  wasmUrl: "/lume_core.wasm",
   entityCapacity: count + 2,
   autoResize: false,
   powerPreference: "high",

@@ -14,6 +14,11 @@ await engine.init();
 engine.start();
 ```
 
+The version-matched WASM binary ships with `@lume/runtime` and is resolved
+automatically. Vite fingerprints and emits it without a `public` copy. Set
+`wasmUrl` only when intentionally hosting that same package artifact at an
+application or CDN URL.
+
 Use `engine.create` for normal authoring. `engine.world` is the advanced API
 for adding descriptors from `@lume/scene`. Call `dispose()` when the page or
 view is no longer active. Every handle belongs to exactly one engine.

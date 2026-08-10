@@ -7,7 +7,7 @@ const slider = document.querySelector<HTMLInputElement>("#x");
 const output = document.querySelector<HTMLOutputElement>("#stats");
 if (canvas === null || slider === null || output === null)
   throw new Error("Example markup is incomplete.");
-const engine = createEngine({ canvas, wasmUrl: "/lume_core.wasm" });
+const engine = createEngine({ canvas });
 const cube = engine.create.mesh({ geometry: "cube", position: [0, 0, -3] });
 slider.addEventListener("input", () => cube.position.set(Number(slider.value), 0, -3));
 await engine.init();

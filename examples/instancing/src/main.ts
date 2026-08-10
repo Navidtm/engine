@@ -7,7 +7,6 @@ const output = document.querySelector<HTMLOutputElement>("#stats");
 if (canvas === null || output === null) throw new Error("Example markup is incomplete.");
 const engine = createEngine({
   canvas,
-  wasmUrl: "/lume_core.wasm",
   entityCapacity: 1_024,
   camera: { position: [0, 0, 5], far: 100 },
   clearColor: { r: 0.01, g: 0.015, b: 0.03, a: 1 },
