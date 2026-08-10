@@ -100,6 +100,29 @@ This makes the replacement live in Rust before its transform can apply. An old
 publication is either replaced by the newer packed generation or rejected by
 Rust liveness validation.
 
+## Frame scheduling contract
+
+The worker owns presentation scheduling; the main thread never drives it with a
+per-frame callback. [ADR 006](../.agents/decisions/006-frame-scheduling.md)
+defines the accepted target semantics:
+
+- automatic mode uses worker `requestAnimationFrame`, with a worker timer as an
+  explicit non-vsync fallback;
+- simulation advances in bounded fixed ticks and renders once per presentation
+  callback;
+- manual mode advances an exact integer tick count without reading wall time;
+- `start` and `stop` are idempotent and stale callbacks cannot survive a
+  scheduler epoch change;
+- hidden-page suspension resets wall-time accumulation and never catches up;
+- one coherent input epoch is claimed at each tick boundary;
+- statistics are accumulated in bounded worker state and returned only on
+  request.
+
+The current implementation still couples one core update/render to each worker
+animation callback. Fixed-step simulation, manual stepping, input transport,
+visibility coordination, and timer fallback remain implementation work; this
+section must not be read as an available public API.
+
 ## Browser requirements
 
 `SharedArrayBuffer` requires cross-origin isolation. Development and benchmark

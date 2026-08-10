@@ -89,6 +89,15 @@ handle contracts.
 Detailed byte layout and browser-thread responsibilities are documented in
 [memory-model.md](memory-model.md) and [threading-model.md](threading-model.md).
 
+[ADR 006](../.agents/decisions/006-frame-scheduling.md) defines the target frame
+coordination contract before animation, physics, replay, editor, or framework
+adapters depend on timing behavior. The worker remains the scheduling owner;
+automatic presentation advances bounded fixed simulation ticks, while an
+advanced manual mode executes exact ticks without wall-clock time. Input is
+sampled at tick boundaries, visibility suspension performs no catch-up, and
+profiling remains pull-based rather than emitting per-frame messages. These
+semantics are accepted design and are not yet an implemented public API.
+
 ## Memory model
 
 - Entity and component capacity is chosen in immutable engine configuration.
