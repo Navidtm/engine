@@ -6,9 +6,9 @@ import {
 } from "@lume/runtime";
 import { getLumeWasmUrl } from "@lume/runtime/wasm-url";
 
-import type { EngineState } from "./engine-state.js";
-import { post } from "./engine-transport.js";
-import type { PowerPreference } from "./engine-types.js";
+import type { EngineState } from "./state.js";
+import { post } from "./transport.js";
+import type { PowerPreference } from "./types.js";
 
 export function initialize(state: EngineState): Promise<void> {
   if (state.initPromise !== undefined) return state.initPromise;

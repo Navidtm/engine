@@ -1,7 +1,7 @@
 import type { MainToWorkerMessage, WorkerToMainMessage } from "@lume/runtime";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { createEngine } from "./engine.js";
+import { createEngine } from ".";
 
 afterEach(() => vi.unstubAllGlobals());
 

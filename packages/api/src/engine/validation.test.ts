@@ -6,7 +6,7 @@ import {
   resolveEngineBudgets,
   validateColor,
   validateEngineCameraOptions,
-} from "./engine-validation.js";
+} from "./validation.js";
 
 const canvas = {} as HTMLCanvasElement;
 

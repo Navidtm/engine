@@ -1,13 +1,13 @@
 import type { Color, Component, Quat } from "@lume/scene";
 
 import { peekEntityIndex, validateLiveEntity } from "../entity-lifecycle.js";
-import type { EngineState } from "./engine-state.js";
+import type { EngineState } from "./state.js";
 import type {
   CameraPerspectiveOptions,
   EngineCameraOptions,
   EngineConfig,
   MeshOptions,
-} from "./engine-types.js";
+} from "./types.js";
 
 export interface CameraPerspective {
   verticalFov: number;

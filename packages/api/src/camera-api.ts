@@ -1,13 +1,10 @@
 import { TransformField } from "@lume/runtime";
 import { camera, type Quat, transform, type Vec3 } from "@lume/scene";
 
-import type { EngineState } from "./engine/engine-state.js";
-import { publishTransform } from "./engine/engine-transport.js";
-import type { EngineCamera, EngineCameraOptions, WorldApi } from "./engine/engine-types.js";
-import {
-  DEFAULT_CAMERA_PERSPECTIVE,
-  resolveCameraPerspective,
-} from "./engine/engine-validation.js";
+import type { EngineState } from "./engine/state.js";
+import { publishTransform } from "./engine/transport.js";
+import type { EngineCamera, EngineCameraOptions, WorldApi } from "./engine/types.js";
+import { DEFAULT_CAMERA_PERSPECTIVE, resolveCameraPerspective } from "./engine/validation.js";
 import {
   createQuaternionControl,
   createVector3Control,

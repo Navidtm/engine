@@ -1,6 +1,6 @@
 import type { EngineStats, RuntimeCommand, SharedRuntimeViews } from "@lume/runtime";
 
-import type { EngineConfig, EngineStatus } from "./engine-types.js";
+import type { EngineConfig, EngineStatus } from "./types.js";
 
 /** Mutable state explicitly owned by one public engine facade. */
 export interface EngineState {

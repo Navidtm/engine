@@ -5,7 +5,9 @@ import {
   type WorkerToMainMessage,
 } from "@lume/runtime";
 
-import { createEngineCamera } from "./camera-api.js";
+import { createEngineCamera } from "../camera-api.js";
+import { createHighLevelApi } from "../resource-api.js";
+import { createWorldApi } from "../world-api.js";
 import {
   dispose,
   fail,
@@ -14,13 +16,11 @@ import {
   initialize,
   requireInitialized,
   resize,
-} from "./engine/engine-lifecycle.js";
-import type { EngineState } from "./engine/engine-state.js";
-import { post } from "./engine/engine-transport.js";
-import type { Engine, EngineConfig, EngineOptions } from "./engine/engine-types.js";
-import { resolveEngineBudgets, validateEngineCameraOptions } from "./engine/engine-validation.js";
-import { createHighLevelApi } from "./resource-api.js";
-import { createWorldApi } from "./world-api.js";
+} from "./lifecycle.js";
+import type { EngineState } from "./state.js";
+import { post } from "./transport.js";
+import type { Engine, EngineConfig, EngineOptions } from "./types.js";
+import { resolveEngineBudgets, validateEngineCameraOptions } from "./validation.js";
 
 export type {
   BasicMaterialHandle,
@@ -43,7 +43,7 @@ export type {
   SetApi,
   Vector3Control,
   WorldApi,
-} from "./engine/engine-types.js";
+} from "./types.js";
 
 /**
  * Creates a worker-owned WebGPU engine. It does not allocate GPU resources until `init()`.
