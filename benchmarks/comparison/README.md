@@ -11,6 +11,10 @@ Query parameters:
 - `updateRatio=0|0.01|0.1|1`
 - `commit=<full git commit>`
 
+The page navbar exposes the standard engine, entity-count, update-ratio, and
+commit controls and submits them as query parameters, so normal interactive use
+does not require editing the URL manually.
+
 The update ratio controls how many leading instances are updated per frame;
 zero is the static scenario. Each page exposes its raw JSON as
 `window.__LUME_COMPARISON_RESULT__`. Dynamic Lume results intentionally include
@@ -20,6 +24,9 @@ known architectural cost.
 
 Capture both implementations at 1k, 10k, 50k, and 100k objects and all four
 update ratios in the same browser session. Reports include raw frame samples,
-p50/p95/p99/max summaries, missed-frame counts, browser/GPU metadata, and the
-tested commit. Store the returned objects without post-processing so the
-repository contains raw measurements rather than a performance conclusion.
+p50/p95/p99/max summaries, missed-frame counts relative to a measured display
+refresh interval, browser/GPU metadata, and the tested commit. The visible
+summary cards are derived only after sampling; the untouched report remains in
+the raw-data disclosure and on `window.__LUME_COMPARISON_RESULT__`. Store the
+returned objects without post-processing so the repository contains raw
+measurements rather than a performance conclusion.
