@@ -6,9 +6,9 @@ import {
 } from "@lume/runtime";
 import type { Entity } from "@lume/scene";
 
+import { packEntity, validateLiveEntity } from "../entity-lifecycle.js";
 import type { EngineState } from "./engine-state.js";
 import { validateTransformSlot } from "./engine-validation.js";
-import { packEntity, validateLiveEntity } from "./entity-lifecycle.js";
 
 export interface TransformValue {
   readonly position: readonly [number, number, number];

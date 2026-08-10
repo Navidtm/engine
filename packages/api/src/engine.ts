@@ -14,11 +14,11 @@ import {
   initialize,
   requireInitialized,
   resize,
-} from "./engine-lifecycle.js";
-import type { EngineState } from "./engine-state.js";
-import { post } from "./engine-transport.js";
-import type { Engine, EngineConfig, EngineOptions } from "./engine-types.js";
-import { resolveEngineBudgets, validateEngineCameraOptions } from "./engine-validation.js";
+} from "./engine/engine-lifecycle.js";
+import type { EngineState } from "./engine/engine-state.js";
+import { post } from "./engine/engine-transport.js";
+import type { Engine, EngineConfig, EngineOptions } from "./engine/engine-types.js";
+import { resolveEngineBudgets, validateEngineCameraOptions } from "./engine/engine-validation.js";
 import { createHighLevelApi } from "./resource-api.js";
 import { createWorldApi } from "./world-api.js";
 
@@ -43,7 +43,7 @@ export type {
   SetApi,
   Vector3Control,
   WorldApi,
-} from "./engine-types.js";
+} from "./engine/engine-types.js";
 
 /**
  * Creates a worker-owned WebGPU engine. It does not allocate GPU resources until `init()`.

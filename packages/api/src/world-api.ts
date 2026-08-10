@@ -1,10 +1,10 @@
 import type { RuntimeCommand } from "@lume/runtime";
 import type { Component, Entity } from "@lume/scene";
 
-import type { EngineState } from "./engine-state.js";
-import { dispatchCommand } from "./engine-transport.js";
-import type { WorldApi } from "./engine-types.js";
-import { validateComponent, validateTransformSlot } from "./engine-validation.js";
+import type { EngineState } from "./engine/engine-state.js";
+import { dispatchCommand } from "./engine/engine-transport.js";
+import type { WorldApi } from "./engine/engine-types.js";
+import { validateComponent, validateTransformSlot } from "./engine/engine-validation.js";
 import {
   allocateEntity,
   packEntity,

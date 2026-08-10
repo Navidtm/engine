@@ -10,8 +10,8 @@ import {
   type Vec3,
 } from "@lume/scene";
 
-import type { EngineState } from "./engine-state.js";
-import { publishTransform } from "./engine-transport.js";
+import type { EngineState } from "./engine/engine-state.js";
+import { publishTransform } from "./engine/engine-transport.js";
 import type {
   BasicMaterialHandle,
   BasicMaterialOptions,
@@ -21,12 +21,12 @@ import type {
   SceneHandle,
   SetApi,
   WorldApi,
-} from "./engine-types.js";
+} from "./engine/engine-types.js";
 import {
   ensureTransformSlotAvailable,
   validateColor,
   validateMeshOptions,
-} from "./engine-validation.js";
+} from "./engine/engine-validation.js";
 import {
   copyQuat,
   copyVec3,
