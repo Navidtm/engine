@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { createMeshRenderer } from "./mesh-renderer.js";
+import type * as SurfaceModule from "./webgpu/surface.js";
 
 const mocks = vi.hoisted(() => ({
   destroySurface: vi.fn(),
@@ -13,7 +14,7 @@ vi.mock("./pipeline/mesh.js", () => ({ getMeshPipeline: mocks.getMeshPipeline })
 vi.mock("./webgpu/adapter.js", () => ({ requestAdapter: mocks.requestAdapter }));
 vi.mock("./webgpu/device.js", () => ({ requestDevice: mocks.requestDevice }));
 vi.mock("./webgpu/surface.js", async (loadOriginal) => {
-  const original = await loadOriginal<typeof import("./webgpu/surface.js")>();
+  const original = await loadOriginal<typeof SurfaceModule>();
   return {
     ...original,
     createSurface: vi.fn(() => ({

@@ -6,4 +6,4 @@ license.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-lume-core = { path = "../../packages/core" }
+lume-core = { path = "../../packages/core", version = "0.1.0" }

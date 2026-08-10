@@ -10,4 +10,4 @@ name = "lume_wasm"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-lume-core = { path = "../../core" }
+lume-core = { path = "../../core", version = "0.1.0" }

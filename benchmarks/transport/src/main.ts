@@ -8,6 +8,9 @@ declare global {
   interface Window {
     __LUME_TRANSPORT_RESULT__?: unknown;
   }
+  interface Navigator {
+    readonly deviceMemory?: number;
+  }
 }
 
 interface WorkerResult {
@@ -34,6 +37,9 @@ if (!crossOriginIsolated) {
 }
 
 const worker = new Worker(new URL("./transport-worker.ts", import.meta.url), { type: "module" });
+const parameters = new URLSearchParams(location.search);
+const benchmarkCommit = parameters.get("commit") ?? "unknown";
+const sampleCount = 10;
 let requestId = 1;
 const pending = new Map<number, (result: WorkerResult) => void>();
 worker.onmessage = (event: MessageEvent<WorkerResult>): void => {
@@ -43,20 +49,25 @@ worker.onmessage = (event: MessageEvent<WorkerResult>): void => {
 
 const results: unknown[] = [];
 for (const entities of [10_000, 100_000, 500_000, 1_000_000]) {
-  results.push(await benchmarkCommands(entities));
-  results.push(await benchmarkSharedMemory(entities));
+  results.push(await sampleScenario("command-buffer", entities, benchmarkCommands));
+  results.push(await sampleScenario("shared-memory", entities, benchmarkSharedMemory));
 }
 for (const commands of [10_000, 100_000, 500_000]) {
   results.push(await benchmarkStructuralRing(commands));
 }
 const report = {
-  schemaVersion: 1,
+  schemaVersion: 2,
   benchmark: "transport-overhead",
+  generatedAt: new Date().toISOString(),
+  commit: benchmarkCommit,
   environment: {
     userAgent: navigator.userAgent,
+    platform: navigator.platform,
     crossOriginIsolated,
     logicalCores: navigator.hardwareConcurrency,
+    deviceMemoryGiB: navigator.deviceMemory ?? null,
   },
+  configuration: { sampleCount },
   results,
 };
 window.__LUME_TRANSPORT_RESULT__ = report;
@@ -114,6 +125,49 @@ async function benchmarkSharedMemory(entities: number) {
     framePreparationMs: workerResult.workerPreparationMs,
     memoryCopies: 0,
     estimatedAllocations: 0,
+  };
+}
+
+async function sampleScenario(
+  transport: "command-buffer" | "shared-memory",
+  entities: number,
+  operation: (entities: number) => Promise<TransportSample>,
+) {
+  await operation(entities);
+  const samples: TransportSample[] = [];
+  for (let sample = 0; sample < sampleCount; sample += 1) {
+    samples.push(await operation(entities));
+  }
+  return {
+    transport,
+    entities,
+    samples,
+    updateMs: summarize(samples.map((sample) => sample.updateMs)),
+    workerCommunicationMs: summarize(samples.map((sample) => sample.workerCommunicationMs)),
+    workerPreparationMs: summarize(samples.map((sample) => sample.framePreparationMs)),
+    memoryCopies: samples[0]?.memoryCopies ?? 0,
+    estimatedAllocations: samples[0]?.estimatedAllocations ?? 0,
+  };
+}
+
+interface TransportSample {
+  readonly updateMs: number;
+  readonly workerCommunicationMs: number;
+  readonly framePreparationMs: number;
+  readonly memoryCopies: number;
+  readonly estimatedAllocations: number;
+}
+
+function summarize(samples: readonly number[]) {
+  const sorted = [...samples].sort((left, right) => left - right);
+  const percentile = (value: number): number =>
+    sorted[Math.min(sorted.length - 1, Math.floor((sorted.length - 1) * value))] ?? 0;
+  return {
+    mean: samples.reduce((sum, sample) => sum + sample, 0) / Math.max(samples.length, 1),
+    p50: percentile(0.5),
+    p95: percentile(0.95),
+    p99: percentile(0.99),
+    max: sorted.at(-1) ?? 0,
   };
 }
 
