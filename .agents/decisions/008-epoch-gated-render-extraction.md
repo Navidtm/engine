@@ -98,13 +98,18 @@ for the current frame so the renderer does not upload it again.
 
 Chrome 151 headless on Apple M4/Metal 3 used ABBA order for baseline and
 candidate artifacts in the same session. Static total worker/render CPU median
-fell from 1.36 ms to 0.375 ms at 10,000 entities, 3.74 ms to 1.125 ms at 50,000,
-and 4.35 ms to 2.29 ms at 100,000. GPU time and owned WASM/GPU buffer memory did
-not materially change.
+fell from 0.988 ms to 0.450 ms at 10,000 entities, 2.873 ms to 0.825 ms at
+50,000, and 3.967 ms to 1.368 ms at 100,000. Those reductions are 54%, 71%, and
+66%, respectively. Native static extraction retained zero allocations and fell
+from 0.091 ms to 0.000008 ms at 10,000 entities; larger retained-snapshot samples
+approached or fell below timer resolution. Owned WASM and GPU buffer bytes were
+exactly unchanged at every tested capacity; GPU-time differences were noise.
 
-Dynamic measurements at 1%, 10%, and 100% update ratios overlap browser
-scheduling noise and retain the linear rebuild by design. The raw native and
-browser samples are committed in
+Dynamic 50,000- and 100,000-entity browser medians at 1%, 10%, and 100% update
+ratios were effectively unchanged because both variants use the linear rebuild.
+The 10,000-entity sessions showed inconsistent run-to-run scheduling variance,
+including candidate regressions at 1% and 10%, so they are not evidence for a
+dynamic-path improvement. The raw native and browser samples are committed in
 `benchmarks/results/incremental-render-world-latest.json`.
 
 ## Future work
