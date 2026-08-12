@@ -30,6 +30,7 @@
     "eslint-plugin-simple-import-sort": "^14.0.0",
     "globals": "^17.8.0",
     "prettier": "^3.9.6",
+    "tsdown": "^0.22.14",
     "typescript": "catalog:",
     "typescript-eslint": "^8.65.0",
     "vite": "catalog:",
