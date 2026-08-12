@@ -18,8 +18,8 @@
     "./worker": "./dist/worker.js"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "prepack": "pnpm --workspace-root build:wasm && pnpm build",
+    "build": "tsdown --config ../../tsdown.config.ts",
+    "prepack": "pnpm build && pnpm --workspace-root build:wasm",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run --passWithNoTests"
   },

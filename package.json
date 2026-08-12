@@ -5,9 +5,9 @@
   "version": "0.1.0",
   "packageManager": "pnpm@11.17.0",
   "scripts": {
-    "build": "pnpm build:wasm && pnpm -r --filter './packages/**' build && pnpm -r --filter './examples/**' build && pnpm -r --filter './benchmarks/**' build",
+    "build": "pnpm -r --filter './packages/**' build && pnpm build:wasm && pnpm -r --filter './examples/**' build && pnpm -r --filter './benchmarks/**' build",
     "build:wasm": "node scripts/build-wasm.mjs",
-    "prepare:examples": "pnpm build:wasm && pnpm -r --filter './packages/**' build",
+    "prepare:examples": "pnpm -r --filter './packages/**' build && pnpm build:wasm",
     "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test",
     "dev": "pnpm --filter @lume/example-cube dev",
     "preview": "pnpm --filter @lume/example-cube preview",
