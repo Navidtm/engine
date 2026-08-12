@@ -18,12 +18,16 @@ if (canvas === null || output === null) throw new Error("Benchmark markup is inc
 
 const parameters = new URLSearchParams(location.search);
 const count = Math.max(1, Number(parameters.get("count") ?? 10_000));
+const wasmUrl = parameters.get("wasmUrl") ?? undefined;
+const wasmProfile = parameters.get("wasmProfile") ?? "workspace-default";
+const benchmarkCommit = parameters.get("commit") ?? "unknown";
 const warmupFrames = 60;
 const sampleFrames = 180;
 const side = Math.ceil(Math.sqrt(count));
 
 const engine = createEngine({
   canvas,
+  ...(wasmUrl === undefined ? {} : { wasmUrl }),
   entityCapacity: count + 2,
   autoResize: false,
   powerPreference: "high",
@@ -67,15 +71,18 @@ for (let frame = 0; frame < sampleFrames; frame += 1) {
   preparationTimesMs.push(stats.timings.framePreparationCpuTime);
 }
 const stats = await engine.getStats();
+const gpuAdapter = await readGpuAdapterInfo();
 const report = {
   schemaVersion: 1,
   engine: "lume",
   engineVersion: "0.2.0",
   scenario: "static_indexed_cubes",
+  commit: benchmarkCommit,
   hardware: {
     userAgent: navigator.userAgent,
     logicalCores: navigator.hardwareConcurrency,
     deviceMemoryGiB: navigator.deviceMemory ?? null,
+    gpuAdapter,
   },
   browser: navigator.userAgent,
   configuration: {
@@ -84,6 +91,7 @@ const report = {
     warmupFrames,
     sampleFrames,
     powerPreference: "high",
+    wasmProfile,
   },
   measurements: {
     initializationMs,
@@ -117,4 +125,9 @@ function resourceTransferBytes(): number {
     total += (entry as PerformanceResourceTiming).transferSize;
   }
   return total;
+}
+
+async function readGpuAdapterInfo(): Promise<GPUAdapterInfo | null> {
+  const adapter = await navigator.gpu.requestAdapter({ powerPreference: "high-performance" });
+  return adapter?.info ?? null;
 }

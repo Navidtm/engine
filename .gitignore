@@ -10,4 +10,5 @@ examples/transform-controls/public/lume_core.wasm
 examples/lifecycle/public/lume_core.wasm
 examples/camera/public/lume_core.wasm
 benchmarks/renderer/public/lume_core.wasm
+benchmarks/renderer/public/wasm-profiles/
 benchmarks/comparison/public/lume_core.wasm
