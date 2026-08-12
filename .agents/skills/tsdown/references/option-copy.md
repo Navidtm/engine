@@ -20,8 +20,8 @@ With the default `outDir` of `dist`, `public/favicon.svg` is copied to `dist/pub
 
 ```ts
 export default defineConfig({
-  copy: 'public',
-})
+  copy: "public",
+});
 ```
 
 Multiple paths, glob patterns, or object entries in an array:
@@ -29,14 +29,14 @@ Multiple paths, glob patterns, or object entries in an array:
 ```ts
 export default defineConfig({
   copy: [
-    'LICENSE',
+    "LICENSE",
     {
-      from: ['public/**/*', '!public/**/*.map'],
-      to: 'dist/assets',
+      from: ["public/**/*", "!public/**/*.map"],
+      to: "dist/assets",
       flatten: false,
     },
   ],
-})
+});
 ```
 
 Glob patterns support negation with a leading `!`.
@@ -45,24 +45,24 @@ Glob patterns support negation with a leading `!`.
 
 ## Object Options
 
-| Property | Type | Default | Description |
-|----------|------|---------|-------------|
-| `from` | `string \| string[]` | Required | Source path or glob pattern; arrays can include negated patterns |
-| `to` | `string` | `outDir` | Destination path, resolved from the project root |
-| `flatten` | `boolean` | `true` | Place matched files directly in `to`. Set `false` to preserve the directory structure below the first segment |
-| `rename` | `string \| ((name, extension, fullPath) => string)` | — | Change the destination name. Callback receives the extension without a leading dot and the absolute path |
-| `verbose` | `boolean` | `false` | Log each copied source and destination |
+| Property  | Type                                                | Default  | Description                                                                                                   |
+| --------- | --------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------- |
+| `from`    | `string \| string[]`                                | Required | Source path or glob pattern; arrays can include negated patterns                                              |
+| `to`      | `string`                                            | `outDir` | Destination path, resolved from the project root                                                              |
+| `flatten` | `boolean`                                           | `true`   | Place matched files directly in `to`. Set `false` to preserve the directory structure below the first segment |
+| `rename`  | `string \| ((name, extension, fullPath) => string)` | —        | Change the destination name. Callback receives the extension without a leading dot and the absolute path      |
+| `verbose` | `boolean`                                           | `false`  | Log each copied source and destination                                                                        |
 
 ### Preserve Directory Structure
 
 ```ts
 export default defineConfig({
   copy: {
-    from: 'assets/**/*',
-    to: 'dist/public',
+    from: "assets/**/*",
+    to: "dist/public",
     flatten: false,
   },
-})
+});
 ```
 
 `assets/fonts/inter.woff2` → `dist/public/fonts/inter.woff2`.
@@ -72,14 +72,14 @@ export default defineConfig({
 ```ts
 export default defineConfig({
   copy: [
-    { from: 'src/file.txt', to: 'dist', rename: 'file.md' },
+    { from: "src/file.txt", to: "dist", rename: "file.md" },
     {
-      from: 'src/file.txt',
-      to: 'dist',
+      from: "src/file.txt",
+      to: "dist",
       rename: (name, extension) => `${name}-renamed.${extension}`,
     },
   ],
-})
+});
 ```
 
 Creates `dist/file.md` and `dist/file-renamed.txt`.
@@ -91,11 +91,11 @@ Creates `dist/file.md` and `dist/file-renamed.txt`.
 ```ts
 export default defineConfig({
   copy: ({ outDir }) => ({
-    from: ['assets/**/*', '!assets/**/*.map'],
+    from: ["assets/**/*", "!assets/**/*.map"],
     to: `${outDir}/assets`,
     flatten: false,
   }),
-})
+});
 ```
 
 ## Build and Watch Behavior

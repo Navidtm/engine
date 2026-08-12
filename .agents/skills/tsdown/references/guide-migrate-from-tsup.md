@@ -35,26 +35,26 @@ npx tsdown-migrate packages/foo packages/bar
 
 ### Default Values
 
-| Option | tsup | tsdown |
-|--------|------|--------|
-| `format` | `['cjs']` | `['esm']` |
-| `clean` | `false` | `true` |
-| `dts` | `false` | Auto-enabled if `types`/`typings` in package.json |
-| `target` | Manual | Auto-read from `engines.node` in package.json |
+| Option   | tsup      | tsdown                                            |
+| -------- | --------- | ------------------------------------------------- |
+| `format` | `['cjs']` | `['esm']`                                         |
+| `clean`  | `false`   | `true`                                            |
+| `dts`    | `false`   | Auto-enabled if `types`/`typings` in package.json |
+| `target` | Manual    | Auto-read from `engines.node` in package.json     |
 
 ### Option Renames
 
-| tsup | tsdown |
-|------|--------|
-| `entryPoints` | `entry` |
-| `cjsInterop` | `cjsDefault` |
-| `esbuildPlugins` | `plugins` |
-| `outExtension` | `outExtensions` |
-| `skipNodeModulesBundle` | `deps: { neverBundle: true }` |
-| `publicDir` | `copy` |
-| `bundle: false` | `unbundle: true` |
-| `removeNodeProtocol: true` | `nodeProtocol: 'strip'` |
-| `injectStyle: true` | `css: { inject: true }` |
+| tsup                       | tsdown                        |
+| -------------------------- | ----------------------------- |
+| `entryPoints`              | `entry`                       |
+| `cjsInterop`               | `cjsDefault`                  |
+| `esbuildPlugins`           | `plugins`                     |
+| `outExtension`             | `outExtensions`               |
+| `skipNodeModulesBundle`    | `deps: { neverBundle: true }` |
+| `publicDir`                | `copy`                        |
+| `bundle: false`            | `unbundle: true`              |
+| `removeNodeProtocol: true` | `nodeProtocol: 'strip'`       |
+| `injectStyle: true`        | `css: { inject: true }`       |
 
 The old names were accepted (with deprecation warnings) up to tsdown v0.22.14 and have been removed since — v0.23+ silently ignores them, so a leftover tsup option won't error. Migrate in two stages: install `tsdown@0.22.14` first and resolve every deprecation warning (a warning-free build proves the mapping is complete), then upgrade to the latest version. The `tsdown-migrate` tool installs v0.22.14 for this reason.
 
@@ -62,23 +62,23 @@ The old names were accepted (with deprecation warnings) up to tsdown v0.22.14 an
 
 These tsup options still work but emit deprecation warnings and will be removed in a future version — migrate them immediately:
 
-| tsup (deprecated) | tsdown (preferred) |
-|-------------------|--------------------|
-| `external: [...]` | `deps: { neverBundle: [...] }` |
+| tsup (deprecated)   | tsdown (preferred)              |
+| ------------------- | ------------------------------- |
+| `external: [...]`   | `deps: { neverBundle: [...] }`  |
 | `noExternal: [...]` | `deps: { alwaysBundle: [...] }` |
 
 tsdown also adds `deps.onlyBundle` for whitelisting allowed bundled packages.
 
 ### Unsupported Options
 
-| Option | Status | Alternative |
-|--------|--------|-------------|
-| `splitting: false` | Always enabled | Code splitting cannot be disabled |
-| `metafile` | Not available | Use `devtools: true` for bundle analysis via Vite DevTools |
-| `swc` | Not supported | tsdown uses oxc for transformation (built-in) |
-| `experimentalDts` | Superseded | Use the `dts` option instead |
-| `legacyOutput` | Not supported | No alternative |
-| `plugins` (tsup experimental) | Incompatible | Migrate to Rolldown plugins |
+| Option                        | Status         | Alternative                                                |
+| ----------------------------- | -------------- | ---------------------------------------------------------- |
+| `splitting: false`            | Always enabled | Code splitting cannot be disabled                          |
+| `metafile`                    | Not available  | Use `devtools: true` for bundle analysis via Vite DevTools |
+| `swc`                         | Not supported  | tsdown uses oxc for transformation (built-in)              |
+| `experimentalDts`             | Superseded     | Use the `dts` option instead                               |
+| `legacyOutput`                | Not supported  | No alternative                                             |
+| `plugins` (tsup experimental) | Incompatible   | Migrate to Rolldown plugins                                |
 
 ### Plugin System
 
@@ -86,9 +86,9 @@ tsdown uses Rolldown plugins instead of esbuild plugins. If you use unplugin plu
 
 ```ts
 // Before (tsup)
-import plugin from 'unplugin-example/esbuild'
+import plugin from "unplugin-example/esbuild";
 // After (tsdown)
-import plugin from 'unplugin-example/rolldown'
+import plugin from "unplugin-example/rolldown";
 ```
 
 ### Output Filename Differences
@@ -101,18 +101,18 @@ For IIFE builds, `tsdown` emits `[name].iife.js`; `tsup` commonly emitted `[name
 
 ```ts
 export default defineConfig({
-  nodeProtocol: true,      // Add node: prefix (fs → node:fs)
-  nodeProtocol: 'strip',   // Remove node: prefix (node:fs → fs)
-  nodeProtocol: false,     // Keep as-is (default)
-})
+  nodeProtocol: true, // Add node: prefix (fs → node:fs)
+  nodeProtocol: "strip", // Remove node: prefix (node:fs → fs)
+  nodeProtocol: false, // Keep as-is (default)
+});
 ```
 
 #### Better Workspace Support
 
 ```ts
 export default defineConfig({
-  workspace: 'packages/*',  // Build all packages
-})
+  workspace: "packages/*", // Build all packages
+});
 ```
 
 #### Other tsdown-Exclusive Features
@@ -139,47 +139,52 @@ export default defineConfig({
 ### Basic Library
 
 **Before (tsup):**
+
 ```ts
 export default defineConfig({
-  entry: ['src/index.ts'],
-  format: ['cjs', 'esm'],
+  entry: ["src/index.ts"],
+  format: ["cjs", "esm"],
   dts: true,
-})
+});
 ```
 
 **After (tsdown):**
+
 ```ts
 export default defineConfig({
-  entry: ['src/index.ts'],
-  format: ['esm', 'cjs'],  // ESM now default
+  entry: ["src/index.ts"],
+  format: ["esm", "cjs"], // ESM now default
   dts: true,
-  clean: true,  // Now enabled by default
-})
+  clean: true, // Now enabled by default
+});
 ```
 
 ### With Custom Target
 
 **Before (tsup):**
+
 ```ts
 export default defineConfig({
-  entry: ['src/index.ts'],
-  target: 'es2020',
-})
+  entry: ["src/index.ts"],
+  target: "es2020",
+});
 ```
 
 **After (tsdown):**
+
 ```ts
 export default defineConfig({
-  entry: ['src/index.ts'],
+  entry: ["src/index.ts"],
   // target auto-reads from package.json engines.node
   // Or override explicitly:
-  target: 'es2020',
-})
+  target: "es2020",
+});
 ```
 
 ### CLI Scripts
 
 **Before (package.json):**
+
 ```json
 {
   "scripts": {
@@ -190,6 +195,7 @@ export default defineConfig({
 ```
 
 **After (package.json):**
+
 ```json
 {
   "scripts": {
@@ -204,6 +210,7 @@ export default defineConfig({
 ### Supported tsup Features
 
 Most tsup features are supported:
+
 - ✅ Multiple entry points
 - ✅ Multiple formats (ESM, CJS, IIFE, UMD)
 - ✅ TypeScript declarations
@@ -237,6 +244,7 @@ Some tsup features are not yet available. Check [GitHub issues](https://github.c
 ### Performance Issues
 
 tsdown should be faster than tsup. If not:
+
 1. Enable `isolatedDeclarations` for faster DTS generation
 2. Check for large dependencies being bundled
 3. Use `deps.neverBundle: true` if needed
