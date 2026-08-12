@@ -83,7 +83,14 @@ fn main() {
         results.push(benchmark_transform_system(count));
     }
     for count in SCALE_COUNTS {
-        results.push(benchmark_render_extraction(count));
+        for (scenario, update_percent) in [
+            ("render_world_extraction_static", 0),
+            ("render_world_extraction_1_percent", 1),
+            ("render_world_extraction_10_percent", 10),
+            ("render_world_extraction_100_percent", 100),
+        ] {
+            results.push(benchmark_render_extraction(count, scenario, update_percent));
+        }
     }
     for (scenario, visible_percent) in [
         ("frustum_culling_100_percent", 100),
@@ -236,7 +243,11 @@ fn benchmark_transform_system(count: usize) -> ResultRecord {
     }
 }
 
-fn benchmark_render_extraction(count: usize) -> ResultRecord {
+fn benchmark_render_extraction(
+    count: usize,
+    scenario: &'static str,
+    update_percent: usize,
+) -> ResultRecord {
     let mut world = World::with_capacity(capacity(count + 1));
     let material_entity = world.spawn().expect("material entity");
     world.add_material(
@@ -246,6 +257,7 @@ fn benchmark_render_extraction(count: usize) -> ResultRecord {
             ..Material::default()
         },
     );
+    let mut mesh_entities = Vec::with_capacity(count);
     for _ in 0..count {
         let entity = world.spawn().expect("mesh entity");
         world.add_transform(entity, Transform::default());
@@ -256,22 +268,42 @@ fn benchmark_render_extraction(count: usize) -> ResultRecord {
                 material: MaterialHandle::from_entity(material_entity),
             },
         );
+        mesh_entities.push(entity);
     }
     world.update();
     let mut render_world = RenderWorld::with_capacity(count + 1, 1);
+    render_world.extract(&world).expect("render capacity");
     let mut samples = Vec::with_capacity(30);
     let mut max_allocations = 0;
     let mut allocated_bytes = 0;
-    for _ in 0..30 {
+    let updated_count = count * update_percent / 100;
+    let extraction_iterations = if updated_count == 0 {
+        (100_000 / count).clamp(1, 100)
+    } else {
+        1
+    };
+    for sample_index in 0..30 {
+        if updated_count > 0 {
+            let mut values = [0.0; 10];
+            values[0] = sample_index as f32 * 0.001;
+            values[6] = 1.0;
+            values[7..].fill(1.0);
+            for entity in &mesh_entities[..updated_count] {
+                assert!(world.update_transform_fields(*entity, 1, &values));
+            }
+            world.update();
+        }
         let (_, sample) = measure(|| {
-            black_box(render_world.extract(&world).expect("render capacity"));
+            for _ in 0..extraction_iterations {
+                black_box(render_world.extract(&world).expect("render capacity"));
+            }
         });
-        samples.push(sample.duration_ms);
+        samples.push(sample.duration_ms / extraction_iterations as f64);
         max_allocations = max_allocations.max(sample.allocations);
         allocated_bytes = allocated_bytes.max(sample.allocated_bytes);
     }
     ResultRecord {
-        scenario: "render_world_extraction",
+        scenario,
         entities: count,
         samples_ms: samples,
         allocations: max_allocations,
@@ -411,7 +443,7 @@ fn render_json(results: &[ResultRecord]) -> String {
         };
         write!(
             output,
-            "    {{ \"scenario\": \"{}\", \"entities\": {}, \"visibleCount\": {}, \"meanMs\": {:.6}, \"throughputPerSecond\": {:.3}, \"allocations\": {}, \"allocatedBytes\": {}, \"estimatedMemoryBytes\": {}, \"samplesMs\": [",
+            "    {{ \"scenario\": \"{}\", \"entities\": {}, \"visibleCount\": {}, \"meanMs\": {:.9}, \"throughputPerSecond\": {:.3}, \"allocations\": {}, \"allocatedBytes\": {}, \"estimatedMemoryBytes\": {}, \"samplesMs\": [",
             result.scenario,
             result.entities,
             result.visible_count.map_or_else(|| "null".to_owned(), |value| value.to_string()),
@@ -426,14 +458,14 @@ fn render_json(results: &[ResultRecord]) -> String {
             if sample_index > 0 {
                 output.push_str(", ");
             }
-            write!(output, "{sample:.6}").expect("write sample");
+            write!(output, "{sample:.9}").expect("write sample");
         }
         output.push_str("], \"framePreparationSamplesMs\": [");
         for (sample_index, sample) in result.frame_preparation_samples_ms.iter().enumerate() {
             if sample_index > 0 {
                 output.push_str(", ");
             }
-            write!(output, "{sample:.6}").expect("write preparation sample");
+            write!(output, "{sample:.9}").expect("write preparation sample");
         }
         output.push_str("] }");
         if index + 1 != results.len() {

@@ -40,6 +40,13 @@ is the explicit memory trade-off for making static instance upload zero and
 dirty instance upload proportional to changed ranges. Exact browser evidence is
 stored in `benchmarks/results/persistent-instance-upload-latest.json`.
 
+Render snapshot reuse adds constant scalar state rather than capacity-sized
+metadata: the ECS world owns a render change epoch, `RenderWorld` retains its
+last successful source epoch and change flag, and the WASM core retains one
+visibility-valid flag. Browser measurements report identical WASM heap and GPU
+buffer sizes before and after. Snapshot arrays remain owned by `RenderWorld` and
+visibility; reuse changes their logical lifetime, not their capacity or owner.
+
 ## Shared allocation and budget
 
 The allocation has three explicit, immutable budgets: public `entityCapacity`

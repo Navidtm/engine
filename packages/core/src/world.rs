@@ -40,6 +40,7 @@ impl Default for WorldCapacity {
 pub struct World {
     entities: EntityAllocator,
     render_revisions: Vec<u32>,
+    render_epoch: u32,
     /// Transform component storage. Mutable access must publish render dirtiness.
     transforms: SparseSet<Transform>,
     /// Mesh renderer component storage.
@@ -47,7 +48,7 @@ pub struct World {
     /// Camera component storage.
     pub cameras: SparseSet<Camera>,
     /// Local bounds component storage.
-    pub bounds: SparseSet<Bounds>,
+    bounds: SparseSet<Bounds>,
     /// Basic material component storage.
     materials: MaterialRegistry,
 }
@@ -59,6 +60,7 @@ impl World {
         Self {
             entities: EntityAllocator::with_capacity(capacity.entities),
             render_revisions: vec![0; capacity.entities],
+            render_epoch: 1,
             transforms: SparseSet::with_capacity(capacity.entities, capacity.transforms),
             mesh_renderers: SparseSet::with_capacity(capacity.entities, capacity.mesh_renderers),
             cameras: SparseSet::with_capacity(capacity.entities, capacity.cameras),
@@ -79,6 +81,13 @@ impl World {
 
     /// Despawns a live entity and removes all of its components atomically.
     pub fn despawn(&mut self, entity: Entity) -> bool {
+        let render_dirty = self.transforms.contains(entity)
+            || self.mesh_renderers.contains(entity)
+            || self.bounds.contains(entity)
+            || self
+                .materials
+                .get(MaterialHandle::from_entity(entity))
+                .is_some();
         if !self.entities.despawn(entity) {
             return false;
         }
@@ -87,6 +96,9 @@ impl World {
         self.cameras.remove(entity);
         self.bounds.remove(entity);
         self.materials.remove(MaterialHandle::from_entity(entity));
+        if render_dirty {
+            self.mark_render_dirty();
+        }
         true
     }
 
@@ -120,15 +132,26 @@ impl World {
         &self.materials
     }
 
+    /// Returns immutable local-bounds storage for allocation-free queries.
+    #[must_use]
+    pub const fn bounds(&self) -> &SparseSet<Bounds> {
+        &self.bounds
+    }
+
     /// Mutates transforms in dense order and marks every visited entity dirty.
     ///
     /// Engine systems must use this entry point instead of retaining mutable
     /// component storage so render extraction cannot miss canonical changes.
     pub fn for_each_transform_mut(&mut self, mut operation: impl FnMut(Entity, &mut Transform)) {
         let (transforms, render_revisions) = (&mut self.transforms, &mut self.render_revisions);
+        let mut visited = false;
         for (entity, transform) in transforms.iter_mut() {
+            visited = true;
             operation(entity, transform);
             bump_revision(&mut render_revisions[entity.index()]);
+        }
+        if visited {
+            self.mark_render_dirty();
         }
     }
 
@@ -140,6 +163,7 @@ impl World {
         let inserted = self.transforms.insert(entity, value).is_ok();
         if inserted {
             bump_revision(&mut self.render_revisions[entity.index()]);
+            self.mark_render_dirty();
         }
         inserted
     }
@@ -170,6 +194,7 @@ impl World {
             transform.scale = crate::math::Vec3::new([value[7], value[8], value[9]]);
         }
         bump_revision(&mut self.render_revisions[entity.index()]);
+        self.mark_render_dirty();
         true
     }
 
@@ -191,6 +216,7 @@ impl World {
         let inserted = mesh_added && bounds_added;
         if inserted {
             bump_revision(&mut self.render_revisions[entity.index()]);
+            self.mark_render_dirty();
         }
         inserted
     }
@@ -208,7 +234,11 @@ impl World {
         if !self.is_alive(entity) || value.radius < 0.0 {
             return false;
         }
-        self.bounds.insert(entity, value).is_ok()
+        let inserted = self.bounds.insert(entity, value).is_ok();
+        if inserted {
+            self.mark_render_dirty();
+        }
+        inserted
     }
 
     /// Adds or replaces the basic material owned by `entity`.
@@ -227,6 +257,7 @@ impl World {
                     bump_revision(&mut self.render_revisions[mesh_entity.index()]);
                 }
             }
+            self.mark_render_dirty();
         }
         inserted
     }
@@ -261,6 +292,9 @@ impl World {
             } else {
                 bump_revision(&mut self.render_revisions[entity.index()]);
             }
+            if component != 3 {
+                self.mark_render_dirty();
+            }
         }
         removed
     }
@@ -285,6 +319,16 @@ impl World {
     #[must_use]
     pub fn render_revision(&self, entity: Entity) -> u32 {
         self.render_revisions[entity.index()]
+    }
+
+    /// Returns the epoch of data consumed by instance and bounds extraction.
+    #[must_use]
+    pub const fn render_epoch(&self) -> u32 {
+        self.render_epoch
+    }
+
+    fn mark_render_dirty(&mut self) {
+        bump_revision(&mut self.render_epoch);
     }
 }
 

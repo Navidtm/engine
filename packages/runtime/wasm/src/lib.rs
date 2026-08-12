@@ -16,6 +16,7 @@ struct EngineCore {
     world: World,
     render_world: RenderWorld,
     visible: VisibleRenderBuffer,
+    visibility_valid: bool,
     transform_update_generations: Box<[u32]>,
     transform_update_values: Box<[[f32; TRANSFORM_UPDATE_FLOATS]]>,
     transform_update_masks: Box<[u32]>,
@@ -50,6 +51,7 @@ pub extern "C" fn lume_engine_create(entity_capacity: u32, transform_capacity: u
         world: World::with_capacity(capacity),
         render_world: RenderWorld::with_capacity(entities, 8),
         visible: VisibleRenderBuffer::with_capacity(entities),
+        visibility_valid: false,
         transform_update_generations: vec![0; transforms].into_boxed_slice(),
         transform_update_values: vec![[0.0; TRANSFORM_UPDATE_FLOATS]; transforms]
             .into_boxed_slice(),
@@ -306,8 +308,19 @@ pub extern "C" fn lume_engine_remove_component(
 pub extern "C" fn lume_engine_update(engine: *mut c_void) -> u32 {
     with_engine(engine, |core| {
         core.world.update();
-        core.render_world.extract(&core.world).is_ok()
-            && core.visible.cull(&core.render_world).is_ok()
+        if core.render_world.extract(&core.world).is_err() {
+            core.visibility_valid = false;
+            return false;
+        }
+        if !core.visibility_valid
+            || core.render_world.snapshot_changed()
+            || core.render_world.cameras_dirty()
+        {
+            core.visibility_valid = core.visible.cull(&core.render_world).is_ok();
+        } else {
+            core.visible.retain_unchanged();
+        }
+        core.visibility_valid
     }) as u32
 }
 
@@ -522,6 +535,9 @@ mod tests {
         assert_eq!(lume_render_dirty_range_count(engine), 1);
         assert!(!lume_render_dirty_range_starts_ptr(engine).is_null());
         assert!(!lume_render_dirty_range_counts_ptr(engine).is_null());
+        assert_eq!(lume_engine_update(engine), 1);
+        assert_eq!(lume_render_dirty_range_count(engine), 0);
+        assert_eq!(lume_visible_slots_dirty(engine), 0);
         assert_eq!(lume_transform_update_capacity(engine), 16);
         // SAFETY: both staging pointers address initialized storage owned by the live engine.
         unsafe {
