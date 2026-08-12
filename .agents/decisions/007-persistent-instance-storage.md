@@ -86,6 +86,13 @@ and 100k entities at 0%, 1%, 10%, and 100% update ratios.
 - The WASM ABI and worker protocol versions advance because frame-view shape
   and renderer metrics changed.
 
+Controlled Chrome 151 measurements on Apple M4/Metal 3 recorded zero bytes and
+zero queue writes for static 10,000-instance frames, compared with 800,128 bytes
+and two writes before the change. Median 1%, 10%, and 100% update uploads were
+8,000, 80,000, and 800,000 bytes respectively, each with one write. The raw
+16-scenario matrix is committed in
+`benchmarks/results/persistent-instance-upload-latest.json`.
+
 ## Future work
 
 Indirect command storage and compute visibility can consume the same stable

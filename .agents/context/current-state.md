@@ -133,6 +133,9 @@ Implemented:
 - Persistent camera and instance GPU buffers.
 - Persistent visible-slot storage, with instance, visibility, and camera writes
   skipped independently when unchanged.
+- A committed 16-scenario Chrome/WebGPU upload matrix: static 10k frames write
+  zero bytes versus the previous 800,128 bytes; dirty 1%, 10%, and 100% medians
+  are 8KB, 80KB, and 800KB with one queue write.
 - Vertex/index buffers and a built-in mesh registry.
 - Depth target creation and resize handling.
 - Timestamp queries when supported, with CPU timing fallback metrics.
