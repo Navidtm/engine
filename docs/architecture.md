@@ -86,6 +86,15 @@ memory while Rust retains canonical ECS ownership. See
 [milestone-5.md](milestone-5.md) for the copy, lifetime, overflow, and stale
 handle contracts.
 
+Renderer scalability begins with persistent, entity-indexed instance storage.
+Render extraction publishes coalesced changed-slot ranges while visibility
+publishes a compact list of stable slots in grouped draw order. The renderer
+updates only those ranges and the mesh shader resolves each visible slot through
+one storage-buffer indirection. This preserves CPU visibility and the
+`RenderWorld` ownership boundary while removing full visible-instance uploads
+from unchanged frames. See
+[ADR 007](../.agents/decisions/007-persistent-instance-storage.md).
+
 Detailed byte layout and browser-thread responsibilities are documented in
 [memory-model.md](memory-model.md) and [threading-model.md](threading-model.md).
 
@@ -112,6 +121,8 @@ semantics are accepted design and are not yet an implemented public API.
   are reported as `getStats().allocationsPerFrame`; this is not a heap-allocation
   counter.
 - Pipeline and shader creation is confined to initialization/cache misses.
+- Persistent instance, visible-slot, dirty-range, camera, and visibility arrays
+  are capacity-sized or reserved during initialization and reused per frame.
 
 ## Public API
 

@@ -1,7 +1,7 @@
 use core::fmt;
 
 use crate::math::{Mat4, multiply};
-use crate::render_world::{GpuCamera, GpuInstance, RenderWorld};
+use crate::render_world::{GpuCamera, RenderWorld};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 struct Plane {
@@ -121,7 +121,9 @@ pub struct VisibleRenderBuffer {
     geometries: Vec<u32>,
     pipelines: Vec<u32>,
     materials: Vec<u32>,
-    instances: Vec<GpuInstance>,
+    slots: Vec<u32>,
+    previous_slots: Vec<u32>,
+    slots_dirty: bool,
     bucket_heads: Vec<usize>,
     bucket_tails: Vec<usize>,
     bucket_pipelines: Vec<u32>,
@@ -141,7 +143,9 @@ impl VisibleRenderBuffer {
             geometries: Vec::with_capacity(capacity),
             pipelines: Vec::with_capacity(capacity),
             materials: Vec::with_capacity(capacity),
-            instances: Vec::with_capacity(capacity),
+            slots: Vec::with_capacity(capacity),
+            previous_slots: Vec::with_capacity(capacity),
+            slots_dirty: false,
             bucket_heads: vec![usize::MAX; capacity],
             bucket_tails: vec![usize::MAX; capacity],
             bucket_pipelines: vec![0; capacity],
@@ -188,14 +192,17 @@ impl VisibleRenderBuffer {
                 self.geometries.push(render_world.geometries()[index]);
                 self.pipelines.push(render_world.pipelines()[index]);
                 self.materials.push(render_world.materials()[index]);
-                self.instances.push(render_world.instances()[index]);
+                self.slots.push(render_world.slots()[index]);
                 entry = self.source_next[entry];
             }
         }
+        self.slots_dirty = self.slots != self.previous_slots;
+        self.previous_slots.clear();
+        self.previous_slots.extend_from_slice(&self.slots);
 
         Ok(VisibilityStats {
-            tested: render_world.instances().len(),
-            visible: self.instances.len(),
+            tested: render_world.instance_count(),
+            visible: self.slots.len(),
         })
     }
 
@@ -209,7 +216,7 @@ impl VisibleRenderBuffer {
         self.geometries.clear();
         self.pipelines.clear();
         self.materials.clear();
-        self.instances.clear();
+        self.slots.clear();
     }
 
     fn push_source_index(
@@ -264,13 +271,13 @@ impl VisibleRenderBuffer {
     /// Returns the current number of visible instances.
     #[must_use]
     pub fn len(&self) -> usize {
-        self.instances.len()
+        self.slots.len()
     }
 
     /// Returns whether no instance is currently visible.
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        self.instances.is_empty()
+        self.slots.is_empty()
     }
 
     /// Returns geometry IDs in grouped visible order.
@@ -291,10 +298,16 @@ impl VisibleRenderBuffer {
         &self.materials
     }
 
-    /// Returns GPU instance records in grouped visible order.
+    /// Returns persistent GPU instance slot IDs in grouped visible order.
     #[must_use]
-    pub fn instances(&self) -> &[GpuInstance] {
-        &self.instances
+    pub fn slots(&self) -> &[u32] {
+        &self.slots
+    }
+
+    /// Returns whether visible membership or grouped order changed this frame.
+    #[must_use]
+    pub const fn slots_dirty(&self) -> bool {
+        self.slots_dirty
     }
 
     /// Returns the stable allocation pointer for visible geometry IDs.
@@ -315,10 +328,10 @@ impl VisibleRenderBuffer {
         self.materials.as_ptr()
     }
 
-    /// Returns the stable allocation pointer for visible GPU instances.
+    /// Returns the stable allocation pointer for visible instance slot IDs.
     #[must_use]
-    pub fn instances_capacity_ptr(&self) -> *const GpuInstance {
-        self.instances.as_ptr()
+    pub fn slots_capacity_ptr(&self) -> *const u32 {
+        self.slots.as_ptr()
     }
 }
 
@@ -351,6 +364,7 @@ mod tests {
         let second_material = world.spawn().unwrap();
         world.add_material(first_material, Material::default());
         world.add_material(second_material, Material::default());
+        let mut mesh_entities = Vec::new();
         for (geometry, material) in [
             (2, second_material),
             (1, first_material),
@@ -365,6 +379,7 @@ mod tests {
                     material: MaterialHandle::from_entity(material),
                 },
             );
+            mesh_entities.push(entity);
         }
         world.update();
         let mut render_world = RenderWorld::with_capacity(8, 1);
@@ -381,5 +396,26 @@ mod tests {
                 second_material.raw()
             ]
         );
+        assert!(visible.slots_dirty());
+        visible.cull(&render_world).unwrap();
+        assert!(!visible.slots_dirty());
+
+        assert!(world.remove_component(mesh_entities[0], 4));
+        render_world.extract(&world).unwrap();
+        let stats = visible.cull(&render_world).unwrap();
+        assert_eq!(stats.visible, 2);
+        assert!(visible.slots_dirty());
+
+        assert!(world.add_mesh_renderer(
+            mesh_entities[0],
+            MeshRenderer {
+                geometry: 2,
+                material: MaterialHandle::from_entity(second_material),
+            },
+        ));
+        render_world.extract(&world).unwrap();
+        let stats = visible.cull(&render_world).unwrap();
+        assert_eq!(stats.visible, 3);
+        assert!(visible.slots_dirty());
     }
 }

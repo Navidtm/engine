@@ -90,6 +90,41 @@ When no controlled browser is connected, the repository records `status:
 "not-run"` with `rawMeasurements: null`; missing data is never replaced by an
 estimate.
 
+Run the persistent-instance upload matrix with:
+
+```sh
+pnpm benchmark:renderer-uploads
+```
+
+It uses the production worker, WASM core, and WebGPU renderer in controlled
+Chrome runs at 1k, 10k, 50k, and 100k entities with 0%, 1%, 10%, and 100%
+per-frame transform updates. The committed report retains raw upload bytes,
+write counts, upload CPU time, complete worker/render CPU time, GPU timestamps,
+and renderer/WASM memory. The `before` section links the last committed browser
+run from the pre-change commit; it does not relabel a post-change run as a
+baseline.
+
+The report captured at commit `5c40b0539dabb81fcceed0fe6f80f6e8055cd2e3`
+used Chrome 151 headless with a non-fallback Apple Metal 3 adapter on an Apple
+M4. At 10,000 visible instances, the previous static path wrote 800,128 bytes
+with two queue writes every frame. The persistent path measured:
+
+| Per-frame transform updates | Median upload bytes | Median writes |
+| --------------------------: | ------------------: | ------------: |
+|                          0% |                   0 |             0 |
+|                          1% |               8,000 |             1 |
+|                         10% |              80,000 |             1 |
+|                        100% |             800,000 |             1 |
+
+The extra visible-slot GPU storage is 40,004 bytes at this configured capacity,
+including the internal camera slot. CPU and GPU timings remain in the raw
+report; they are directional because browser scheduling variance overlaps the
+small upload-enqueue cost. At 100,000 entities, a 100% main-thread update loop
+can span multiple independently scheduled worker frames, so individual raw
+uploads range below the nominal eight-megabyte batch. The median was 5,070,720
+bytes; this is retained as observed production scheduling, not normalized into
+a synthetic single-frame result.
+
 ## Interpreting results
 
 Native timings isolate ECS and extraction architecture. Browser timings include

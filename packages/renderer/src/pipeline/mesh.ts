@@ -7,7 +7,7 @@ export function getMeshPipeline(
   cache: PipelineCache,
   format: GPUTextureFormat,
 ): Promise<GPURenderPipeline> {
-  return cache.getOrCreate(`mesh:${format}:depth24plus:v1`, async () => {
+  return cache.getOrCreate(`mesh:${format}:depth24plus:v2`, async () => {
     const shader = device.createShaderModule({ label: "Lume mesh shader", code: MESH_SHADER });
     return device.createRenderPipelineAsync({
       label: "Lume indexed mesh pipeline",

@@ -7,6 +7,6 @@ describe("packaged WASM URL", () => {
     const url = getLumeWasmUrl();
 
     expect(url.pathname).toMatch(/\/lume_core\.wasm$/);
-    expect(LUME_WASM_ABI_VERSION).toBe(6);
+    expect(LUME_WASM_ABI_VERSION).toBe(7);
   });
 });

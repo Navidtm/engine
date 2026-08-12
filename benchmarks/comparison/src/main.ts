@@ -127,6 +127,9 @@ async function runLume(
       visibleObjects: stats.render.visibleObjects,
       gpuFrameTimeMs: stats.gpuTime,
       workerCpuTimeMs: stats.cpuTime,
+      bufferUploadCpuTimeMs: stats.timings.bufferUploadCpuTime,
+      bufferUploadBytes: stats.timings.bufferUploadBytes,
+      bufferWriteCount: stats.timings.bufferWriteCount,
       wasmHeapBytes: stats.memory.wasmHeap,
       workerJsHeapBytes: stats.memory.jsHeap,
       firstRenderedFrameMs,
@@ -196,6 +199,9 @@ async function runThree(
       visibleObjects: null,
       gpuFrameTimeMs: null,
       workerCpuTimeMs: null,
+      bufferUploadCpuTimeMs: null,
+      bufferUploadBytes: null,
+      bufferWriteCount: null,
       wasmHeapBytes: null,
       workerJsHeapBytes: null,
       firstRenderedFrameMs,
@@ -271,6 +277,9 @@ interface ComparisonMetrics {
   readonly visibleObjects: number | null;
   readonly gpuFrameTimeMs: number | null;
   readonly workerCpuTimeMs: number | null;
+  readonly bufferUploadCpuTimeMs: number | null;
+  readonly bufferUploadBytes: number | null;
+  readonly bufferWriteCount: number | null;
   readonly wasmHeapBytes: number | null;
   readonly workerJsHeapBytes: number | null;
   readonly firstRenderedFrameMs: number | null;

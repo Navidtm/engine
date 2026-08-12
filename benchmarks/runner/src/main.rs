@@ -184,7 +184,7 @@ fn benchmark_component_storage(count: usize) -> Vec<ResultRecord> {
     });
     let (_, iteration) = measure(|| {
         let mut sum = 0.0;
-        for transform in world.transforms.values() {
+        for transform in world.transforms().values() {
             sum += transform.local_position.0[0];
         }
         black_box(sum);
@@ -192,7 +192,7 @@ fn benchmark_component_storage(count: usize) -> Vec<ResultRecord> {
     let (_, query) = measure(|| {
         let mut found = 0;
         for entity in &entities {
-            found += usize::from(world.transforms.get(*entity).is_some());
+            found += usize::from(world.transforms().get(*entity).is_some());
         }
         black_box(found);
     });
@@ -214,11 +214,11 @@ fn benchmark_transform_system(count: usize) -> ResultRecord {
     let mut allocated_bytes = 0;
     for _ in 0..30 {
         let (_, sample) = measure(|| {
-            for transform in world.transforms.values_mut() {
+            world.for_each_transform_mut(|_, transform| {
                 transform.local_position.0[0] += 0.001;
-            }
+            });
             world.update();
-            black_box(world.transforms.values());
+            black_box(world.transforms().values());
         });
         samples.push(sample.duration_ms);
         max_allocations = max_allocations.max(sample.allocations);
@@ -258,7 +258,7 @@ fn benchmark_render_extraction(count: usize) -> ResultRecord {
         );
     }
     world.update();
-    let mut render_world = RenderWorld::with_capacity(count, 1);
+    let mut render_world = RenderWorld::with_capacity(count + 1, 1);
     let mut samples = Vec::with_capacity(30);
     let mut max_allocations = 0;
     let mut allocated_bytes = 0;
@@ -330,7 +330,7 @@ fn benchmark_frustum_culling(scenario: &'static str, visible_percent: usize) -> 
         );
     }
     world.update();
-    let mut render_world = RenderWorld::with_capacity(COUNT, 1);
+    let mut render_world = RenderWorld::with_capacity(COUNT + 2, 1);
     render_world.extract(&world).expect("render capacity");
     let mut visible = VisibleRenderBuffer::with_capacity(COUNT);
     visible.cull(&render_world).expect("visible capacity");

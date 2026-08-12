@@ -30,6 +30,7 @@ import {
 
 const INSTANCE_FLOATS = 20;
 const INSTANCE_BYTES = INSTANCE_FLOATS * Float32Array.BYTES_PER_ELEMENT;
+const VISIBLE_SLOT_BYTES = Uint32Array.BYTES_PER_ELEMENT;
 const CAMERA_FLOATS = 32;
 const CAMERA_BYTES = CAMERA_FLOATS * Float32Array.BYTES_PER_ELEMENT;
 const BASIC_PIPELINE_ID = 1;
@@ -59,16 +60,28 @@ export interface RendererOptions {
 export interface RenderFrame {
   /** Number of entries to read from the instance arrays. */
   instanceCount: number;
+  /** Number of changed persistent-instance ranges to upload. */
+  dirtyRangeCount: number;
+  /** Whether the compact visible-slot mapping changed. */
+  visibleSlotsDirty: boolean;
   /** Number of camera records to read from `cameraData`. */
   cameraCount: number;
+  /** Whether camera records changed. */
+  camerasDirty: boolean;
   /** Geometry handles ordered to match `instanceData`. */
   geometries: Uint32Array<ArrayBuffer>;
   /** Pipeline handles ordered to match `instanceData`. */
   pipelines: Uint32Array<ArrayBuffer>;
   /** Material handles ordered to match `instanceData`. */
   materials: Uint32Array<ArrayBuffer>;
-  /** Packed model-matrix/color records. */
+  /** Persistent instance slots ordered for the compact visible draw list. */
+  visibleSlots: Uint32Array<ArrayBuffer>;
+  /** Packed model-matrix/color records indexed by persistent entity slot. */
   instanceData: Float32Array<ArrayBuffer>;
+  /** Starts of coalesced changed persistent-instance ranges. */
+  dirtyRangeStarts: Uint32Array<ArrayBuffer>;
+  /** Counts of coalesced changed persistent-instance ranges. */
+  dirtyRangeCounts: Uint32Array<ArrayBuffer>;
   /** Packed view/projection camera records. */
   cameraData: Float32Array<ArrayBuffer>;
 }
@@ -83,6 +96,10 @@ export interface RendererStats {
   readonly submittedInstances: number;
   /** CPU duration of buffer writes in milliseconds. */
   readonly bufferUploadCpuTimeMs: number;
+  /** CPU-to-GPU bytes written during the most recent frame. */
+  readonly bufferUploadBytes: number;
+  /** `GPUQueue.writeBuffer` calls issued during the most recent frame. */
+  readonly bufferWriteCount: number;
   /** CPU duration of extraction-input preparation and encoding in milliseconds. */
   readonly framePreparationCpuTimeMs: number;
   /** Timestamp-query duration, or null when unsupported/unavailable. */
@@ -112,6 +129,7 @@ interface RendererState {
   readonly meshes: MeshRegistry;
   readonly cameraBuffer: GPUBuffer;
   readonly instanceBuffer: GPUBuffer;
+  readonly visibleSlotBuffer: GPUBuffer;
   readonly bindGroup: GPUBindGroup;
   readonly profiler: GpuTimestampProfiler;
   readonly clearColor: GPUColor;
@@ -122,6 +140,8 @@ interface RendererState {
   drawCalls: number;
   submittedInstances: number;
   bufferUploadCpuTimeMs: number;
+  bufferUploadBytes: number;
+  bufferWriteCount: number;
   framePreparationCpuTimeMs: number;
   browserObjectsPerFrame: number;
   disposed: boolean;
@@ -158,6 +178,7 @@ export async function createMeshRenderer(
   let profiler: GpuTimestampProfiler | undefined;
   let cameraBuffer: GPUBuffer | undefined;
   let instanceBuffer: GPUBuffer | undefined;
+  let visibleSlotBuffer: GPUBuffer | undefined;
   try {
     const instanceBytes = Math.max(INSTANCE_BYTES, instanceCapacity * INSTANCE_BYTES);
     if (
@@ -183,12 +204,18 @@ export async function createMeshRenderer(
       size: instanceBytes,
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
     });
+    visibleSlotBuffer = device.createBuffer({
+      label: "Lume visible instance slots",
+      size: Math.max(VISIBLE_SLOT_BYTES, instanceCapacity * VISIBLE_SLOT_BYTES),
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    });
     const bindGroup = device.createBindGroup({
       label: "Lume frame bind group",
       layout: pipeline.getBindGroupLayout(0),
       entries: [
         { binding: 0, resource: { buffer: cameraBuffer } },
         { binding: 1, resource: { buffer: instanceBuffer } },
+        { binding: 2, resource: { buffer: visibleSlotBuffer } },
       ],
     });
     device.queue.writeBuffer(cameraBuffer, 0, DEFAULT_CAMERA);
@@ -207,6 +234,7 @@ export async function createMeshRenderer(
       meshes,
       cameraBuffer,
       instanceBuffer,
+      visibleSlotBuffer,
       bindGroup,
       profiler,
       clearColor: options.clearColor ?? { r: 0.018, g: 0.024, b: 0.04, a: 1 },
@@ -217,6 +245,8 @@ export async function createMeshRenderer(
       drawCalls: 0,
       submittedInstances: 0,
       bufferUploadCpuTimeMs: 0,
+      bufferUploadBytes: 0,
+      bufferWriteCount: 0,
       framePreparationCpuTimeMs: 0,
       browserObjectsPerFrame: 0,
       disposed: false,
@@ -242,10 +272,13 @@ export async function createMeshRenderer(
           state.meshes.gpuBytes +
           state.cameraBuffer.size +
           state.instanceBuffer.size +
+          state.visibleSlotBuffer.size +
           state.profiler.gpuBytes,
         drawCalls: state.drawCalls,
         submittedInstances: state.submittedInstances,
         bufferUploadCpuTimeMs: state.bufferUploadCpuTimeMs,
+        bufferUploadBytes: state.bufferUploadBytes,
+        bufferWriteCount: state.bufferWriteCount,
         framePreparationCpuTimeMs: state.framePreparationCpuTimeMs,
         gpuTimeMs: state.profiler.gpuTimeMs,
         browserObjectsPerFrame: state.browserObjectsPerFrame,
@@ -255,6 +288,7 @@ export async function createMeshRenderer(
     return renderer;
   } catch (error) {
     instanceBuffer?.destroy();
+    visibleSlotBuffer?.destroy();
     cameraBuffer?.destroy();
     if (profiler !== undefined) destroyGpuTimestampProfiler(profiler);
     meshes?.dispose();
@@ -297,16 +331,37 @@ function uploadFrame(context: RendererFrameContext): void {
   if (frame === undefined) throw new Error("Renderer frame context is not initialized.");
   const uploadStart = performance.now();
   const instanceCount = frame.instanceCount;
-  if (instanceCount > 0) {
+  let uploadedBytes = 0;
+  let writes = 0;
+  for (let range = 0; range < frame.dirtyRangeCount; range += 1) {
+    const start = frame.dirtyRangeStarts[range] ?? 0;
+    const count = frame.dirtyRangeCounts[range] ?? 0;
+    if (count === 0) continue;
+    const byteOffset = start * INSTANCE_BYTES;
+    const byteLength = count * INSTANCE_BYTES;
     state.device.queue.writeBuffer(
       state.instanceBuffer,
-      0,
+      byteOffset,
       frame.instanceData.buffer,
-      frame.instanceData.byteOffset,
-      instanceCount * INSTANCE_BYTES,
+      frame.instanceData.byteOffset + byteOffset,
+      byteLength,
     );
+    uploadedBytes += byteLength;
+    writes += 1;
   }
-  if (frame.cameraCount > 0) {
+  if (instanceCount > 0 && frame.visibleSlotsDirty) {
+    const byteLength = instanceCount * VISIBLE_SLOT_BYTES;
+    state.device.queue.writeBuffer(
+      state.visibleSlotBuffer,
+      0,
+      frame.visibleSlots.buffer,
+      frame.visibleSlots.byteOffset,
+      byteLength,
+    );
+    uploadedBytes += byteLength;
+    writes += 1;
+  }
+  if (frame.cameraCount > 0 && frame.camerasDirty) {
     state.device.queue.writeBuffer(
       state.cameraBuffer,
       0,
@@ -314,8 +369,12 @@ function uploadFrame(context: RendererFrameContext): void {
       frame.cameraData.byteOffset,
       CAMERA_BYTES,
     );
+    uploadedBytes += CAMERA_BYTES;
+    writes += 1;
   }
   state.bufferUploadCpuTimeMs = performance.now() - uploadStart;
+  state.bufferUploadBytes = uploadedBytes;
+  state.bufferWriteCount = writes;
 }
 
 function encodeMainPass(context: RendererFrameContext): void {
@@ -395,6 +454,7 @@ function dispose(state: RendererState): void {
   destroyGpuTimestampProfiler(state.profiler);
   state.cameraBuffer.destroy();
   state.instanceBuffer.destroy();
+  state.visibleSlotBuffer.destroy();
   state.pipelineCache.clear();
   destroySurface(state.surface);
   state.device.destroy();

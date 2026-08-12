@@ -1,4 +1,4 @@
-import { createEngine } from "@lume/api";
+import { createEngine, type MeshHandle } from "@lume/api";
 
 declare global {
   interface Window {
@@ -21,6 +21,7 @@ const count = Math.max(1, Number(parameters.get("count") ?? 10_000));
 const wasmUrl = parameters.get("wasmUrl") ?? undefined;
 const wasmProfile = parameters.get("wasmProfile") ?? "workspace-default";
 const benchmarkCommit = parameters.get("commit") ?? "unknown";
+const updateRatio = Math.min(1, Math.max(0, Number(parameters.get("updateRatio") ?? 0)));
 const warmupFrames = 60;
 const sampleFrames = 180;
 const side = Math.ceil(Math.sqrt(count));
@@ -38,15 +39,17 @@ const engine = createEngine({
   },
 });
 const blue = engine.create.basicMaterial({ color: [0.31, 0.56, 1, 1] });
+const meshes = new Array<MeshHandle>(count);
 for (let index = 0; index < count; index += 1) {
   const x = (index % side) - side * 0.5;
   const y = Math.floor(index / side) - side * 0.5;
-  engine.create.mesh({
+  meshes[index] = engine.create.mesh({
     geometry: "cube",
     material: blue,
     position: [x * 1.2, y * 1.2, 0],
   });
 }
+const updatedEntities = Math.floor(count * updateRatio);
 
 const initializationStart = performance.now();
 await engine.init();
@@ -62,13 +65,18 @@ const frameTimesMs: number[] = [];
 const cpuTimesMs: number[] = [];
 const uploadTimesMs: number[] = [];
 const preparationTimesMs: number[] = [];
+const uploadBytes: number[] = [];
+const bufferWriteCounts: number[] = [];
 for (let frame = 0; frame < sampleFrames; frame += 1) {
+  updateTransforms(frame);
   await nextAnimationFrame();
   const stats = await engine.getStats();
   frameTimesMs.push(stats.frameTime);
   cpuTimesMs.push(stats.cpuTime);
   uploadTimesMs.push(stats.timings.bufferUploadCpuTime);
   preparationTimesMs.push(stats.timings.framePreparationCpuTime);
+  uploadBytes.push(stats.timings.bufferUploadBytes);
+  bufferWriteCounts.push(stats.timings.bufferWriteCount);
 }
 const stats = await engine.getStats();
 const gpuAdapter = await readGpuAdapterInfo();
@@ -92,6 +100,8 @@ const report = {
     sampleFrames,
     powerPreference: "high",
     wasmProfile,
+    updateRatio,
+    updatedEntities,
   },
   measurements: {
     initializationMs,
@@ -101,6 +111,8 @@ const report = {
     cpuTimesMs,
     bufferUploadCpuTimesMs: uploadTimesMs,
     framePreparationCpuTimesMs: preparationTimesMs,
+    bufferUploadBytes: uploadBytes,
+    bufferWriteCounts,
     jsHeapBytes: performance.memory?.usedJSHeapSize ?? null,
     gpuFrameTimeMs: stats.gpuTime,
     gpuBufferBytes: stats.memory.gpuBuffers,
@@ -117,6 +129,16 @@ output.textContent = JSON.stringify(report, null, 2);
 
 function nextAnimationFrame(): Promise<void> {
   return new Promise((resolve) => requestAnimationFrame(() => resolve()));
+}
+
+function updateTransforms(frame: number): void {
+  for (let index = 0; index < updatedEntities; index += 1) {
+    const x = (index % side) - side * 0.5;
+    const y = Math.floor(index / side) - side * 0.5;
+    engine.set.transform(meshes[index] as MeshHandle, {
+      position: [x * 1.2, y * 1.2, Math.sin(frame * 0.01 + index * 0.001) * 0.1],
+    });
+  }
 }
 
 function resourceTransferBytes(): number {
