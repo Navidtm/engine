@@ -40,16 +40,16 @@ impl Default for WorldCapacity {
 pub struct World {
     entities: EntityAllocator,
     render_revisions: Vec<u32>,
-    /// Transform component storage, exposed for allocation-free engine systems.
-    pub transforms: SparseSet<Transform>,
+    /// Transform component storage. Mutable access must publish render dirtiness.
+    transforms: SparseSet<Transform>,
     /// Mesh renderer component storage.
-    pub mesh_renderers: SparseSet<MeshRenderer>,
+    mesh_renderers: SparseSet<MeshRenderer>,
     /// Camera component storage.
     pub cameras: SparseSet<Camera>,
     /// Local bounds component storage.
     pub bounds: SparseSet<Bounds>,
     /// Basic material component storage.
-    pub materials: MaterialRegistry,
+    materials: MaterialRegistry,
 }
 
 impl World {
@@ -100,6 +100,36 @@ impl World {
     #[must_use]
     pub fn entity_count(&self) -> usize {
         self.entities.len()
+    }
+
+    /// Returns immutable transform storage for allocation-free queries.
+    #[must_use]
+    pub const fn transforms(&self) -> &SparseSet<Transform> {
+        &self.transforms
+    }
+
+    /// Returns immutable mesh-renderer storage for allocation-free queries.
+    #[must_use]
+    pub const fn mesh_renderers(&self) -> &SparseSet<MeshRenderer> {
+        &self.mesh_renderers
+    }
+
+    /// Returns immutable material storage for allocation-free queries.
+    #[must_use]
+    pub const fn materials(&self) -> &MaterialRegistry {
+        &self.materials
+    }
+
+    /// Mutates transforms in dense order and marks every visited entity dirty.
+    ///
+    /// Engine systems must use this entry point instead of retaining mutable
+    /// component storage so render extraction cannot miss canonical changes.
+    pub fn for_each_transform_mut(&mut self, mut operation: impl FnMut(Entity, &mut Transform)) {
+        let (transforms, render_revisions) = (&mut self.transforms, &mut self.render_revisions);
+        for (entity, transform) in transforms.iter_mut() {
+            operation(entity, transform);
+            bump_revision(&mut render_revisions[entity.index()]);
+        }
     }
 
     /// Adds or replaces an entity's transform when capacity and liveness allow it.

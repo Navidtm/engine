@@ -184,7 +184,7 @@ fn benchmark_component_storage(count: usize) -> Vec<ResultRecord> {
     });
     let (_, iteration) = measure(|| {
         let mut sum = 0.0;
-        for transform in world.transforms.values() {
+        for transform in world.transforms().values() {
             sum += transform.local_position.0[0];
         }
         black_box(sum);
@@ -192,7 +192,7 @@ fn benchmark_component_storage(count: usize) -> Vec<ResultRecord> {
     let (_, query) = measure(|| {
         let mut found = 0;
         for entity in &entities {
-            found += usize::from(world.transforms.get(*entity).is_some());
+            found += usize::from(world.transforms().get(*entity).is_some());
         }
         black_box(found);
     });
@@ -214,11 +214,11 @@ fn benchmark_transform_system(count: usize) -> ResultRecord {
     let mut allocated_bytes = 0;
     for _ in 0..30 {
         let (_, sample) = measure(|| {
-            for transform in world.transforms.values_mut() {
+            world.for_each_transform_mut(|_, transform| {
                 transform.local_position.0[0] += 0.001;
-            }
+            });
             world.update();
-            black_box(world.transforms.values());
+            black_box(world.transforms().values());
         });
         samples.push(sample.duration_ms);
         max_allocations = max_allocations.max(sample.allocations);

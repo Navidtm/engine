@@ -364,6 +364,7 @@ mod tests {
         let second_material = world.spawn().unwrap();
         world.add_material(first_material, Material::default());
         world.add_material(second_material, Material::default());
+        let mut mesh_entities = Vec::new();
         for (geometry, material) in [
             (2, second_material),
             (1, first_material),
@@ -378,6 +379,7 @@ mod tests {
                     material: MaterialHandle::from_entity(material),
                 },
             );
+            mesh_entities.push(entity);
         }
         world.update();
         let mut render_world = RenderWorld::with_capacity(8, 1);
@@ -397,5 +399,23 @@ mod tests {
         assert!(visible.slots_dirty());
         visible.cull(&render_world).unwrap();
         assert!(!visible.slots_dirty());
+
+        assert!(world.remove_component(mesh_entities[0], 4));
+        render_world.extract(&world).unwrap();
+        let stats = visible.cull(&render_world).unwrap();
+        assert_eq!(stats.visible, 2);
+        assert!(visible.slots_dirty());
+
+        assert!(world.add_mesh_renderer(
+            mesh_entities[0],
+            MeshRenderer {
+                geometry: 2,
+                material: MaterialHandle::from_entity(second_material),
+            },
+        ));
+        render_world.extract(&world).unwrap();
+        let stats = visible.cull(&render_world).unwrap();
+        assert_eq!(stats.visible, 3);
+        assert!(visible.slots_dirty());
     }
 }

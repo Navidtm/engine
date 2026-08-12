@@ -126,12 +126,12 @@ impl RenderWorld {
         self.clear();
         let mut skipped_meshes = 0;
 
-        for (entity, mesh) in world.mesh_renderers.iter() {
-            let Some(transform) = world.transforms.get(entity) else {
+        for (entity, mesh) in world.mesh_renderers().iter() {
+            let Some(transform) = world.transforms().get(entity) else {
                 skipped_meshes += 1;
                 continue;
             };
-            let Some(material) = world.materials.get(mesh.material) else {
+            let Some(material) = world.materials().get(mesh.material) else {
                 skipped_meshes += 1;
                 continue;
             };
@@ -415,6 +415,18 @@ mod tests {
         assert_eq!(render_world.dirty_range_counts(), &[1]);
         render_world.extract(&world).unwrap();
         assert!(render_world.dirty_range_starts().is_empty());
+
+        world.for_each_transform_mut(|entity, transform| {
+            if entity == mesh_entity {
+                transform.local_position.0[0] = 2.0;
+            }
+        });
+        world.update();
+        render_world.extract(&world).unwrap();
+        assert_eq!(
+            render_world.dirty_range_starts(),
+            &[mesh_entity.index() as u32]
+        );
 
         world.add_material(
             material_entity,

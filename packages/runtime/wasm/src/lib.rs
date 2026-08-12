@@ -547,12 +547,12 @@ mod tests {
         assert_eq!(lume_engine_apply_transform_ranges(engine, 1), 2);
         // SAFETY: the pointer is live and exclusively owned by this test.
         let core = unsafe { &*engine.cast::<EngineCore>() };
-        let transform = core.world.transforms.get(Entity::from_raw(0)).unwrap();
+        let transform = core.world.transforms().get(Entity::from_raw(0)).unwrap();
         assert_eq!(transform.local_position, Vec3::new([2.0, 3.0, -4.0]));
         assert_eq!(transform.scale, Vec3::new([1.0, 1.0, 1.0]));
         assert_eq!(
             core.world
-                .transforms
+                .transforms()
                 .get(Entity::from_raw(1))
                 .unwrap()
                 .local_position,
