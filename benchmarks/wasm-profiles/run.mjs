@@ -76,7 +76,7 @@ for (const profile of profiles) {
       }).byteLength,
       buildWallMs,
     },
-    startup: await benchmarkStartup(bytes, module),
+    startup: benchmarkStartup(wasmPath),
     wasmRuntime: await benchmarkWasmRuntime(module),
     nativeCore: selectNativeResults(native.results),
   });
@@ -124,6 +124,7 @@ const report = {
     warmupIterations,
     sampleIterations,
     startupSamples: 20,
+    startupIsolation: "fresh Node process per metric sample",
     compression: { gzipLevel: 9, brotliQuality: 11 },
     notes: [
       "Build wall time is diagnostic and may include different incremental cache states.",
@@ -140,24 +141,14 @@ await mkdir(dirname(outputPath), { recursive: true });
 await writeFile(outputPath, `${JSON.stringify(report, null, 2)}\n`);
 console.log(`Wrote WASM profile benchmark to ${relativePath(outputPath)}`);
 
-async function benchmarkStartup(bytes, precompiledModule) {
+function benchmarkStartup(wasmPath) {
   const compileMs = [];
   const instantiatePrecompiledMs = [];
   const compileAndInstantiateMs = [];
   for (let index = 0; index < 20; index += 1) {
-    const compileBytes = bytes.slice();
-    let started = performance.now();
-    await WebAssembly.compile(compileBytes);
-    compileMs.push(performance.now() - started);
-
-    started = performance.now();
-    await WebAssembly.instantiate(precompiledModule, {});
-    instantiatePrecompiledMs.push(performance.now() - started);
-
-    const startupBytes = bytes.slice();
-    started = performance.now();
-    await WebAssembly.instantiate(startupBytes, {});
-    compileAndInstantiateMs.push(performance.now() - started);
+    compileMs.push(runStartupSample("compile", wasmPath));
+    instantiatePrecompiledMs.push(runStartupSample("instantiate", wasmPath));
+    compileAndInstantiateMs.push(runStartupSample("combined", wasmPath));
   }
   return {
     compileMs,
@@ -169,6 +160,13 @@ async function benchmarkStartup(bytes, precompiledModule) {
       compileAndInstantiate: summarize(compileAndInstantiateMs),
     },
   };
+}
+
+function runStartupSample(mode, wasmPath) {
+  const output = runText("node", [resolve(benchmarkRoot, "startup-sample.mjs"), mode, wasmPath]);
+  const duration = Number(output);
+  if (!Number.isFinite(duration)) throw new Error(`Invalid ${mode} startup sample: ${output}`);
+  return duration;
 }
 
 async function benchmarkWasmRuntime(module) {

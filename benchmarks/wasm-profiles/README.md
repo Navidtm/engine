@@ -16,6 +16,9 @@ WASM transform-range and complete core-frame samples, and matching native Rust
 system/extraction/visibility samples. It writes the reproducible report to
 `benchmarks/results/wasm-profiles-latest.json`.
 
+Each Node compile, precompiled-instantiation, and combined-startup sample runs
+in a fresh process so V8's module cache cannot leak across samples.
+
 Pass `--browser` to additionally run the existing renderer benchmark in Chrome
 against each generated artifact:
 
