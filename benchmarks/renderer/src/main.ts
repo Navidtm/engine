@@ -127,7 +127,17 @@ function resourceTransferBytes(): number {
   return total;
 }
 
-async function readGpuAdapterInfo(): Promise<GPUAdapterInfo | null> {
+async function readGpuAdapterInfo(): Promise<Record<string, string | number | boolean> | null> {
   const adapter = await navigator.gpu.requestAdapter({ powerPreference: "high-performance" });
-  return adapter?.info ?? null;
+  if (adapter === null) return null;
+  const info = adapter.info;
+  return {
+    vendor: info.vendor,
+    architecture: info.architecture,
+    device: info.device,
+    description: info.description,
+    isFallbackAdapter: info.isFallbackAdapter,
+    ...(info.subgroupMinSize === undefined ? {} : { subgroupMinSize: info.subgroupMinSize }),
+    ...(info.subgroupMaxSize === undefined ? {} : { subgroupMaxSize: info.subgroupMaxSize }),
+  };
 }

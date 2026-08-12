@@ -34,5 +34,8 @@ The profile artifact directories live under `target/wasm-profile-benchmark/`
 and are isolated so one profile cannot reuse the other's final binary. Build
 wall time is diagnostic only because incremental cache state can affect it.
 
-The benchmark does not change the workspace default. Update `[profile.release]`
-only after reviewing the committed measurements and their limitations.
+The workspace default is `opt-level = 3`, selected from the committed profile
+comparison. The runner overrides that setting independently for each artifact,
+so it continues to compare equivalent `s` and `3` builds if the default changes.
+See [`docs/benchmarking.md`](../../docs/benchmarking.md#wasm-release-profile-suite)
+for the decision, measured tradeoff, and interpretation limits.
