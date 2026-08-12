@@ -90,6 +90,9 @@ pub struct RenderWorld {
     cameras: Vec<GpuCamera>,
     previous_cameras: Vec<GpuCamera>,
     cameras_dirty: bool,
+    source_epoch: u32,
+    snapshot_changed: bool,
+    skipped_meshes: usize,
 }
 
 impl RenderWorld {
@@ -115,55 +118,63 @@ impl RenderWorld {
             cameras: Vec::with_capacity(camera_capacity),
             previous_cameras: Vec::with_capacity(camera_capacity),
             cameras_dirty: false,
+            source_epoch: 0,
+            snapshot_changed: false,
+            skipped_meshes: 0,
         }
     }
 
-    /// Rebuilds this snapshot from `world` without allocating on success.
+    /// Updates this snapshot from `world`, reusing unchanged instance data.
     ///
     /// Meshes missing a transform or material are counted and skipped. Capacity
     /// errors leave a partial snapshot which the caller must not submit.
     pub fn extract(&mut self, world: &World) -> Result<ExtractionStats, ExtractionError> {
-        self.clear();
-        let mut skipped_meshes = 0;
+        let source_epoch = world.render_epoch();
+        let snapshot_changed = self.source_epoch != source_epoch;
+        self.begin_extraction(snapshot_changed);
+        let mut skipped_meshes = self.skipped_meshes;
 
-        for (entity, mesh) in world.mesh_renderers().iter() {
-            let Some(transform) = world.transforms().get(entity) else {
-                skipped_meshes += 1;
-                continue;
-            };
-            let Some(material) = world.materials().get(mesh.material) else {
-                skipped_meshes += 1;
-                continue;
-            };
-            let slot = entity.index();
-            if self.entities.len() == self.entity_capacity || slot >= self.entity_capacity {
-                return Err(ExtractionError::InstanceCapacity {
-                    capacity: self.entity_capacity,
-                });
-            }
-            self.entities.push(entity.raw());
-            self.slots.push(slot as u32);
-            self.geometries.push(mesh.geometry);
-            self.pipelines.push(material.pipeline.raw());
-            self.materials.push(mesh.material.raw());
-            let render_revision = world.render_revision(entity);
-            if self.slot_entities[slot] != entity.raw()
-                || self.slot_render_revisions[slot] != render_revision
-            {
-                self.slot_entities[slot] = entity.raw();
-                self.slot_render_revisions[slot] = render_revision;
-                self.instances[slot] = GpuInstance {
-                    world_matrix: transform.world_matrix,
-                    color: material.color,
+        if snapshot_changed {
+            skipped_meshes = 0;
+            for (entity, mesh) in world.mesh_renderers().iter() {
+                let Some(transform) = world.transforms().get(entity) else {
+                    skipped_meshes += 1;
+                    continue;
                 };
-                self.dirty_slots.push(slot as u32);
+                let Some(material) = world.materials().get(mesh.material) else {
+                    skipped_meshes += 1;
+                    continue;
+                };
+                let slot = entity.index();
+                if self.entities.len() == self.entity_capacity || slot >= self.entity_capacity {
+                    return Err(ExtractionError::InstanceCapacity {
+                        capacity: self.entity_capacity,
+                    });
+                }
+                self.entities.push(entity.raw());
+                self.slots.push(slot as u32);
+                self.geometries.push(mesh.geometry);
+                self.pipelines.push(material.pipeline.raw());
+                self.materials.push(mesh.material.raw());
+                let render_revision = world.render_revision(entity);
+                if self.slot_entities[slot] != entity.raw()
+                    || self.slot_render_revisions[slot] != render_revision
+                {
+                    self.slot_entities[slot] = entity.raw();
+                    self.slot_render_revisions[slot] = render_revision;
+                    self.instances[slot] = GpuInstance {
+                        world_matrix: transform.world_matrix,
+                        color: material.color,
+                    };
+                    self.dirty_slots.push(slot as u32);
+                }
+                let local_bounds = world.bounds().get(entity).copied().unwrap_or_default();
+                self.bounds
+                    .push(world_space_bounds(&transform.world_matrix, local_bounds));
             }
-            let local_bounds = world.bounds.get(entity).copied().unwrap_or_default();
-            self.bounds
-                .push(world_space_bounds(&transform.world_matrix, local_bounds));
-        }
 
-        self.build_dirty_ranges();
+            self.build_dirty_ranges();
+        }
 
         for (entity, camera) in world.cameras.iter() {
             if self.cameras.len() == self.camera_capacity {
@@ -180,6 +191,9 @@ impl RenderWorld {
         self.cameras_dirty = self.cameras != self.previous_cameras;
         self.previous_cameras.clear();
         self.previous_cameras.extend_from_slice(&self.cameras);
+        self.source_epoch = source_epoch;
+        self.snapshot_changed = snapshot_changed;
+        self.skipped_meshes = skipped_meshes;
 
         Ok(ExtractionStats {
             instances: self.entities.len(),
@@ -190,15 +204,36 @@ impl RenderWorld {
 
     /// Clears logical contents while retaining all allocated storage.
     pub fn clear(&mut self) {
+        self.clear_snapshot();
+        self.clear_frame_state();
+        self.previous_cameras.clear();
+        self.cameras_dirty = false;
+        self.source_epoch = 0;
+        self.snapshot_changed = false;
+        self.skipped_meshes = 0;
+    }
+
+    fn begin_extraction(&mut self, snapshot_changed: bool) {
+        self.snapshot_changed = false;
+        self.clear_frame_state();
+        if snapshot_changed {
+            self.clear_snapshot();
+        }
+    }
+
+    fn clear_snapshot(&mut self) {
         self.entities.clear();
         self.slots.clear();
         self.geometries.clear();
         self.pipelines.clear();
         self.materials.clear();
+        self.bounds.clear();
+    }
+
+    fn clear_frame_state(&mut self) {
         self.dirty_slots.clear();
         self.dirty_range_starts.clear();
         self.dirty_range_counts.clear();
-        self.bounds.clear();
         self.camera_entities.clear();
         self.cameras.clear();
     }
@@ -285,6 +320,12 @@ impl RenderWorld {
     #[must_use]
     pub const fn cameras_dirty(&self) -> bool {
         self.cameras_dirty
+    }
+
+    /// Returns whether instance metadata or bounds were rebuilt this frame.
+    #[must_use]
+    pub const fn snapshot_changed(&self) -> bool {
+        self.snapshot_changed
     }
 
     /// Returns entity IDs that own the returned [`Self::cameras`].
@@ -374,8 +415,8 @@ fn world_space_bounds(matrix: &Mat4, bounds: crate::Bounds) -> GpuBounds {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::math::Color;
-    use crate::{Material, MaterialHandle, MeshRenderer, Transform, WorldCapacity};
+    use crate::math::{Color, Vec3};
+    use crate::{Bounds, Material, MaterialHandle, MeshRenderer, Transform, WorldCapacity};
 
     #[test]
     fn extraction_joins_components_into_gpu_layout() {
@@ -401,6 +442,7 @@ mod tests {
 
         let mut render_world = RenderWorld::with_capacity(4, 1);
         let stats = render_world.extract(&world).unwrap();
+        assert!(render_world.snapshot_changed());
         assert_eq!(stats.instances, 1);
         assert_eq!(render_world.geometries(), &[2]);
         assert_eq!(
@@ -414,6 +456,7 @@ mod tests {
         );
         assert_eq!(render_world.dirty_range_counts(), &[1]);
         render_world.extract(&world).unwrap();
+        assert!(!render_world.snapshot_changed());
         assert!(render_world.dirty_range_starts().is_empty());
 
         world.for_each_transform_mut(|entity, transform| {
@@ -423,6 +466,7 @@ mod tests {
         });
         world.update();
         render_world.extract(&world).unwrap();
+        assert!(render_world.snapshot_changed());
         assert_eq!(
             render_world.dirty_range_starts(),
             &[mesh_entity.index() as u32]
@@ -436,6 +480,7 @@ mod tests {
             },
         );
         render_world.extract(&world).unwrap();
+        assert!(render_world.snapshot_changed());
         assert_eq!(
             render_world.dirty_range_starts(),
             &[mesh_entity.index() as u32]
@@ -444,6 +489,17 @@ mod tests {
             render_world.instances()[mesh_entity.index()].color.0,
             [0.0, 1.0, 0.0, 1.0]
         );
+
+        world.add_bounds(
+            mesh_entity,
+            Bounds {
+                center: Vec3::default(),
+                radius: 2.0,
+            },
+        );
+        render_world.extract(&world).unwrap();
+        assert!(render_world.snapshot_changed());
+        assert_eq!(render_world.bounds()[0].center_radius[3], 2.0);
         assert_eq!(core::mem::size_of::<GpuInstance>(), 80);
         assert_eq!(core::mem::size_of::<GpuCamera>(), 128);
     }
@@ -506,6 +562,11 @@ mod tests {
 
         let recycled_slot = meshes[0].index();
         assert!(world.despawn(meshes[0]));
+        assert!(!world.add_transform(meshes[0], Transform::default()));
+        render_world.extract(&world).unwrap();
+        assert!(render_world.snapshot_changed());
+        assert_eq!(render_world.instance_count(), 2);
+
         let recycled = world.spawn().unwrap();
         assert_eq!(recycled.index(), recycled_slot);
         assert_ne!(recycled.generation(), meshes[0].generation());
@@ -519,6 +580,8 @@ mod tests {
         );
         world.update();
         render_world.extract(&world).unwrap();
+        assert!(render_world.snapshot_changed());
+        assert_eq!(render_world.instance_count(), 3);
         assert!(
             render_world
                 .dirty_range_starts()

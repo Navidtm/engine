@@ -1,6 +1,6 @@
 # Current Project State
 
-Last verified: 2026-08-12 on the issue #8 implementation branch
+Last verified: 2026-08-12 on the issue #9 implementation branch
 
 This document records the implementation that exists in the repository. It is
 an evidence-based snapshot, not a description of intended future architecture.
@@ -103,6 +103,8 @@ Implemented:
   camera matrices, and bounding spheres.
 - Persistent entity-indexed instance records with generational/revision dirty
   tracking and coalesced upload ranges.
+- Epoch-gated reuse of unchanged instance metadata and bounds, plus retained
+  visibility when the active camera is also unchanged.
 - CPU frustum culling using sphere bounds.
 - Reusable visibility output buffers.
 - CPU ordering by pipeline, material, and geometry for consecutive draw runs.
@@ -263,8 +265,9 @@ browser worker latency.
 | 1,000,000 | 9.72 ms | 1.22 ms | 1.05 ms |      yes       |
 
 The repository also contains Rust ECS/extraction benchmarks and browser
-renderer/comparison/transport harnesses. Controlled Chrome and Edge results on
-the same hardware and resolution remain outstanding.
+renderer/comparison/transport harnesses. Controlled Chrome results now cover
+persistent upload and incremental RenderWorld decisions; equivalent Edge
+results remain outstanding.
 
 ## Quality and Tooling
 
@@ -311,10 +314,11 @@ transport milestone.
 
 1. The required SAB-to-WASM staging copy still scales linearly with the number
    and size of dirty fields.
-2. Extraction, frustum culling, and render-key sorting are CPU-side. Visibility
-   ordering performs an `O(V log V)` unstable sort each frame.
-3. Persistent instance upload is change-proportional, but extraction and the
-   compact visible-slot list remain CPU-prepared each frame.
+2. Changed scenes still use CPU extraction, frustum culling, and render-key
+   sorting. Visibility ordering performs an `O(V log V)` unstable sort whenever
+   the render snapshot or camera changes.
+3. Static frames reuse extraction and visibility, but any render mutation still
+   rebuilds the complete compact snapshot.
 4. Draw-call reduction depends on consecutive CPU ordering; there are no
    indirect batches or GPU-generated commands.
 5. Large-scale measurements are transport microbenchmarks. Real worker

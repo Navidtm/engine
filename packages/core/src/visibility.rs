@@ -310,6 +310,11 @@ impl VisibleRenderBuffer {
         self.slots_dirty
     }
 
+    /// Marks the retained visible-slot list unchanged for the current frame.
+    pub fn retain_unchanged(&mut self) {
+        self.slots_dirty = false;
+    }
+
     /// Returns the stable allocation pointer for visible geometry IDs.
     #[must_use]
     pub fn geometries_capacity_ptr(&self) -> *const u32 {

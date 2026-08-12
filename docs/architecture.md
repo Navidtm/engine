@@ -95,6 +95,14 @@ one storage-buffer indirection. This preserves CPU visibility and the
 from unchanged frames. See
 [ADR 007](../.agents/decisions/007-persistent-instance-storage.md).
 
+Mostly-static frames reuse the retained `RenderWorld` snapshot through a
+world-owned render change epoch. Unchanged instance metadata and bounds are not
+rebuilt, and visibility grouping is retained when camera records are also
+unchanged. Any canonical render mutation takes the existing full linear path,
+so dynamic scenes keep contiguous deterministic extraction without a second
+incremental data structure. See
+[ADR 008](../.agents/decisions/008-epoch-gated-render-extraction.md).
+
 Detailed byte layout and browser-thread responsibilities are documented in
 [memory-model.md](memory-model.md) and [threading-model.md](threading-model.md).
 

@@ -14,6 +14,22 @@ culling. Scaling counts are 1k, 10k, 50k, 100k, 500k, and 1M entities. The
 committed result includes duration, throughput, allocation counts, allocated
 bytes, and estimated owned memory.
 
+To compare epoch-gated RenderWorld reuse with a separately built baseline WASM
+artifact in controlled Chrome, run:
+
+```sh
+pnpm benchmark:render-world -- \
+  --baseline-wasm /path/to/baseline.wasm \
+  --baseline-native /path/to/baseline-native.json \
+  --candidate-native /path/to/candidate-native.json
+```
+
+The browser runner uses ABBA order for every 10k/50k/100k entity and
+0%/1%/10%/100% update-ratio pair. It retains raw worker/render CPU, renderer
+preparation, GPU timestamp, frame, upload, and memory samples together with the
+native extraction-only matrix. Results are written to
+`benchmarks/results/incremental-render-world-latest.json`.
+
 ## Transport overhead suite
 
 Run:
