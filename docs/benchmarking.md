@@ -29,6 +29,52 @@ update latency, worker round-trip cost, and worker preparation, plus
 cross-thread copies and estimated transport allocations. Raw output is exposed
 as `window.__LUME_TRANSPORT_RESULT__`.
 
+## WASM release profile suite
+
+Run the reproducible Rust/WASM and Node comparison with:
+
+```sh
+pnpm benchmark:wasm-profiles
+```
+
+Add `-- --browser` to run the renderer through Chrome headless, the production
+worker and SharedArrayBuffer transport, and WebGPU. Browser runs use ABBA order;
+all raw samples and environment metadata are retained in
+[`wasm-profiles-latest.json`](../benchmarks/results/wasm-profiles-latest.json).
+
+The committed report compares `opt-level = "s"` with `opt-level = "3"` at
+commit `ed4ef2917083c5695996ab3c66c827d635ff333c`, with fat LTO, one codegen
+unit, abort-on-panic, and stripping held constant. It was captured on an Apple
+M4 with 16 GiB RAM, macOS 26.5.1, Rust 1.96.0, Node 24.19.0/V8 13.6, and
+Chrome 151 headless using a non-fallback Apple Metal 3 adapter. The report
+records `dirty: false`.
+
+| Metric (10k entities)                       | `s`            | `3`            | `3` tradeoff             |
+| ------------------------------------------- | -------------- | -------------- | ------------------------ |
+| Raw WASM                                    | 54,185 B       | 56,759 B       | +2,574 B (+4.75%)        |
+| gzip level 9                                | 20,610 B       | 21,738 B       | +1,128 B (+5.47%)        |
+| Brotli quality 11                           | 17,187 B       | 18,010 B       | +823 B (+4.79%)          |
+| Node/V8 compile median                      | 0.1759 ms      | 0.1875 ms      | +0.0117 ms (+6.63%)      |
+| Node/V8 compile + instantiate median        | 0.2224 ms      | 0.2487 ms      | +0.0263 ms (+11.82%)     |
+| WASM transform-range median                 | 0.0713 ms      | 0.0461 ms      | 35.40% faster            |
+| WASM complete core-frame median             | 0.3813 ms      | 0.3327 ms      | 12.75% faster            |
+| Browser per-run worker/render CPU median    | 0.855–0.915 ms | 0.795–0.900 ms | overlapping/noisy        |
+| Browser presented-frame median (60Hz/vsync) | 16.660 ms      | 16.660 ms      | no measurable difference |
+
+The workspace release default is therefore `opt-level = 3`. The recurring
+runtime gain is worth 823 compressed bytes for an engine runtime, while cold
+compile plus instantiation regressed by only 26 microseconds. A separate size
+build is not maintained: applications with an unusually strict payload budget
+can override Cargo's release opt level and rerun this suite.
+
+The presented browser frame is vsync-limited and must not be cited as a render
+throughput improvement. Browser initialization has only two retained samples
+per profile, and browser CPU varied materially between runs; both are recorded
+as directional checks but excluded from the numerical decision. Build wall
+time is also excluded because incremental cache state differs. The selected
+evidence is artifact size, raw startup samples, and isolated WASM hot paths;
+the same-session browser run validates the production path and direction only.
+
 ## Rendering and comparison suites
 
 The renderer suite measures 1k, 10k, 50k, and 100k cubes. The comparison suite

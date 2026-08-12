@@ -64,6 +64,12 @@ Run the internal release benchmarks with:
 pnpm benchmark
 ```
 
+Compare the two Rust/WASM release optimization profiles with:
+
+```sh
+pnpm benchmark:wasm-profiles -- --browser
+```
+
 The latest raw internal results are stored in
 `benchmarks/results/internal-latest.json`. Browser renderer and Three.js
 comparison harnesses live under `benchmarks/renderer` and
