@@ -43,27 +43,27 @@ all raw samples and environment metadata are retained in
 [`wasm-profiles-latest.json`](../benchmarks/results/wasm-profiles-latest.json).
 
 The committed report compares `opt-level = "s"` with `opt-level = "3"` at
-commit `5204235896fe48582547d6ae1e24d1971459ec8a`, with fat LTO, one codegen
+commit `ed4ef2917083c5695996ab3c66c827d635ff333c`, with fat LTO, one codegen
 unit, abort-on-panic, and stripping held constant. It was captured on an Apple
 M4 with 16 GiB RAM, macOS 26.5.1, Rust 1.96.0, Node 24.19.0/V8 13.6, and
 Chrome 151 headless using a non-fallback Apple Metal 3 adapter. The report
 records `dirty: false`.
 
-| Metric (10k entities)                       | `s`          | `3`          | `3` tradeoff             |
-| ------------------------------------------- | ------------ | ------------ | ------------------------ |
-| Raw WASM                                    | 54,185 B     | 56,759 B     | +2,574 B (+4.75%)        |
-| gzip level 9                                | 20,610 B     | 21,738 B     | +1,128 B (+5.47%)        |
-| Brotli quality 11                           | 17,187 B     | 18,010 B     | +823 B (+4.79%)          |
-| Node/V8 compile median                      | 0.0802 ms    | 0.0793 ms    | no meaningful difference |
-| Node/V8 compile + instantiate median        | 0.1094 ms    | 0.1080 ms    | no meaningful difference |
-| WASM transform-range median                 | 0.0792 ms    | 0.0453 ms    | 42.82% faster            |
-| WASM complete core-frame median             | 0.3760 ms    | 0.3254 ms    | 13.46% faster            |
-| Browser per-run worker/render CPU median    | 0.54–1.20 ms | 0.41–0.43 ms | directional; high noise  |
-| Browser presented-frame median (60Hz/vsync) | 16.665 ms    | 16.670 ms    | no measurable difference |
+| Metric (10k entities)                       | `s`            | `3`            | `3` tradeoff             |
+| ------------------------------------------- | -------------- | -------------- | ------------------------ |
+| Raw WASM                                    | 54,185 B       | 56,759 B       | +2,574 B (+4.75%)        |
+| gzip level 9                                | 20,610 B       | 21,738 B       | +1,128 B (+5.47%)        |
+| Brotli quality 11                           | 17,187 B       | 18,010 B       | +823 B (+4.79%)          |
+| Node/V8 compile median                      | 0.1759 ms      | 0.1875 ms      | +0.0117 ms (+6.63%)      |
+| Node/V8 compile + instantiate median        | 0.2224 ms      | 0.2487 ms      | +0.0263 ms (+11.82%)     |
+| WASM transform-range median                 | 0.0713 ms      | 0.0461 ms      | 35.40% faster            |
+| WASM complete core-frame median             | 0.3813 ms      | 0.3327 ms      | 12.75% faster            |
+| Browser per-run worker/render CPU median    | 0.855–0.915 ms | 0.795–0.900 ms | overlapping/noisy        |
+| Browser presented-frame median (60Hz/vsync) | 16.660 ms      | 16.660 ms      | no measurable difference |
 
 The workspace release default is therefore `opt-level = 3`. The recurring
-runtime gain is worth 823 compressed bytes for an engine runtime, while startup
-was indistinguishable at roughly one tenth of a millisecond. A separate size
+runtime gain is worth 823 compressed bytes for an engine runtime, while cold
+compile plus instantiation regressed by only 26 microseconds. A separate size
 build is not maintained: applications with an unusually strict payload budget
 can override Cargo's release opt level and rerun this suite.
 
