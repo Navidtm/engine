@@ -20,6 +20,26 @@ sparse set reject capacity overflow instead of growing WASM memory. A WASM
 memory growth refreshes JavaScript typed views but does not change the exported
 staging offsets; normal engine operation must not require one.
 
+## Persistent renderer data
+
+`RenderWorld` owns one 80-byte `GpuInstance` record per configured entity slot.
+The record is indexed by entity index and overwritten when its generation or
+render revision changes. Extraction exposes changed slots as reusable,
+coalesced `{start, count}` arrays. The worker borrows stable WASM views and the
+renderer writes only those byte ranges into its persistent storage buffer.
+
+Visibility keeps render-key grouping compact, but its output is a four-byte
+slot index rather than a copied 80-byte instance. A renderer-owned visible-slot
+storage buffer maps `instance_index` to the persistent record. It is uploaded
+only when visibility or ordering changes. Camera records use the same
+compare-before-upload rule. These arrays have fixed capacity and create no
+per-frame JavaScript allocation.
+
+At 10,000 configured slots, the GPU indirection buffer adds 40,000 bytes. This
+is the explicit memory trade-off for making static instance upload zero and
+dirty instance upload proportional to changed ranges. Exact browser evidence is
+stored in `benchmarks/results/persistent-instance-upload-latest.json`.
+
 ## Shared allocation and budget
 
 The allocation has three explicit, immutable budgets: public `entityCapacity`

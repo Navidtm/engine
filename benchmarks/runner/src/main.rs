@@ -258,7 +258,7 @@ fn benchmark_render_extraction(count: usize) -> ResultRecord {
         );
     }
     world.update();
-    let mut render_world = RenderWorld::with_capacity(count, 1);
+    let mut render_world = RenderWorld::with_capacity(count + 1, 1);
     let mut samples = Vec::with_capacity(30);
     let mut max_allocations = 0;
     let mut allocated_bytes = 0;
@@ -330,7 +330,7 @@ fn benchmark_frustum_culling(scenario: &'static str, visible_percent: usize) -> 
         );
     }
     world.update();
-    let mut render_world = RenderWorld::with_capacity(COUNT, 1);
+    let mut render_world = RenderWorld::with_capacity(COUNT + 2, 1);
     render_world.extract(&world).expect("render capacity");
     let mut visible = VisibleRenderBuffer::with_capacity(COUNT);
     visible.cull(&render_world).expect("visible capacity");

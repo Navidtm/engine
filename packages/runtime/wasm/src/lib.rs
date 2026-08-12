@@ -8,7 +8,7 @@ use lume_core::{
 };
 
 /// ABI revision required by the TypeScript runtime before it calls any export.
-pub const ABI_VERSION: u32 = 6;
+pub const ABI_VERSION: u32 = 7;
 
 const TRANSFORM_UPDATE_FLOATS: usize = 10;
 
@@ -332,13 +332,19 @@ pub extern "C" fn lume_engine_entity_count(engine: *mut c_void) -> u32 {
 /// Returns extracted instance count before visibility culling.
 #[unsafe(no_mangle)]
 pub extern "C" fn lume_render_instance_count(engine: *mut c_void) -> u32 {
-    with_engine_value(engine, |core| core.render_world.instances().len() as u32).unwrap_or(0)
+    with_engine_value(engine, |core| core.render_world.instance_count() as u32).unwrap_or(0)
 }
 
 /// Returns extracted camera count.
 #[unsafe(no_mangle)]
 pub extern "C" fn lume_render_camera_count(engine: *mut c_void) -> u32 {
     with_engine_value(engine, |core| core.render_world.cameras().len() as u32).unwrap_or(0)
+}
+
+/// Returns `1` when camera GPU records changed during the current frame.
+#[unsafe(no_mangle)]
+pub extern "C" fn lume_render_cameras_dirty(engine: *mut c_void) -> u32 {
+    with_engine_value(engine, |core| core.render_world.cameras_dirty() as u32).unwrap_or(0)
 }
 
 /// Returns the fixed extracted-instance capacity.
@@ -377,6 +383,33 @@ pub extern "C" fn lume_render_instances_ptr(engine: *mut c_void) -> *const GpuIn
         .unwrap_or(core::ptr::null())
 }
 
+/// Returns the number of coalesced persistent-instance ranges changed this frame.
+#[unsafe(no_mangle)]
+pub extern "C" fn lume_render_dirty_range_count(engine: *mut c_void) -> u32 {
+    with_engine_value(engine, |core| {
+        core.render_world.dirty_range_starts().len() as u32
+    })
+    .unwrap_or(0)
+}
+
+/// Returns the stable pointer to dirty persistent-instance range starts.
+#[unsafe(no_mangle)]
+pub extern "C" fn lume_render_dirty_range_starts_ptr(engine: *mut c_void) -> *const u32 {
+    with_engine_value(engine, |core| {
+        core.render_world.dirty_range_starts_capacity_ptr()
+    })
+    .unwrap_or(core::ptr::null())
+}
+
+/// Returns the stable pointer to dirty persistent-instance range counts.
+#[unsafe(no_mangle)]
+pub extern "C" fn lume_render_dirty_range_counts_ptr(engine: *mut c_void) -> *const u32 {
+    with_engine_value(engine, |core| {
+        core.render_world.dirty_range_counts_capacity_ptr()
+    })
+    .unwrap_or(core::ptr::null())
+}
+
 /// Returns the stable pointer to extracted `GpuCamera` records.
 #[unsafe(no_mangle)]
 pub extern "C" fn lume_render_cameras_ptr(engine: *mut c_void) -> *const GpuCamera {
@@ -394,6 +427,12 @@ pub extern "C" fn lume_visible_count(engine: *mut c_void) -> u32 {
 #[unsafe(no_mangle)]
 pub extern "C" fn lume_visible_capacity(engine: *mut c_void) -> u32 {
     with_engine_value(engine, |core| core.visible.capacity() as u32).unwrap_or(0)
+}
+
+/// Returns `1` when visible slot membership or grouped order changed this frame.
+#[unsafe(no_mangle)]
+pub extern "C" fn lume_visible_slots_dirty(engine: *mut c_void) -> u32 {
+    with_engine_value(engine, |core| core.visible.slots_dirty() as u32).unwrap_or(0)
 }
 
 /// Returns the stable pointer to visible geometry IDs in grouped draw order.
@@ -417,11 +456,10 @@ pub extern "C" fn lume_visible_materials_ptr(engine: *mut c_void) -> *const u32 
         .unwrap_or(core::ptr::null())
 }
 
-/// Returns the stable pointer to visible `GpuInstance` records in draw order.
+/// Returns the stable pointer to visible persistent-instance slot IDs in draw order.
 #[unsafe(no_mangle)]
-pub extern "C" fn lume_visible_instances_ptr(engine: *mut c_void) -> *const GpuInstance {
-    with_engine_value(engine, |core| core.visible.instances_capacity_ptr())
-        .unwrap_or(core::ptr::null())
+pub extern "C" fn lume_visible_slots_ptr(engine: *mut c_void) -> *const u32 {
+    with_engine_value(engine, |core| core.visible.slots_capacity_ptr()).unwrap_or(core::ptr::null())
 }
 
 fn with_engine(engine: *mut c_void, operation: impl FnOnce(&mut EngineCore) -> bool) -> bool {
@@ -480,7 +518,10 @@ mod tests {
         assert_eq!(lume_render_instance_count(engine), 1);
         assert_eq!(lume_visible_count(engine), 1);
         assert!(!lume_visible_geometries_ptr(engine).is_null());
-        assert!(!lume_visible_instances_ptr(engine).is_null());
+        assert!(!lume_visible_slots_ptr(engine).is_null());
+        assert_eq!(lume_render_dirty_range_count(engine), 1);
+        assert!(!lume_render_dirty_range_starts_ptr(engine).is_null());
+        assert!(!lume_render_dirty_range_counts_ptr(engine).is_null());
         assert_eq!(lume_transform_update_capacity(engine), 16);
         // SAFETY: both staging pointers address initialized storage owned by the live engine.
         unsafe {

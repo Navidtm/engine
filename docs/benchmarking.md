@@ -90,6 +90,20 @@ When no controlled browser is connected, the repository records `status:
 "not-run"` with `rawMeasurements: null`; missing data is never replaced by an
 estimate.
 
+Run the persistent-instance upload matrix with:
+
+```sh
+pnpm benchmark:renderer-uploads
+```
+
+It uses the production worker, WASM core, and WebGPU renderer in controlled
+Chrome runs at 1k, 10k, 50k, and 100k entities with 0%, 1%, 10%, and 100%
+per-frame transform updates. The committed report retains raw upload bytes,
+write counts, upload CPU time, complete worker/render CPU time, GPU timestamps,
+and renderer/WASM memory. The `before` section links the last committed browser
+run from the pre-change commit; it does not relabel a post-change run as a
+baseline.
+
 ## Interpreting results
 
 Native timings isolate ECS and extraction architecture. Browser timings include

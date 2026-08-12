@@ -1,7 +1,7 @@
 import type { RendererOptions, SurfaceSize } from "@lume/renderer";
 
 /** Version checked before a main thread and worker exchange runtime messages. */
-export const RUNTIME_PROTOCOL_VERSION = 5;
+export const RUNTIME_PROTOCOL_VERSION = 6;
 
 /** Snapshot returned by {@link Engine.getStats} through the worker boundary. */
 export interface EngineStats {
@@ -32,6 +32,10 @@ export interface EngineStats {
   readonly timings: {
     /** CPU milliseconds spent writing dynamic GPU buffers. */
     readonly bufferUploadCpuTime: number;
+    /** CPU-to-GPU bytes written during the latest frame. */
+    readonly bufferUploadBytes: number;
+    /** GPU queue buffer writes issued during the latest frame. */
+    readonly bufferWriteCount: number;
     /** CPU milliseconds spent preparing extraction/visibility work. */
     readonly framePreparationCpuTime: number;
   };

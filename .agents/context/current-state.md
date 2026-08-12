@@ -1,6 +1,6 @@
 # Current Project State
 
-Last verified: 2026-08-05 at commit `be38b28`
+Last verified: 2026-08-12 on the issue #8 implementation branch
 
 This document records the implementation that exists in the repository. It is
 an evidence-based snapshot, not a description of intended future architecture.
@@ -101,6 +101,8 @@ Implemented:
 - Separate, reusable `RenderWorld` storage.
 - Extraction of instance matrices, colors, geometry/material/pipeline IDs,
   camera matrices, and bounding spheres.
+- Persistent entity-indexed instance records with generational/revision dirty
+  tracking and coalesced upload ranges.
 - CPU frustum culling using sphere bounds.
 - Reusable visibility output buffers.
 - CPU ordering by pipeline, material, and geometry for consecutive draw runs.
@@ -129,6 +131,8 @@ Implemented:
 - Adapter/device acquisition and canvas configuration.
 - Asynchronous basic render-pipeline creation and pipeline caching.
 - Persistent camera and instance GPU buffers.
+- Persistent visible-slot storage, with instance, visibility, and camera writes
+  skipped independently when unchanged.
 - Vertex/index buffers and a built-in mesh registry.
 - Depth target creation and resize handling.
 - Timestamp queries when supported, with CPU timing fallback metrics.
@@ -142,8 +146,6 @@ Implemented:
 Current limitations:
 
 - One basic pipeline and color-only material path.
-- Every frame uploads the complete visible instance range, even if only a
-  subset changed.
 - No indirect command buffers or indirect drawing.
 - No GPU-driven culling, compute visibility, or GPU scene database.
 - Device loss is reported but the renderer is not automatically rebuilt.
@@ -308,11 +310,8 @@ transport milestone.
    and size of dirty fields.
 2. Extraction, frustum culling, and render-key sorting are CPU-side. Visibility
    ordering performs an `O(V log V)` unstable sort each frame.
-3. The renderer uploads the full visible instance buffer every frame instead of
-   retaining GPU-side data and uploading dirty ranges. This is explicitly
-   deferred Renderer Scalability work: visible instances are compacted and
-   reordered each frame, so persistent GPU slots require a scene-data and
-   indirect-draw design rather than a local transport patch.
+3. Persistent instance upload is change-proportional, but extraction and the
+   compact visible-slot list remain CPU-prepared each frame.
 4. Draw-call reduction depends on consecutive CPU ordering; there are no
    indirect batches or GPU-generated commands.
 5. Large-scale measurements are transport microbenchmarks. Real worker
@@ -328,11 +327,10 @@ finds a correctness or material performance problem. The next development
 milestone should focus on renderer scalability:
 
 1. Establish controlled Chrome and Edge baselines for the complete runtime.
-2. Add persistent GPU scene/instance storage with dirty-range uploads.
-3. Scale batching beyond consecutive CPU-prepared instance runs.
-4. Introduce indirect command storage and indirect drawing.
-5. Move visibility/culling to GPU compute when measurements justify it.
-6. Preserve the existing ECS/RenderWorld/renderer ownership boundaries while
+2. Scale batching beyond consecutive CPU-prepared instance runs.
+3. Introduce indirect command storage and indirect drawing.
+4. Move visibility/culling to GPU compute when measurements justify it.
+5. Preserve the existing ECS/RenderWorld/renderer ownership boundaries while
    doing so.
 
 Textures, lighting, animation, physics, and asset loading remain out of scope

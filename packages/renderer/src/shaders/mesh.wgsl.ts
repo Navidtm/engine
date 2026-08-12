@@ -16,13 +16,14 @@ struct VertexOutput {
 
 @group(0) @binding(0) var<uniform> camera: CameraData;
 @group(0) @binding(1) var<storage, read> instances: array<InstanceData>;
+@group(0) @binding(2) var<storage, read> visible_slots: array<u32>;
 
 @vertex
 fn vertex_main(
   @location(0) position: vec3f,
   @builtin(instance_index) instance_index: u32,
 ) -> VertexOutput {
-  let instance = instances[instance_index];
+  let instance = instances[visible_slots[instance_index]];
   let world_position = instance.model * vec4f(position, 1.0);
   var output: VertexOutput;
   output.position = camera.projection * camera.view * world_position;

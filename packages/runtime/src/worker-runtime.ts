@@ -209,6 +209,8 @@ export function createWorkerRuntime(host: WorkerHost): (message: MainToWorkerMes
               },
               timings: {
                 bufferUploadCpuTime: rendererStats?.bufferUploadCpuTimeMs ?? 0,
+                bufferUploadBytes: rendererStats?.bufferUploadBytes ?? 0,
+                bufferWriteCount: rendererStats?.bufferWriteCount ?? 0,
                 framePreparationCpuTime: rendererStats?.framePreparationCpuTimeMs ?? 0,
               },
               transport: transportStats(

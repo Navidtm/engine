@@ -76,6 +76,9 @@ export async function runBrowserBenchmarks({ repositoryRoot, artifacts, commit, 
         wasmProfile: artifact.name,
         commit,
       });
+      if (artifact.updateRatio !== undefined) {
+        query.set("updateRatio", String(artifact.updateRatio));
+      }
       profiles[artifact.name].push(
         await runPage(`http://${host}:${serverPort}/?${query.toString()}`),
       );

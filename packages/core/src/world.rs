@@ -39,6 +39,7 @@ impl Default for WorldCapacity {
 /// through [`crate::RenderWorld`], so renderer state never mutates this world.
 pub struct World {
     entities: EntityAllocator,
+    render_revisions: Vec<u32>,
     /// Transform component storage, exposed for allocation-free engine systems.
     pub transforms: SparseSet<Transform>,
     /// Mesh renderer component storage.
@@ -57,6 +58,7 @@ impl World {
     pub fn with_capacity(capacity: WorldCapacity) -> Self {
         Self {
             entities: EntityAllocator::with_capacity(capacity.entities),
+            render_revisions: vec![0; capacity.entities],
             transforms: SparseSet::with_capacity(capacity.entities, capacity.transforms),
             mesh_renderers: SparseSet::with_capacity(capacity.entities, capacity.mesh_renderers),
             cameras: SparseSet::with_capacity(capacity.entities, capacity.cameras),
@@ -105,7 +107,11 @@ impl World {
         if !self.is_alive(entity) {
             return false;
         }
-        self.transforms.insert(entity, value).is_ok()
+        let inserted = self.transforms.insert(entity, value).is_ok();
+        if inserted {
+            bump_revision(&mut self.render_revisions[entity.index()]);
+        }
+        inserted
     }
 
     /// Applies the transport field mask (`position=1`, `rotation=2`, `scale=4`).
@@ -133,6 +139,7 @@ impl World {
         if mask & 4 != 0 {
             transform.scale = crate::math::Vec3::new([value[7], value[8], value[9]]);
         }
+        bump_revision(&mut self.render_revisions[entity.index()]);
         true
     }
 
@@ -151,7 +158,11 @@ impl World {
         let mesh_added = self.mesh_renderers.insert(entity, value).is_ok();
         let bounds_added =
             self.bounds.contains(entity) || self.bounds.insert(entity, Bounds::default()).is_ok();
-        mesh_added && bounds_added
+        let inserted = mesh_added && bounds_added;
+        if inserted {
+            bump_revision(&mut self.render_revisions[entity.index()]);
+        }
+        inserted
     }
 
     /// Adds or replaces a camera component.
@@ -175,9 +186,19 @@ impl World {
         if !self.is_alive(entity) {
             return false;
         }
-        self.materials
+        let inserted = self
+            .materials
             .insert(MaterialHandle::from_entity(entity), value)
-            .is_ok()
+            .is_ok();
+        if inserted {
+            let material = MaterialHandle::from_entity(entity);
+            for (mesh_entity, mesh) in self.mesh_renderers.iter() {
+                if mesh.material == material {
+                    bump_revision(&mut self.render_revisions[mesh_entity.index()]);
+                }
+            }
+        }
+        inserted
     }
 
     /// Removes a component selected by the stable transport component ID.
@@ -188,7 +209,7 @@ impl World {
         if !self.is_alive(entity) {
             return false;
         }
-        match component {
+        let removed = match component {
             1 => self.transforms.remove(entity).is_some(),
             2 => self
                 .materials
@@ -198,7 +219,20 @@ impl World {
             4 => self.mesh_renderers.remove(entity).is_some(),
             5 => self.bounds.remove(entity).is_some(),
             _ => false,
+        };
+        if removed {
+            if component == 2 {
+                let material = MaterialHandle::from_entity(entity);
+                for (mesh_entity, mesh) in self.mesh_renderers.iter() {
+                    if mesh.material == material {
+                        bump_revision(&mut self.render_revisions[mesh_entity.index()]);
+                    }
+                }
+            } else {
+                bump_revision(&mut self.render_revisions[entity.index()]);
+            }
         }
+        removed
     }
 
     /// Updates every camera's positive viewport aspect ratio in place.
@@ -215,6 +249,19 @@ impl World {
     pub fn update(&mut self) {
         update_transforms(&mut self.transforms);
         update_cameras(&mut self.cameras, &self.transforms);
+    }
+
+    /// Returns the revision of entity-owned data consumed by render extraction.
+    #[must_use]
+    pub fn render_revision(&self, entity: Entity) -> u32 {
+        self.render_revisions[entity.index()]
+    }
+}
+
+fn bump_revision(revision: &mut u32) {
+    *revision = revision.wrapping_add(1);
+    if *revision == 0 {
+        *revision = 1;
     }
 }
 
