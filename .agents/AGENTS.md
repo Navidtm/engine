@@ -227,6 +227,37 @@ Prefer:
 
 Avoid choosing the fastest implementation if it creates future technical debt.
 
+# GitHub Issue Tracking
+
+Whenever repository work discovers an actionable, evidence-backed problem or
+improvement, create or update a GitHub issue before considering the review or
+task complete. This includes:
+
+- correctness and lifecycle bugs;
+- architecture inconsistencies or accepted-ADR implementation gaps;
+- measured performance regressions or concrete hot-path risks;
+- missing regression coverage for an identified failure boundary; and
+- stale documentation that can misdirect future implementation.
+
+Before creating an issue:
+
+1. Search both open and closed issues for an existing report.
+2. If an issue already covers the finding, add the new evidence or acceptance
+   criteria there instead of creating a duplicate.
+3. Confirm the finding from repository code, tests, documentation, or measured
+   results. Do not create issues for unsupported speculation.
+
+Every new issue should include:
+
+- the observed evidence and relevant file locations;
+- why the problem matters;
+- the intended scope and explicit non-goals;
+- concrete acceptance criteria; and
+- an appropriate repository label.
+
+When GitHub access is unavailable, provide a ready-to-file issue draft and
+clearly report that the external issue was not created.
+
 # Implementation Rules
 
 Always prefer:
