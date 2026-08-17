@@ -83,9 +83,12 @@ command record. Publishing the tail is the release point; consuming the head is
 the acquire point. Commands are applied in FIFO order before transform ranges so
 a newly created entity exists before its component data arrives.
 
-If the ring is full, the write fails explicitly, increments `droppedCommands`,
-and the API uses its ordered message fallback. Initialization batches remain
-message based because they can exceed the runtime ring before the worker starts.
+If the ring is full, the write fails explicitly and increments
+`droppedCommands`. The worker drains older shared structural and transform
+publications before applying the attempted command; all later structural and
+transform authoring then uses the ordered message stream. Initialization batches
+remain message based because they can exceed the runtime ring before the worker
+starts.
 
 ## Generational lifecycle
 

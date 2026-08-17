@@ -117,6 +117,8 @@ export interface WasmCore {
   apply(command: RuntimeCommand, aspect: number): void;
   /** Drains the shared structural SPSC ring when that transport is active. */
   updateSharedCommands(): void;
+  /** Applies shared transforms published before an ordered fallback command. */
+  updateSharedTransforms(): void;
   /** Updates all camera aspects after a valid surface resize. */
   resize(aspect: number): void;
   /** Drains shared transforms, advances ECS, and returns borrowed render views. */
@@ -320,6 +322,22 @@ export async function createWasmCore(
     if (sharedViews === undefined) return;
     drainSharedCommands(sharedViews, applyShared);
   };
+  const updateSharedTransforms = (): void => {
+    if (sharedViews === undefined) return;
+    stagedTransformCount = 0;
+    stagedRangeCount = 0;
+    previousStagedIndex = -2;
+    stagingEpoch = stagingEpoch === 0xffff_ffff ? 1 : stagingEpoch + 1;
+    drainSharedTransforms(sharedViews, transformScratch, stageTransform);
+    if (
+      stagedTransformCount > 0 &&
+      exports.lume_engine_apply_transform_ranges(handle, stagedRangeCount) !== stagedTransformCount
+    ) {
+      throw new Error("WASM rejected one or more shared transform updates.");
+    }
+    lastSharedTransformUpdates = stagedTransformCount;
+    totalDirtyRanges += stagedRangeCount;
+  };
 
   const core: WasmCore = {
     apply(command: RuntimeCommand, aspect: number) {
@@ -330,6 +348,7 @@ export async function createWasmCore(
       }
     },
     updateSharedCommands,
+    updateSharedTransforms,
     update() {
       if (exports.memory.buffer !== observedMemory) {
         observedMemory = exports.memory.buffer;
@@ -383,20 +402,7 @@ export async function createWasmCore(
       }
       if (sharedViews !== undefined) {
         updateSharedCommands();
-        stagedTransformCount = 0;
-        stagedRangeCount = 0;
-        previousStagedIndex = -2;
-        stagingEpoch = stagingEpoch === 0xffff_ffff ? 1 : stagingEpoch + 1;
-        drainSharedTransforms(sharedViews, transformScratch, stageTransform);
-        if (
-          stagedTransformCount > 0 &&
-          exports.lume_engine_apply_transform_ranges(handle, stagedRangeCount) !==
-            stagedTransformCount
-        ) {
-          throw new Error("WASM rejected one or more shared transform updates.");
-        }
-        lastSharedTransformUpdates = stagedTransformCount;
-        totalDirtyRanges += stagedRangeCount;
+        updateSharedTransforms();
       }
       if (!disposed && exports.lume_engine_update(handle) === 0) {
         throw new Error("WASM world update failed.");

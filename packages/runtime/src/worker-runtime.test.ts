@@ -109,4 +109,48 @@ describe("worker runtime resource ownership", () => {
     coreResult.reject(new Error("disposed"));
     await Promise.allSettled([rendererResult.promise, coreResult.promise]);
   });
+
+  it("flushes shared state before ordered fallback commands but not initialization batches", async () => {
+    const order: string[] = [];
+    const renderer = {
+      lost: new Promise<GPUDeviceLostInfo>(() => undefined),
+      execute: vi.fn(),
+      resize: vi.fn(),
+      stats: vi.fn(),
+      dispose: vi.fn(),
+    } satisfies MeshRenderer;
+    const core = {
+      apply: vi.fn((command: { readonly type: string }) => order.push(`apply:${command.type}`)),
+      updateSharedCommands: vi.fn(() => order.push("shared-commands")),
+      updateSharedTransforms: vi.fn(() => order.push("shared-transforms")),
+      resize: vi.fn(),
+      update: vi.fn(),
+      stats: vi.fn(),
+      dispose: vi.fn(),
+    } satisfies WasmCore;
+    mocks.createMeshRenderer.mockResolvedValueOnce(renderer);
+    mocks.createWasmCore.mockResolvedValueOnce(core);
+    const posted: WorkerToMainMessage[] = [];
+    const host: WorkerHost = {
+      postMessage: (message) => posted.push(message),
+      requestAnimationFrame: vi.fn(() => 1),
+      cancelAnimationFrame: vi.fn(),
+    };
+    const receive = createWorkerRuntime(host);
+
+    receive(initMessage());
+    await vi.waitFor(() => expect(posted[0]?.type).toBe("ready"));
+    receive({ type: "command", value: { type: "spawn", entity: 1 } });
+    expect(order).toEqual(["shared-commands", "shared-transforms", "apply:spawn"]);
+
+    order.length = 0;
+    receive({
+      type: "batch",
+      value: [
+        { type: "spawn", entity: 2 },
+        { type: "despawn", entity: 2 },
+      ],
+    });
+    expect(order).toEqual(["apply:spawn", "apply:despawn"]);
+  });
 });
