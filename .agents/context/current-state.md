@@ -206,9 +206,11 @@ Implemented shared SPSC commands include:
 - remove component.
 
 The ring is lock-free, FIFO, bounded, and fixed-record-width. Overflow is
-observable through `droppedCommands`; the API switches to an ordered
-`postMessage` fallback so later structural commands cannot overtake the dropped
-command. Initialization batches and non-SAB environments also use messages.
+observable through `droppedCommands`; the worker drains older shared structural
+and transform publications before applying the attempted command, then the API
+routes all later structural and transform authoring through the ordered
+`postMessage` stream. Initialization batches and non-SAB environments also use
+messages.
 
 ### Transport Metrics
 

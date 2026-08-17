@@ -59,7 +59,9 @@ not reduce the public entity budget. `transport.transformCapacity` defaults to
 in the lower entity index range. The command budget defaults to
 `min(entityCapacity, 1,024)`, because short structural bursts
 do not justify reserving 64 bytes per entity. Overflow preserves ordering by
-switching subsequent structural commands to the message fallback.
+draining older shared structural and transform publications before the attempted
+command, then switching subsequent structural and transform authoring to the
+message fallback.
 
 ```text
 SAB bytes = 64-byte header + transformCapacity × 56 bytes
@@ -158,9 +160,11 @@ the compact format.
 The transform queue is bounded by `transport.transformCapacity`; dirty-bit
 coalescing means it cannot exceed one pending entry per slot. The structural
 queue is separately bounded by `transport.structuralCommandCapacity`.
-Structural overflow increments `droppedCommands`; the attempted command and all
-later structural commands switch to ordered `postMessage` fallback, so scene
-operations are not semantically dropped.
+Structural overflow increments `droppedCommands`. Before applying the attempted
+command from `postMessage`, the worker drains older shared structural commands
+and transform publications. The attempted command and all later structural and
+transform authoring then use that FIFO message stream, so operations cannot
+overtake either side of the transport boundary and are not semantically dropped.
 
 Capacity is a contract, not a request to grow storage:
 

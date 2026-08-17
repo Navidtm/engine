@@ -32,6 +32,14 @@ one range descriptor, versus 40 transform payload bytes on the old full update
 path. The hot path performs no dynamic allocation. Structural publication is a
 fixed 64-byte record and bounded atomic bookkeeping.
 
+The first structural-ring overflow creates a one-way ordering barrier. When
+the worker receives that fallback command, it drains already-published shared
+structural commands first and shared transforms second, then applies the
+message command. From that point until disposal, both structural and transform
+authoring updates use the worker message stream. This preserves the existing
+structural-before-transform drain rule across the SAB/message boundary without
+adding messages to the normal shared-memory path.
+
 `engine.getStats().transport` reports:
 
 - `messages`: main-to-worker messages received;

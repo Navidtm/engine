@@ -29,7 +29,7 @@ export function publishTransform(
   validateLiveEntity(state, entity);
   validateTransformSlot(state, entity);
   const packedEntity = packEntity(entity);
-  if (state.sharedMemory !== undefined) {
+  if (!state.structuralFallback && state.sharedMemory !== undefined) {
     writeSharedTransform(state.sharedMemory, packedEntity, value, fieldMask);
     return;
   }
@@ -42,7 +42,7 @@ export function publishTransform(
   });
 }
 
-/** Preserves structural command ordering across initialization, shared memory, and fallback. */
+/** Preserves command ordering across initialization, shared memory, and fallback. */
 export function dispatchCommand(state: EngineState, command: RuntimeCommand): void {
   if (state.status === "disposed" || state.status === "failed") {
     throw new Error(`Cannot update a ${state.status} engine.`);

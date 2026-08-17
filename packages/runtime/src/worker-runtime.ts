@@ -163,6 +163,7 @@ export function createWorkerRuntime(host: WorkerHost): (message: MainToWorkerMes
         }
         case "command":
           state.core?.updateSharedCommands();
+          state.core?.updateSharedTransforms();
           apply(message.value);
           break;
         case "batch":
