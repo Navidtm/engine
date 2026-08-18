@@ -129,6 +129,8 @@ function createState(): {
     statsRequests: new Map(),
     nextStatsRequest: 1,
     structuralFallback: false,
+    lifecycleEpoch: 0,
+    runningIntent: false,
   };
   return { state, posted };
 }

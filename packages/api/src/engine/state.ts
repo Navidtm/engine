@@ -29,4 +29,8 @@ export interface EngineState {
   >;
   nextStatsRequest: number;
   structuralFallback: boolean;
+  /** Monotonic control request used to reject stale worker acknowledgements. */
+  lifecycleEpoch: number;
+  /** Latest desired scheduling state, including an in-flight stop or restart. */
+  runningIntent: boolean;
 }

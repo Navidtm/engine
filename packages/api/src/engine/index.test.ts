@@ -161,4 +161,70 @@ describe("high-level engine API", () => {
     engine.dispose();
     await expect(initialization).rejects.toThrow("disposed during initialization");
   });
+
+  it("correlates lifecycle acknowledgements and publishes idempotent controls", async () => {
+    let onMessage: ((event: MessageEvent<WorkerToMainMessage>) => void) | undefined;
+    const posted: MainToWorkerMessage[] = [];
+    const worker = {
+      addEventListener(type: string, listener: EventListener) {
+        if (type === "message") {
+          onMessage = listener as (event: MessageEvent<WorkerToMainMessage>) => void;
+        }
+      },
+      postMessage(message: MainToWorkerMessage) {
+        posted.push(message);
+      },
+      terminate: vi.fn(),
+    } as unknown as Worker;
+    const canvas = {
+      getBoundingClientRect: () => ({ width: 640, height: 360 }),
+      transferControlToOffscreen: () => ({}) as OffscreenCanvas,
+    } as HTMLCanvasElement;
+    vi.stubGlobal("document", { baseURI: "https://example.test/" });
+    vi.stubGlobal("window", { devicePixelRatio: 1 });
+    vi.stubGlobal("crossOriginIsolated", false);
+    const engine = createEngine(canvas, {
+      autoResize: false,
+      workerFactory: () => worker,
+      wasmUrl: "https://example.test/lume_core.wasm",
+    });
+
+    const initialization = engine.init();
+    onMessage?.({ data: { type: "ready" } } as MessageEvent<WorkerToMainMessage>);
+    await initialization;
+    posted.length = 0;
+
+    engine.start();
+    engine.start();
+    expect(posted).toEqual([{ type: "start", lifecycleEpoch: 1 }]);
+
+    engine.stop();
+    expect(engine.status).toBe("running");
+    engine.start();
+    expect(posted).toEqual([
+      { type: "start", lifecycleEpoch: 1 },
+      { type: "stop", lifecycleEpoch: 2 },
+      { type: "start", lifecycleEpoch: 3 },
+    ]);
+
+    onMessage?.({
+      data: { type: "stopped", lifecycleEpoch: 2 },
+    } as unknown as MessageEvent<WorkerToMainMessage>);
+    expect(engine.status).toBe("running");
+
+    engine.stop();
+    engine.stop();
+    expect(posted).toHaveLength(4);
+    onMessage?.({
+      data: { type: "stopped", lifecycleEpoch: 4 },
+    } as unknown as MessageEvent<WorkerToMainMessage>);
+    expect(engine.status).toBe("stopped");
+
+    engine.dispose();
+    onMessage?.({
+      data: { type: "stopped", lifecycleEpoch: 4 },
+    } as unknown as MessageEvent<WorkerToMainMessage>);
+    onMessage?.({ data: { type: "ready" } } as MessageEvent<WorkerToMainMessage>);
+    expect(engine.status).toBe("disposed");
+  });
 });

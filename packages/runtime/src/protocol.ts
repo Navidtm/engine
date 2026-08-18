@@ -1,7 +1,7 @@
 import type { RendererOptions, SurfaceSize } from "@lume/renderer";
 
 /** Version checked before a main thread and worker exchange runtime messages. */
-export const RUNTIME_PROTOCOL_VERSION = 6;
+export const RUNTIME_PROTOCOL_VERSION = 7;
 
 /** Snapshot returned by {@link Engine.getStats} through the worker boundary. */
 export interface EngineStats {
@@ -124,8 +124,8 @@ export type MainToWorkerMessage =
   | { readonly type: "init"; readonly value: RuntimeInit }
   | { readonly type: "command"; readonly value: RuntimeCommand }
   | { readonly type: "batch"; readonly value: readonly RuntimeCommand[] }
-  | { readonly type: "start" }
-  | { readonly type: "stop" }
+  | { readonly type: "start"; readonly lifecycleEpoch: number }
+  | { readonly type: "stop"; readonly lifecycleEpoch: number }
   | { readonly type: "resize"; readonly value: SurfaceSize }
   | { readonly type: "get-stats"; readonly requestId: number }
   | { readonly type: "dispose" };
@@ -133,7 +133,7 @@ export type MainToWorkerMessage =
 /** Versioned lifecycle, statistics, and error messages returned by the worker. */
 export type WorkerToMainMessage =
   | { readonly type: "ready" }
-  | { readonly type: "stopped" }
+  | { readonly type: "stopped"; readonly lifecycleEpoch: number }
   | { readonly type: "disposed" }
   | { readonly type: "stats"; readonly requestId: number; readonly value: EngineStats }
   | { readonly type: "error"; readonly message: string; readonly stack?: string }

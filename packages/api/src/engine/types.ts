@@ -213,9 +213,9 @@ export interface Engine {
   readonly status: EngineStatus;
   /** Initializes the worker, WASM core, and WebGPU renderer. */
   init(): Promise<void>;
-  /** Starts the worker frame loop after initialization. */
+  /** Starts the worker frame loop after initialization; repeated calls are idempotent. */
   start(): void;
-  /** Stops the frame loop without destroying resources. */
+  /** Requests a stop without destroying resources; status changes after worker confirmation. */
   stop(): void;
   /** Publishes the canvas size; normally invoked by the resize observer. */
   resize(): void;

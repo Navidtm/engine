@@ -112,8 +112,10 @@ adapters depend on timing behavior. The worker remains the scheduling owner;
 automatic presentation advances bounded fixed simulation ticks, while an
 advanced manual mode executes exact ticks without wall-clock time. Input is
 sampled at tick boundaries, visibility suspension performs no catch-up, and
-profiling remains pull-based rather than emitting per-frame messages. These
-semantics are accepted design and are not yet an implemented public API.
+profiling remains pull-based rather than emitting per-frame messages. Lifecycle
+request correlation, idempotent start/stop, and worker scheduler epochs are
+implemented; fixed-step, visibility, fallback, input, and manual-mode semantics
+remain accepted design rather than an available public API.
 
 ## Memory model
 

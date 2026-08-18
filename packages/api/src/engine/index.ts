@@ -14,11 +14,11 @@ import {
   getStats,
   handleWorkerMessage,
   initialize,
-  requireInitialized,
   resize,
+  start,
+  stop,
 } from "./lifecycle.js";
 import type { EngineState } from "./state.js";
-import { post } from "./transport.js";
 import type { Engine, EngineConfig, EngineOptions } from "./types.js";
 import { resolveEngineBudgets, validateEngineCameraOptions } from "./validation.js";
 
@@ -79,16 +79,8 @@ export function createEngine(
       return state.status;
     },
     init: () => initialize(state),
-    start() {
-      requireInitialized(state, "start");
-      state.status = "running";
-      post(state, { type: "start" });
-    },
-    stop() {
-      if (state.status !== "running") return;
-      state.status = "stopped";
-      post(state, { type: "stop" });
-    },
+    start: () => start(state),
+    stop: () => stop(state),
     resize: () => resize(state),
     getStats: () => getStats(state),
     destroy: highLevel.destroy,
@@ -121,5 +113,7 @@ function createEngineState(config: EngineConfig): EngineState {
     statsRequests: new Map(),
     nextStatsRequest: 1,
     structuralFallback: false,
+    lifecycleEpoch: 0,
+    runningIntent: false,
   };
 }

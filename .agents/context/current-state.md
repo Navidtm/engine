@@ -1,6 +1,6 @@
 # Current Project State
 
-Last verified: 2026-08-12 on the issue #9 implementation branch
+Last verified: 2026-08-17 on master after issue #17
 
 This document records the implementation that exists in the repository. It is
 an evidence-based snapshot, not a description of intended future architecture.
@@ -45,6 +45,8 @@ The implementation follows the project architecture rules:
   renderer.
 - The worker owns the WASM core, WebGPU renderer, and frame loop. The main
   thread owns the public API and is the producer for shared runtime writes.
+- Worker scheduler epochs invalidate callbacks queued before stop, restart,
+  failure, device loss, or disposal.
 - Pipelines and persistent GPU buffers are created during renderer
   initialization, not during frame execution.
 - Hot-path transport, extraction, visibility, and frame-graph storage are
@@ -62,6 +64,8 @@ message path as overflow/initialization fallback.
 Implemented:
 
 - Functional `createEngine` API with explicit lifecycle states.
+- Idempotent start/stop intent with lifecycle-epoch acknowledgement correlation;
+  stop becomes externally final only after the matching worker confirmation.
 - High-level mesh, perspective-camera, and basic-material creation.
 - Lower-level `world` API for entity creation/destruction and component
   addition/removal.

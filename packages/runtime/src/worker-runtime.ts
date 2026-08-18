@@ -17,6 +17,8 @@ interface WorkerRuntimeState {
   size: SurfaceSize | undefined;
   frameRequest: number | undefined;
   running: boolean;
+  lifecycleEpoch: number;
+  schedulerEpoch: number;
   disposed: boolean;
   initializing: boolean;
   lastFrameTimeMs: number;
@@ -44,6 +46,8 @@ export function createWorkerRuntime(host: WorkerHost): (message: MainToWorkerMes
     size: undefined,
     frameRequest: undefined,
     running: false,
+    lifecycleEpoch: 0,
+    schedulerEpoch: 0,
     disposed: false,
     initializing: false,
     lastFrameTimeMs: 0,
@@ -62,8 +66,24 @@ export function createWorkerRuntime(host: WorkerHost): (message: MainToWorkerMes
     host.postMessage(event);
   };
 
-  const frame = (): void => {
-    if (!state.running || state.disposed) return;
+  const invalidateScheduler = (): number => {
+    state.schedulerEpoch += 1;
+    state.previousFrameStart = 0;
+    if (state.frameRequest !== undefined) host.cancelAnimationFrame(state.frameRequest);
+    state.frameRequest = undefined;
+    return state.schedulerEpoch;
+  };
+
+  const stopScheduling = (): void => {
+    state.running = false;
+    invalidateScheduler();
+  };
+
+  const frame = (schedulerEpoch: number, scheduleNext: FrameRequestCallback): void => {
+    if (schedulerEpoch !== state.schedulerEpoch || !state.running || state.disposed) {
+      return;
+    }
+    state.frameRequest = undefined;
     try {
       const frameStart = performance.now();
       const renderFrame = state.core?.update();
@@ -73,9 +93,9 @@ export function createWorkerRuntime(host: WorkerHost): (message: MainToWorkerMes
       state.lastFrameTimeMs =
         state.previousFrameStart === 0 ? 0 : frameStart - state.previousFrameStart;
       state.previousFrameStart = frameStart;
-      state.frameRequest = host.requestAnimationFrame(frame);
+      state.frameRequest = host.requestAnimationFrame(scheduleNext);
     } catch (error) {
-      state.running = false;
+      stopScheduling();
       report(error);
     }
   };
@@ -123,7 +143,7 @@ export function createWorkerRuntime(host: WorkerHost): (message: MainToWorkerMes
       state.core = core;
       void renderer.lost.then((info) => {
         if (state.disposed || state.renderer !== renderer) return;
-        state.running = false;
+        stopScheduling();
         host.postMessage({
           type: "device-lost",
           reason: info.reason,
@@ -169,17 +189,20 @@ export function createWorkerRuntime(host: WorkerHost): (message: MainToWorkerMes
         case "batch":
           for (const command of message.value) apply(command);
           break;
-        case "start":
-          if (!state.running) {
-            state.running = true;
-            frame();
-          }
+        case "start": {
+          if (message.lifecycleEpoch <= state.lifecycleEpoch) break;
+          state.lifecycleEpoch = message.lifecycleEpoch;
+          const schedulerEpoch = invalidateScheduler();
+          const scheduleNext: FrameRequestCallback = () => frame(schedulerEpoch, scheduleNext);
+          state.running = true;
+          frame(schedulerEpoch, scheduleNext);
           break;
+        }
         case "stop":
-          state.running = false;
-          if (state.frameRequest !== undefined) host.cancelAnimationFrame(state.frameRequest);
-          state.frameRequest = undefined;
-          host.postMessage({ type: "stopped" });
+          if (message.lifecycleEpoch <= state.lifecycleEpoch) break;
+          state.lifecycleEpoch = message.lifecycleEpoch;
+          stopScheduling();
+          host.postMessage({ type: "stopped", lifecycleEpoch: message.lifecycleEpoch });
           break;
         case "resize":
           state.size = message.value;
@@ -225,9 +248,8 @@ export function createWorkerRuntime(host: WorkerHost): (message: MainToWorkerMes
           break;
         }
         case "dispose":
-          state.running = false;
+          stopScheduling();
           state.disposed = true;
-          if (state.frameRequest !== undefined) host.cancelAnimationFrame(state.frameRequest);
           state.renderer?.dispose();
           state.core?.dispose();
           host.postMessage({ type: "disposed" });

@@ -153,4 +153,69 @@ describe("worker runtime resource ownership", () => {
     });
     expect(order).toEqual(["apply:spawn", "apply:despawn"]);
   });
+
+  it("rejects stale scheduler callbacks across stop, restart, and disposal", async () => {
+    const renderer = {
+      lost: new Promise<GPUDeviceLostInfo>(() => undefined),
+      execute: vi.fn(),
+      resize: vi.fn(),
+      stats: vi.fn(),
+      dispose: vi.fn(),
+    } satisfies MeshRenderer;
+    const core = {
+      apply: vi.fn(),
+      updateSharedCommands: vi.fn(),
+      updateSharedTransforms: vi.fn(),
+      resize: vi.fn(),
+      update: vi.fn(),
+      stats: vi.fn(),
+      dispose: vi.fn(),
+    } satisfies WasmCore;
+    mocks.createMeshRenderer.mockResolvedValueOnce(renderer);
+    mocks.createWasmCore.mockResolvedValueOnce(core);
+    const posted: WorkerToMainMessage[] = [];
+    const callbacks = new Map<number, FrameRequestCallback>();
+    let nextFrameRequest = 1;
+    const host: WorkerHost = {
+      postMessage: (message) => posted.push(message),
+      requestAnimationFrame: vi.fn((callback) => {
+        const request = nextFrameRequest;
+        nextFrameRequest += 1;
+        callbacks.set(request, callback);
+        return request;
+      }),
+      cancelAnimationFrame: vi.fn(),
+    };
+    const receive = createWorkerRuntime(host);
+
+    receive(initMessage());
+    await vi.waitFor(() => expect(posted[0]?.type).toBe("ready"));
+    receive({ type: "start", lifecycleEpoch: 1 });
+    expect(core.update).toHaveBeenCalledTimes(1);
+    expect(host.requestAnimationFrame).toHaveBeenCalledTimes(1);
+
+    receive({ type: "stop", lifecycleEpoch: 2 });
+    receive({ type: "start", lifecycleEpoch: 3 });
+    expect(posted).toContainEqual({ type: "stopped", lifecycleEpoch: 2 });
+    expect(core.update).toHaveBeenCalledTimes(2);
+    expect(host.requestAnimationFrame).toHaveBeenCalledTimes(2);
+
+    callbacks.get(1)?.(16);
+    expect(core.update).toHaveBeenCalledTimes(2);
+    expect(host.requestAnimationFrame).toHaveBeenCalledTimes(2);
+
+    callbacks.get(2)?.(32);
+    expect(core.update).toHaveBeenCalledTimes(3);
+    expect(host.requestAnimationFrame).toHaveBeenCalledTimes(3);
+    expect(callbacks.get(3)).toBe(callbacks.get(2));
+
+    receive({ type: "start", lifecycleEpoch: 3 });
+    expect(core.update).toHaveBeenCalledTimes(3);
+    expect(host.requestAnimationFrame).toHaveBeenCalledTimes(3);
+
+    receive({ type: "dispose" });
+    callbacks.get(3)?.(48);
+    expect(core.update).toHaveBeenCalledTimes(3);
+    expect(host.requestAnimationFrame).toHaveBeenCalledTimes(3);
+  });
 });

@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted; implementation pending
+Accepted; lifecycle epochs implemented, remaining phases pending
 
 ## Date
 
@@ -291,6 +291,10 @@ Implementation must be incremental:
 4. add manual control plus deterministic tick/input tests;
 5. add shared input state and bounded event transport;
 6. expose bounded statistics only after counters are implemented.
+
+The lifecycle-request correlation, worker scheduler epochs, and idempotent
+start/stop tests from step 1 are implemented. Scheduler capability detection
+and the worker timer fallback remain pending.
 
 Tests must cover 60/120 Hz callback sequences, first-frame zero delta, long
 stalls, max-substep overflow, stop/restart races, stale callbacks, hidden/visible

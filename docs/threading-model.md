@@ -118,10 +118,17 @@ defines the accepted target semantics:
 - statistics are accumulated in bounded worker state and returned only on
   request.
 
+Lifecycle control now uses two explicit epochs. The main thread increments a
+request epoch for each effective start or stop and accepts only a matching
+stopped acknowledgement. The worker increments its private scheduler epoch
+whenever scheduling is started or invalidated; every callback captures that
+epoch and returns without advancing or rescheduling when stale. Failure, device
+loss, restart, stop, and disposal all invalidate the prior scheduler epoch.
+
 The current implementation still couples one core update/render to each worker
-animation callback. Fixed-step simulation, manual stepping, input transport,
-visibility coordination, and timer fallback remain implementation work; this
-section must not be read as an available public API.
+animation callback. Scheduler capability fallback, fixed-step simulation,
+manual stepping, input transport, and visibility coordination remain
+implementation work; this section must not be read as an available public API.
 
 ## Browser requirements
 

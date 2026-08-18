@@ -80,6 +80,7 @@ export function resolveWasmUrl(value: string | URL | undefined): string {
 export function handleWorkerMessage(state: EngineState, message: WorkerToMainMessage): void {
   switch (message.type) {
     case "ready":
+      if (state.status === "disposed" || state.status === "failed") break;
       state.status = "ready";
       if (state.pendingCommands.length > 0) {
         post(state, { type: "batch", value: state.pendingCommands.splice(0) });
@@ -89,7 +90,14 @@ export function handleWorkerMessage(state: EngineState, message: WorkerToMainMes
       state.rejectInit = undefined;
       break;
     case "stopped":
-      if (state.status !== "disposed") state.status = "stopped";
+      if (
+        message.lifecycleEpoch === state.lifecycleEpoch &&
+        !state.runningIntent &&
+        state.status !== "disposed" &&
+        state.status !== "failed"
+      ) {
+        state.status = "stopped";
+      }
       break;
     case "disposed":
       state.worker.terminate();
@@ -124,12 +132,28 @@ export function resize(state: EngineState): void {
   });
 }
 
+export function start(state: EngineState): void {
+  requireInitialized(state, "start");
+  if (state.runningIntent) return;
+  state.runningIntent = true;
+  state.status = "running";
+  post(state, { type: "start", lifecycleEpoch: advanceLifecycleEpoch(state) });
+}
+
+export function stop(state: EngineState): void {
+  if (!state.runningIntent) return;
+  state.runningIntent = false;
+  post(state, { type: "stop", lifecycleEpoch: advanceLifecycleEpoch(state) });
+}
+
 export function dispose(state: EngineState): void {
   if (state.status === "disposed") return;
   state.resizeObserver?.disconnect();
   state.rejectInit?.(new Error("Engine disposed during initialization."));
   state.resolveInit = undefined;
   state.rejectInit = undefined;
+  state.runningIntent = false;
+  advanceLifecycleEpoch(state);
   state.status = "disposed";
   rejectStatsRequests(state, new Error("Engine disposed before statistics were returned."));
   post(state, { type: "dispose" });
@@ -152,6 +176,8 @@ export function requireInitialized(state: EngineState, operation: string): void 
 
 export function fail(state: EngineState, error: Error): void {
   if (state.status === "failed" || state.status === "disposed") return;
+  state.runningIntent = false;
+  advanceLifecycleEpoch(state);
   state.status = "failed";
   state.rejectInit?.(error);
   state.resolveInit = undefined;
@@ -168,4 +194,9 @@ function webGpuPowerPreference(preference: PowerPreference): GPUPowerPreference 
 function rejectStatsRequests(state: EngineState, error: Error): void {
   for (const request of state.statsRequests.values()) request.reject(error);
   state.statsRequests.clear();
+}
+
+function advanceLifecycleEpoch(state: EngineState): number {
+  state.lifecycleEpoch += 1;
+  return state.lifecycleEpoch;
 }
