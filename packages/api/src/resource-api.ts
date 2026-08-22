@@ -1,8 +1,14 @@
 import { TransformField } from "@lume/runtime";
 import { bounds, material, mesh, type Quat, transform, type Vec3 } from "@lume/scene";
 
+import { ensureComponentSlotAvailable, releaseEntityComponents } from "./capacity.js";
 import type { EngineState } from "./engine/state.js";
-import { publishTransform } from "./engine/transport.js";
+import {
+  beginCommandTransaction,
+  commitCommandTransaction,
+  publishTransform,
+  rollbackCommandTransaction,
+} from "./engine/transport.js";
 import type {
   BasicMaterialHandle,
   BasicMaterialOptions,
@@ -19,7 +25,15 @@ import {
   validateColor,
   validateMeshOptions,
 } from "./engine/validation.js";
-import { createBasicMaterialResource, retireResource } from "./resource-lifecycle.js";
+import { ensureEntitySlotAvailable, peekEntityIndex, releaseEntity } from "./entity-lifecycle.js";
+import {
+  createBasicMaterialResource,
+  ensureResourceSlotAvailable,
+  hasMeshResources,
+  releaseMeshResources,
+  retireResource,
+  rollbackCreatedResource,
+} from "./resource-lifecycle.js";
 import {
   copyQuat,
   copyVec3,
@@ -47,37 +61,65 @@ export function createHighLevelApi(
     const descriptor = material(options);
     return createBasicMaterialResource(state, descriptor.color);
   };
-  const defaultBasicMaterial = (): BasicMaterialHandle => {
-    defaultMaterial ??= createBasicMaterial();
-    return defaultMaterial;
-  };
   const create: CreateApi = {
     basicMaterial: createBasicMaterial,
     mesh(options: MeshOptions) {
       validateMeshOptions(state, options);
+      ensureEntitySlotAvailable(state);
       ensureTransformSlotAvailable(state);
-      const materialHandle =
-        options.material === undefined || options.material === "basic"
-          ? defaultBasicMaterial()
-          : options.material;
-      const entity = world.createEntity();
+      const entityIndex = peekEntityIndex(state);
+      ensureComponentSlotAvailable(state.components, "transform", entityIndex);
+      ensureComponentSlotAvailable(state.components, "mesh", entityIndex);
+      if (options.bounds !== undefined) {
+        ensureComponentSlotAvailable(state.components, "bounds", entityIndex);
+      }
+      const usesDefaultMaterial = options.material === undefined || options.material === "basic";
+      const needsDefaultMaterial = usesDefaultMaterial && defaultMaterial === undefined;
+      if (needsDefaultMaterial) ensureResourceSlotAvailable(state, "basic-material");
       const initialTransform = mutableTransform(options);
-      world.add(
-        entity,
-        transform({
-          ...(options.position === undefined ? {} : { position: options.position }),
-          ...(options.rotation === undefined ? {} : { rotation: options.rotation }),
-          ...(options.scale === undefined ? {} : { scale: options.scale }),
-        }),
-      );
       const geometry =
         options.geometry === "cube"
           ? geometryApi.cube
           : options.geometry === "triangle"
             ? geometryApi.triangle
             : options.geometry;
-      world.add(entity, mesh(geometry, materialHandle));
-      if (options.bounds !== undefined) world.add(entity, bounds(options.bounds));
+      let entity: ReturnType<WorldApi["createEntity"]> | undefined;
+      let createdDefaultMaterial: BasicMaterialHandle | undefined;
+      beginCommandTransaction(state);
+      try {
+        if (needsDefaultMaterial) createdDefaultMaterial = createBasicMaterial();
+        const materialHandle = usesDefaultMaterial
+          ? (defaultMaterial ?? createdDefaultMaterial)
+          : options.material;
+        if (materialHandle === undefined) {
+          throw new Error("Default material allocation failed.");
+        }
+        entity = world.createEntity();
+        world.add(
+          entity,
+          transform({
+            ...(options.position === undefined ? {} : { position: options.position }),
+            ...(options.rotation === undefined ? {} : { rotation: options.rotation }),
+            ...(options.scale === undefined ? {} : { scale: options.scale }),
+          }),
+        );
+        world.add(entity, mesh(geometry, materialHandle));
+        if (options.bounds !== undefined) world.add(entity, bounds(options.bounds));
+        commitCommandTransaction(state);
+      } catch (error) {
+        rollbackCommandTransaction(state);
+        if (entity !== undefined) {
+          if (hasMeshResources(state, entity)) releaseMeshResources(state, entity);
+          releaseEntityComponents(state.components, entity.index);
+          releaseEntity(state, entity);
+        }
+        if (createdDefaultMaterial !== undefined) {
+          rollbackCreatedResource(state, createdDefaultMaterial);
+        }
+        throw error;
+      }
+      if (createdDefaultMaterial !== undefined) defaultMaterial = createdDefaultMaterial;
+      if (entity === undefined) throw new Error("Mesh entity allocation failed.");
       const handle = createMeshHandle(state, entity, initialTransform);
       transforms.set(handle, initialTransform);
       return handle;

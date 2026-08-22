@@ -48,6 +48,9 @@ export function initialize(state: EngineState): Promise<void> {
       entityCapacity: state.entityCapacity,
       resourceCapacity: state.resources.capacity,
       transformCapacity: state.transformCapacity,
+      meshRendererCapacity: state.meshRendererCapacity,
+      cameraCapacity: state.cameraCapacity,
+      boundsCapacity: state.boundsCapacity,
       size: {
         width: rect.width,
         height: rect.height,

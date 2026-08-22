@@ -1,5 +1,6 @@
 import type { BasicMaterialHandle, Color, Entity, GeometryHandle } from "@lume/scene";
 
+import { EngineCapacityError } from "./capacity.js";
 import type { EngineState } from "./engine/state.js";
 import { dispatchCommand } from "./engine/transport.js";
 import type { BuiltinGeometryApi } from "./engine/types.js";
@@ -167,6 +168,31 @@ export function validateResourceHandle(
   return validateHandleForUsage(state, handle, expectedKind, 0);
 }
 
+/** Rejects a future resource allocation without mutating its registry. */
+export function ensureResourceSlotAvailable(
+  state: EngineState,
+  kind: "geometry" | "basic-material",
+): void {
+  const registry = registryFor(state.resources, kind);
+  if (registry.freeSlotCount > 0 || registry.nextSlot < state.resources.capacity) return;
+  throw new EngineCapacityError(
+    kind === "basic-material" ? "material" : "geometry",
+    state.resources.capacity - 1,
+  );
+}
+
+/** Rolls back a newly allocated, unpublished resource after transaction failure. */
+export function rollbackCreatedResource(state: EngineState, handle: ResourceHandle): void {
+  const record = ownedRecord(state, handle);
+  const registry = registryFor(state.resources, record.kind);
+  const index = resourceIndex(record.raw);
+  if (registry.states[index] !== ResourceStatus.Ready || registry.usage[index] !== 0) {
+    throw new Error("Cannot roll back a committed or referenced resource.");
+  }
+  rollbackAllocation(registry, record.raw);
+  state.resources.handles.delete(handle);
+}
+
 function createGeometry(state: EngineState, builtin: "cube" | "triangle"): GeometryHandle {
   const handle = allocateHandle(state, "geometry") as GeometryHandle;
   const raw = ownedRecord(state, handle).raw;
@@ -184,14 +210,11 @@ function allocateHandle(state: EngineState, kind: ResourceKind): ResourceHandle 
     throw new Error(`Cannot create a resource on a ${state.status} engine.`);
   }
   const registry = registryFor(state.resources, kind);
+  ensureResourceSlotAvailable(state, kind);
   const index =
     registry.freeSlotCount > 0
       ? (registry.freeSlots[--registry.freeSlotCount] ?? 0)
       : registry.nextSlot++;
-  if (index <= 0 || index >= state.resources.capacity) {
-    registry.nextSlot = Math.min(registry.nextSlot, state.resources.capacity);
-    throw new Error(`${kind} resource capacity exhausted.`);
-  }
   registry.states[index] = ResourceStatus.Ready;
   const generation = registry.generations[index] ?? 0;
   const handle = Object.freeze({ kind }) as ResourceHandle;

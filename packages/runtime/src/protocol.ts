@@ -1,7 +1,7 @@
 import type { RendererOptions, SurfaceSize } from "@lume/renderer";
 
 /** Version checked before a main thread and worker exchange runtime messages. */
-export const RUNTIME_PROTOCOL_VERSION = 9;
+export const RUNTIME_PROTOCOL_VERSION = 10;
 
 /** CPU milliseconds attributed to one pull-sampled worker frame. */
 export interface FrameCpuStageTimings {
@@ -144,6 +144,12 @@ export interface RuntimeInit {
   readonly resourceCapacity: number;
   /** Independent fixed capacity for synchronized transform slots. */
   readonly transformCapacity: number;
+  /** Fixed mesh-renderer component count. */
+  readonly meshRendererCapacity: number;
+  /** Fixed camera component count, including the engine-owned active camera. */
+  readonly cameraCapacity: number;
+  /** Fixed explicit-bounds component count. */
+  readonly boundsCapacity: number;
   /** Initial CSS size and pixel ratio of the render surface. */
   readonly size: SurfaceSize;
   /** Renderer configuration already validated by the authoring API. */
@@ -156,7 +162,12 @@ export interface RuntimeInit {
 export type MainToWorkerMessage =
   | { readonly type: "init"; readonly value: RuntimeInit }
   | { readonly type: "command"; readonly value: RuntimeCommand }
-  | { readonly type: "batch"; readonly value: readonly RuntimeCommand[] }
+  | {
+      readonly type: "batch";
+      readonly value: readonly RuntimeCommand[];
+      /** Drains earlier shared publications before applying this atomic authoring batch. */
+      readonly ordered?: boolean;
+    }
   | { readonly type: "start"; readonly lifecycleEpoch: number }
   | { readonly type: "stop"; readonly lifecycleEpoch: number }
   | { readonly type: "resize"; readonly value: SurfaceSize }

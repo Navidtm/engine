@@ -17,6 +17,9 @@ interface LumeWasmExports extends WebAssembly.Exports {
     entityCapacity: number,
     transformCapacity: number,
     resourceCapacity: number,
+    meshRendererCapacity: number,
+    cameraCapacity: number,
+    boundsCapacity: number,
   ): number;
   lume_engine_destroy(engine: number): void;
   lume_engine_spawn(engine: number, entity: number): number;
@@ -157,6 +160,9 @@ export async function createWasmCore(
   transformCapacity: number,
   sharedMemory?: SharedArrayBuffer,
   resourceCapacity = entityCapacity,
+  meshRendererCapacity = entityCapacity,
+  cameraCapacity = Math.min(entityCapacity, 8),
+  boundsCapacity = entityCapacity,
 ): Promise<WasmCore> {
   let response: Response;
   try {
@@ -201,7 +207,14 @@ export async function createWasmCore(
     );
   }
   const exports = module.instance.exports as LumeWasmExports;
-  const handle = exports.lume_engine_create(entityCapacity, transformCapacity, resourceCapacity);
+  const handle = exports.lume_engine_create(
+    entityCapacity,
+    transformCapacity,
+    resourceCapacity,
+    meshRendererCapacity,
+    cameraCapacity,
+    boundsCapacity,
+  );
   if (handle === 0) throw new Error("Lume WASM core allocation failed.");
   const visibleCapacity = exports.lume_visible_capacity(handle);
   const renderEntityCapacity = exports.lume_render_entity_capacity(handle);

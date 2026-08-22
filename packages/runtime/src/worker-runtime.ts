@@ -203,6 +203,9 @@ export function createWorkerRuntime(host: WorkerHost): (message: MainToWorkerMes
           message.value.transformCapacity,
           message.value.sharedMemory,
           message.value.resourceCapacity,
+          message.value.meshRendererCapacity,
+          message.value.cameraCapacity,
+          message.value.boundsCapacity,
         ),
       ]);
       if (rendererResult.status === "fulfilled") renderer = rendererResult.value;
@@ -268,6 +271,10 @@ export function createWorkerRuntime(host: WorkerHost): (message: MainToWorkerMes
           apply(message.value);
           break;
         case "batch":
+          if (message.ordered === true) {
+            updateSharedCommands();
+            state.core?.updateSharedTransforms();
+          }
           for (const command of message.value) apply(command);
           break;
         case "start": {

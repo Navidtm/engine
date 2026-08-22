@@ -47,6 +47,9 @@ function initMessage(): MainToWorkerMessage {
       entityCapacity: 16,
       resourceCapacity: 16,
       transformCapacity: 16,
+      meshRendererCapacity: 16,
+      cameraCapacity: 8,
+      boundsCapacity: 16,
       size: { width: 640, height: 360, devicePixelRatio: 1 },
       renderer: {},
     },
@@ -180,6 +183,14 @@ describe("worker runtime resource ownership", () => {
       ],
     });
     expect(order).toEqual(["apply:spawn", "apply:despawn"]);
+
+    order.length = 0;
+    receive({
+      type: "batch",
+      ordered: true,
+      value: [{ type: "spawn", entity: 3 }],
+    });
+    expect(order).toEqual(["shared-commands", "shared-transforms", "apply:spawn"]);
   });
 
   it("rejects stale scheduler callbacks across stop, restart, and disposal", async () => {

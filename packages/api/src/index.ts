@@ -1,3 +1,5 @@
+export type { CapacityKind, EngineCapacities } from "./capacity.js";
+export { EngineCapacityError } from "./capacity.js";
 export type {
   BasicMaterialHandle,
   BasicMaterialOptions,
@@ -7,6 +9,7 @@ export type {
   Engine,
   EngineCamera,
   EngineCameraOptions,
+  EngineComponentCapacityOptions,
   EngineConfig,
   EngineHandle,
   EngineOptions,

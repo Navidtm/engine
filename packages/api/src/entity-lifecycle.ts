@@ -1,5 +1,7 @@
 import type { Entity } from "@lume/scene";
 
+import { EngineCapacityError } from "./capacity.js";
+
 const MAX_ENTITY_INDEX = (1 << 20) - 1;
 const MAX_ENTITY_GENERATION = (1 << 12) - 1;
 const ENTITY_OWNER = Symbol("lume-entity-owner");
@@ -67,13 +69,20 @@ export function peekEntityIndex(state: EntityLifecycleState): number {
     : state.nextEntityIndex;
 }
 
+/** Rejects exhaustion without mutating the allocator. */
+export function ensureEntitySlotAvailable(state: EntityLifecycleState): void {
+  if (peekEntityIndex(state) >= state.entityCapacity) {
+    throw new EngineCapacityError("entity", state.entityCapacity - 1);
+  }
+}
+
 function reuseIndex(state: EntityLifecycleState): number {
   return state.freeEntities[--state.freeEntityCount] ?? 0;
 }
 
 function nextIndex(state: EntityLifecycleState): number {
   if (state.nextEntityIndex >= state.entityCapacity || state.nextEntityIndex > MAX_ENTITY_INDEX) {
-    throw new Error("Entity capacity exhausted.");
+    throw new EngineCapacityError("entity", state.entityCapacity - 1);
   }
   return state.nextEntityIndex++;
 }

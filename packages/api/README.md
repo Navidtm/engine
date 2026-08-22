@@ -40,7 +40,26 @@ const engine = createEngine({
   canvas,
   entityCapacity: 100_000,
   resourceCapacity: 2_048,
+  componentCapacities: {
+    transforms: 20_000,
+    meshRenderers: 15_000,
+    cameras: 4,
+    bounds: 10_000,
+  },
   powerPreference: "high",
-  transport: { transformCapacity: 20_000 }, // transform-bearing entities use indices < 20,000
 });
 ```
+
+The resolved application-visible limits are available through
+`engine.capacities`. `resourceCapacity` is the independent limit for each typed
+resource registry, including materials; the two built-in geometries consume two
+geometry slots but no material slots. Camera counts exclude the engine-owned
+active camera, whose entity, transform, camera, and render-camera slots are
+reserved internally. `transport.transformCapacity` remains a compatibility
+alias for `componentCapacities.transforms`. Mesh-renderer, additional-camera,
+and explicit-bounds capacities may be zero.
+
+Capacity exhaustion throws `EngineCapacityError` synchronously with
+`code === "LUME_CAPACITY_EXHAUSTED"`, plus `capacityKind` and `capacity` fields.
+High-level mesh creation preflights all required slots and publishes its entity,
+components, lazy default material, and commands as one transaction.

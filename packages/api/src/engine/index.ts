@@ -6,6 +6,7 @@ import {
 } from "@lume/runtime";
 
 import { createEngineCamera } from "../camera-api.js";
+import { createComponentCapacityState } from "../capacity.js";
 import { createHighLevelApi } from "../resource-api.js";
 import { createBuiltinGeometryApi, createResourceState } from "../resource-lifecycle.js";
 import { createWorldApi } from "../world-api.js";
@@ -32,6 +33,7 @@ export type {
   Engine,
   EngineCamera,
   EngineCameraOptions,
+  EngineComponentCapacityOptions,
   EngineConfig,
   EngineHandle,
   EngineOptions,
@@ -80,6 +82,7 @@ export function createEngine(
     set: highLevel.set,
     world,
     camera: engineCamera,
+    capacities: state.capacities,
     get status() {
       return state.status;
     },
@@ -106,10 +109,22 @@ function createEngineState(config: EngineConfig): EngineState {
     status: "new",
     entityCapacity: budgets.entityCapacity,
     transformCapacity: budgets.transformCapacity,
+    meshRendererCapacity: budgets.meshRendererCapacity,
+    cameraCapacity: budgets.cameraCapacity,
+    boundsCapacity: budgets.boundsCapacity,
     entityGenerations: new Uint16Array(budgets.entityCapacity),
     entityAlive: new Uint8Array(budgets.entityCapacity),
     freeEntities: new Uint32Array(budgets.entityCapacity),
     resources: createResourceState(budgets.resourceCapacity, budgets.entityCapacity),
+    components: createComponentCapacityState(
+      budgets.entityCapacity,
+      budgets.transformCapacity,
+      budgets.cameraCapacity,
+      budgets.meshRendererCapacity,
+      budgets.boundsCapacity,
+    ),
+    capacities: budgets.capacities,
+    commandTransaction: undefined,
     nextEntityIndex: 0,
     freeEntityCount: 0,
     initPromise: undefined,

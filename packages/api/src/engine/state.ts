@@ -1,5 +1,6 @@
 import type { EngineStats, RuntimeCommand, SharedRuntimeViews } from "@lume/runtime";
 
+import type { ComponentCapacityState, EngineCapacities } from "../capacity.js";
 import type { ResourceState } from "../resource-lifecycle.js";
 import type { EngineConfig, EngineStatus } from "./types.js";
 
@@ -12,10 +13,16 @@ export interface EngineState {
   status: EngineStatus;
   readonly entityCapacity: number;
   readonly transformCapacity: number;
+  readonly meshRendererCapacity: number;
+  readonly cameraCapacity: number;
+  readonly boundsCapacity: number;
   readonly entityGenerations: Uint16Array;
   readonly entityAlive: Uint8Array;
   readonly freeEntities: Uint32Array;
   readonly resources: ResourceState;
+  readonly components: ComponentCapacityState;
+  readonly capacities: EngineCapacities;
+  commandTransaction: RuntimeCommand[] | undefined;
   nextEntityIndex: number;
   freeEntityCount: number;
   initPromise: Promise<void> | undefined;

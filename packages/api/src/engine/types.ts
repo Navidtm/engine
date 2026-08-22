@@ -9,6 +9,8 @@ import type {
   Vec3,
 } from "@lume/scene";
 
+import type { EngineCapacities } from "../capacity.js";
+
 export type { BasicMaterialHandle, GeometryHandle } from "@lume/scene";
 
 /** Lifecycle state exposed by an engine instance. */
@@ -31,6 +33,18 @@ export interface EngineTransportOptions {
    * Defaults to `min(entityCapacity, 1,024)`.
    */
   readonly structuralCommandCapacity?: number;
+}
+
+/** Fixed application component budgets; engine-owned reserved slots are added internally. */
+export interface EngineComponentCapacityOptions {
+  /** Maximum entities with transforms; defaults to `entityCapacity`. */
+  readonly transforms?: number;
+  /** Maximum entities with mesh-renderer components; may be zero and defaults to `entityCapacity`. */
+  readonly meshRenderers?: number;
+  /** Additional cameras beyond the engine-owned active camera; may be zero and defaults to `min(entityCapacity, 7)`. */
+  readonly cameras?: number;
+  /** Maximum entities with explicit bounds; may be zero and defaults to `entityCapacity`. */
+  readonly bounds?: number;
 }
 
 /** Perspective parameters that can change without recreating the engine camera. */
@@ -71,6 +85,8 @@ export interface EngineConfig {
   readonly entityCapacity?: number;
   /** Maximum slots in each typed resource registry; defaults to `min(max(entityCapacity, 2), 1,024)`. */
   readonly resourceCapacity?: number;
+  /** Explicit fixed component budgets. */
+  readonly componentCapacities?: EngineComponentCapacityOptions;
   /** Optional initial state for the engine-owned active camera. */
   readonly camera?: EngineCameraOptions;
   /** Advanced SharedArrayBuffer and worker transport budgets. */
@@ -211,6 +227,8 @@ export interface WorldApi {
  * engine.start();
  */
 export interface Engine {
+  /** Effective fixed authoring limits for this engine instance. */
+  readonly capacities: EngineCapacities;
   /** High-level creation API. */
   readonly create: CreateApi;
   /** Typed handles for built-in geometry registered by this engine. */

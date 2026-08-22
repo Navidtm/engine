@@ -8,6 +8,7 @@ import {
 } from "@lume/runtime";
 import { describe, expect, it, vi } from "vitest";
 
+import { createComponentCapacityState } from "../capacity.js";
 import { allocateEntity, packEntity, releaseEntity } from "../entity-lifecycle.js";
 import { createResourceState } from "../resource-lifecycle.js";
 import type { EngineState } from "./state.js";
@@ -120,10 +121,32 @@ function createState(): {
     status: "ready",
     entityCapacity,
     transformCapacity: entityCapacity,
+    meshRendererCapacity: entityCapacity,
+    cameraCapacity: entityCapacity,
+    boundsCapacity: entityCapacity,
     entityGenerations: new Uint16Array(entityCapacity),
     entityAlive: new Uint8Array(entityCapacity),
     freeEntities: new Uint32Array(entityCapacity),
     resources: createResourceState(4, entityCapacity),
+    components: createComponentCapacityState(
+      entityCapacity,
+      entityCapacity,
+      entityCapacity,
+      entityCapacity,
+      entityCapacity,
+    ),
+    capacities: {
+      entities: entityCapacity - 1,
+      transforms: entityCapacity - 1,
+      meshRenderers: entityCapacity,
+      cameras: entityCapacity - 1,
+      materials: 3,
+      geometries: 3,
+      bounds: entityCapacity,
+      renderInstances: entityCapacity - 1,
+      renderCameras: entityCapacity - 1,
+    },
+    commandTransaction: undefined,
     nextEntityIndex: 0,
     freeEntityCount: 0,
     initPromise: undefined,

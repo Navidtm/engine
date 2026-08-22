@@ -1,5 +1,6 @@
 import type { Color, Component, Quat } from "@lume/scene";
 
+import { type EngineCapacities, EngineCapacityError } from "../capacity.js";
 import { peekEntityIndex } from "../entity-lifecycle.js";
 import { validateResourceHandle } from "../resource-lifecycle.js";
 import type { EngineState } from "./state.js";
@@ -21,6 +22,10 @@ export interface EngineBudgets {
   readonly resourceCapacity: number;
   readonly transformCapacity: number;
   readonly structuralCommandCapacity: number;
+  readonly cameraCapacity: number;
+  readonly meshRendererCapacity: number;
+  readonly boundsCapacity: number;
+  readonly capacities: EngineCapacities;
 }
 
 export const DEFAULT_CAMERA_PERSPECTIVE: CameraPerspective = {
@@ -39,7 +44,22 @@ export function resolveEngineBudgets(config: EngineConfig): EngineBudgets {
   ) {
     throw new RangeError("entityCapacity must be an integer between 1 and 1,048,575.");
   }
-  const userTransformCapacity = config.transport?.transformCapacity ?? userEntityCapacity;
+  const configuredTransformCapacity = config.componentCapacities?.transforms;
+  const transportTransformCapacity = config.transport?.transformCapacity;
+  if (
+    configuredTransformCapacity !== undefined &&
+    transportTransformCapacity !== undefined &&
+    configuredTransformCapacity !== transportTransformCapacity
+  ) {
+    throw new RangeError(
+      "componentCapacities.transforms and transport.transformCapacity must match when both are provided.",
+    );
+  }
+  const userTransformCapacity =
+    configuredTransformCapacity ?? transportTransformCapacity ?? userEntityCapacity;
+  const userMeshRendererCapacity = config.componentCapacities?.meshRenderers ?? userEntityCapacity;
+  const userCameraCapacity = config.componentCapacities?.cameras ?? Math.min(userEntityCapacity, 7);
+  const userBoundsCapacity = config.componentCapacities?.bounds ?? userEntityCapacity;
   const userResourceCapacity =
     config.resourceCapacity ?? Math.min(Math.max(userEntityCapacity, 2), 1_024);
   if (
@@ -55,9 +75,12 @@ export function resolveEngineBudgets(config: EngineConfig): EngineBudgets {
     userTransformCapacity > userEntityCapacity
   ) {
     throw new RangeError(
-      "transport.transformCapacity must be an integer between 1 and entityCapacity.",
+      "componentCapacities.transforms (or transport.transformCapacity) must be an integer between 1 and entityCapacity.",
     );
   }
+  validateComponentCapacity("meshRenderers", userMeshRendererCapacity, userEntityCapacity);
+  validateComponentCapacity("cameras", userCameraCapacity, userEntityCapacity);
+  validateComponentCapacity("bounds", userBoundsCapacity, userEntityCapacity);
   const structuralCommandCapacity =
     config.transport?.structuralCommandCapacity ?? Math.min(userEntityCapacity, 1_024);
   if (
@@ -74,7 +97,29 @@ export function resolveEngineBudgets(config: EngineConfig): EngineBudgets {
     resourceCapacity: userResourceCapacity + 1,
     transformCapacity: userTransformCapacity + 1,
     structuralCommandCapacity,
+    cameraCapacity: userCameraCapacity + 1,
+    meshRendererCapacity: userMeshRendererCapacity,
+    boundsCapacity: userBoundsCapacity,
+    capacities: Object.freeze({
+      entities: userEntityCapacity,
+      transforms: userTransformCapacity,
+      meshRenderers: userMeshRendererCapacity,
+      cameras: userCameraCapacity,
+      materials: userResourceCapacity,
+      geometries: userResourceCapacity,
+      bounds: userBoundsCapacity,
+      renderInstances: userEntityCapacity,
+      renderCameras: userCameraCapacity,
+    }),
   };
+}
+
+function validateComponentCapacity(label: string, value: number, entityCapacity: number): void {
+  if (!Number.isSafeInteger(value) || value < 0 || value > entityCapacity) {
+    throw new RangeError(
+      `componentCapacities.${label} must be an integer between 0 and entityCapacity.`,
+    );
+  }
 }
 
 export function validateEngineCameraOptions(options: EngineCameraOptions | undefined): void {
@@ -176,7 +221,9 @@ export function validateColor(value: Color): void {
 
 export function ensureTransformSlotAvailable(state: EngineState): void {
   const index = peekEntityIndex(state);
-  if (index >= state.transformCapacity) throw new Error("Transform capacity exhausted.");
+  if (index >= state.transformCapacity) {
+    throw new EngineCapacityError("transform", state.capacities.transforms);
+  }
 }
 
 export function validateTransformSlot(
@@ -184,6 +231,10 @@ export function validateTransformSlot(
   entity: { readonly index: number },
 ): void {
   if (entity.index >= state.transformCapacity) {
-    throw new Error("Entity index exceeds configured transform capacity.");
+    throw new EngineCapacityError(
+      "transform",
+      state.transformCapacity - 1,
+      "Entity index exceeds configured transform capacity. Increase componentCapacities.transforms (or transport.transformCapacity) or allocate transform-bearing entities earlier.",
+    );
   }
 }

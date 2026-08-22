@@ -17,6 +17,20 @@ describe("engine validation", () => {
       resourceCapacity: 9,
       transformCapacity: 9,
       structuralCommandCapacity: 8,
+      cameraCapacity: 8,
+      meshRendererCapacity: 8,
+      boundsCapacity: 8,
+      capacities: {
+        entities: 8,
+        transforms: 8,
+        meshRenderers: 8,
+        cameras: 7,
+        materials: 8,
+        geometries: 8,
+        bounds: 8,
+        renderInstances: 8,
+        renderCameras: 7,
+      },
     });
     expect(
       resolveEngineBudgets({
@@ -29,6 +43,20 @@ describe("engine validation", () => {
       resourceCapacity: 9,
       transformCapacity: 4,
       structuralCommandCapacity: 2,
+      cameraCapacity: 8,
+      meshRendererCapacity: 8,
+      boundsCapacity: 8,
+      capacities: {
+        entities: 8,
+        transforms: 3,
+        meshRenderers: 8,
+        cameras: 7,
+        materials: 8,
+        geometries: 8,
+        bounds: 8,
+        renderInstances: 8,
+        renderCameras: 7,
+      },
     });
   });
 
@@ -48,6 +76,18 @@ describe("engine validation", () => {
         transport: { structuralCommandCapacity: 5 },
       }),
     ).toThrow("transport.structuralCommandCapacity");
+    expect(
+      resolveEngineBudgets({
+        canvas,
+        entityCapacity: 1,
+        componentCapacities: { meshRenderers: 0, cameras: 0, bounds: 0 },
+      }),
+    ).toMatchObject({
+      meshRendererCapacity: 0,
+      cameraCapacity: 1,
+      boundsCapacity: 0,
+      capacities: { meshRenderers: 0, cameras: 0, bounds: 0, renderCameras: 0 },
+    });
   });
 
   it("merges partial perspective updates and validates the resulting range", () => {

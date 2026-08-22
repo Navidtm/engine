@@ -178,6 +178,14 @@ the same representation used by Rust when crossing the transport boundary.
 Destroyed slots return to a fixed free list; reuse increments the generation so
 stale references fail validation.
 
+`engine.capacities` exposes the effective application budgets for entities,
+transforms, mesh renderers, cameras, typed resources, bounds, and extracted
+render storage. Engine-owned camera slots are added internally. High-level mesh
+creation preflights these fixed mirrors, captures all structural commands, and
+commits one ordered worker batch. A synchronous publication failure rolls back
+the entity, components, resource edges, and a newly allocated default material
+before returning an error.
+
 All public numeric tuples and camera/bounds values are checked for finite,
 valid ranges before an entity slot is allocated. Material and advanced mesh
 component handles are validated against the owning engine before commands are

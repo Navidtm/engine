@@ -1,12 +1,177 @@
 import type { MainToWorkerMessage, WorkerToMainMessage } from "@lume/runtime";
-import { type GeometryHandle, mesh as meshComponent } from "@lume/scene";
+import { camera, type GeometryHandle, mesh as meshComponent } from "@lume/scene";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { EngineCapacityError } from "../capacity.js";
 import { createEngine } from "./index.js";
 
 afterEach(() => vi.unstubAllGlobals());
 
 describe("high-level engine API", () => {
+  it("exposes effective application capacities without reserved engine slots", () => {
+    const engine = createEngine({} as HTMLCanvasElement, {
+      autoResize: false,
+      entityCapacity: 4,
+      resourceCapacity: 3,
+      componentCapacities: { transforms: 2, meshRenderers: 1, cameras: 1, bounds: 1 },
+      workerFactory: () =>
+        ({
+          addEventListener: vi.fn(),
+          postMessage: vi.fn(),
+          terminate: vi.fn(),
+        }) as unknown as Worker,
+    });
+
+    expect(engine.capacities).toEqual({
+      entities: 4,
+      transforms: 2,
+      meshRenderers: 1,
+      cameras: 1,
+      materials: 3,
+      geometries: 3,
+      bounds: 1,
+      renderInstances: 4,
+      renderCameras: 1,
+    });
+  });
+
+  it("reports machine-readable entity, transform, mesh, camera, and bounds exhaustion", () => {
+    const workerFactory = () =>
+      ({
+        addEventListener: vi.fn(),
+        postMessage: vi.fn(),
+        terminate: vi.fn(),
+      }) as unknown as Worker;
+    const engine = createEngine({} as HTMLCanvasElement, {
+      autoResize: false,
+      entityCapacity: 4,
+      componentCapacities: { transforms: 2, meshRenderers: 1, cameras: 1, bounds: 1 },
+      workerFactory,
+    });
+    engine.create.mesh({ geometry: "cube", bounds: { radius: 1 } });
+    const secondEntity = engine.world.createEntity();
+    engine.world.add(secondEntity, camera());
+
+    const thirdEntity = engine.world.createEntity();
+    expect(() =>
+      engine.world.add(
+        thirdEntity,
+        meshComponent(engine.geometry.cube, engine.create.basicMaterial()),
+      ),
+    ).toThrowError(expect.objectContaining({ capacityKind: "mesh-renderer", capacity: 1 }));
+    expect(() => engine.world.add(thirdEntity, camera())).toThrowError(
+      expect.objectContaining({ capacityKind: "camera", capacity: 1 }),
+    );
+    expect(() =>
+      engine.world.add(thirdEntity, { kind: "bounds", center: [0, 0, 0], radius: 1 }),
+    ).toThrowError(expect.objectContaining({ capacityKind: "bounds", capacity: 1 }));
+    expect(() => engine.create.mesh({ geometry: "cube" })).toThrowError(
+      expect.objectContaining({
+        code: "LUME_CAPACITY_EXHAUSTED",
+        capacityKind: "transform",
+        capacity: 2,
+      }),
+    );
+
+    const finalEntity = engine.world.createEntity();
+    expect(() => engine.world.createEntity()).toThrowError(
+      expect.objectContaining({ capacityKind: "entity", capacity: 4 }),
+    );
+    expect(finalEntity.index).toBe(4);
+  });
+
+  it("preflights low transform capacity before allocating the lazy default material", () => {
+    const workerFactory = () =>
+      ({
+        addEventListener: vi.fn(),
+        postMessage: vi.fn(),
+        terminate: vi.fn(),
+      }) as unknown as Worker;
+    const engine = createEngine({} as HTMLCanvasElement, {
+      autoResize: false,
+      entityCapacity: 2,
+      resourceCapacity: 2,
+      componentCapacities: { transforms: 1 },
+      workerFactory,
+    });
+    const blocker = engine.world.createEntity();
+
+    expect(() => engine.create.mesh({ geometry: "cube" })).toThrowError(EngineCapacityError);
+    engine.world.destroyEntity(blocker);
+    expect(engine.create.mesh({ geometry: "cube" }).id.index).toBe(blocker.index);
+    expect(engine.create.basicMaterial()).toBeDefined();
+    expect(() => engine.create.basicMaterial()).toThrowError(
+      expect.objectContaining({ capacityKind: "material", capacity: 2 }),
+    );
+  });
+
+  it("does not consume explicit-bounds capacity for an unbounded mesh", () => {
+    const workerFactory = () =>
+      ({
+        addEventListener: vi.fn(),
+        postMessage: vi.fn(),
+        terminate: vi.fn(),
+      }) as unknown as Worker;
+    const engine = createEngine({} as HTMLCanvasElement, {
+      autoResize: false,
+      entityCapacity: 2,
+      componentCapacities: { bounds: 0 },
+      workerFactory,
+    });
+
+    expect(engine.create.mesh({ geometry: "cube" })).toBeDefined();
+    expect(() => engine.create.mesh({ geometry: "cube", bounds: { radius: 1 } })).toThrowError(
+      expect.objectContaining({ capacityKind: "bounds", capacity: 0 }),
+    );
+    expect(engine.world.createEntity()).toMatchObject({ index: 2, generation: 0 });
+  });
+
+  it("rolls back entity, material, and commands when ordered mesh publication fails", async () => {
+    let onMessage: ((event: MessageEvent<WorkerToMainMessage>) => void) | undefined;
+    let rejectOrderedBatch = false;
+    const posted: MainToWorkerMessage[] = [];
+    const worker = {
+      addEventListener(type: string, listener: EventListener) {
+        if (type === "message") {
+          onMessage = listener as (event: MessageEvent<WorkerToMainMessage>) => void;
+        }
+      },
+      postMessage(message: MainToWorkerMessage) {
+        if (rejectOrderedBatch && message.type === "batch" && message.ordered === true) {
+          throw new Error("transport rejected transaction");
+        }
+        posted.push(message);
+      },
+      terminate: vi.fn(),
+    } as unknown as Worker;
+    const canvas = {
+      getBoundingClientRect: () => ({ width: 1, height: 1 }),
+      transferControlToOffscreen: () => ({}) as OffscreenCanvas,
+    } as HTMLCanvasElement;
+    vi.stubGlobal("window", { devicePixelRatio: 1 });
+    vi.stubGlobal("crossOriginIsolated", false);
+    const engine = createEngine(canvas, {
+      autoResize: false,
+      entityCapacity: 2,
+      resourceCapacity: 2,
+      workerFactory: () => worker,
+    });
+    const initialization = engine.init();
+    onMessage?.({ data: { type: "ready" } } as MessageEvent<WorkerToMainMessage>);
+    await initialization;
+    posted.length = 0;
+
+    rejectOrderedBatch = true;
+    expect(() => engine.create.mesh({ geometry: "cube" })).toThrow("transport rejected");
+    expect(posted).toEqual([]);
+
+    rejectOrderedBatch = false;
+    expect(engine.create.basicMaterial()).toBeDefined();
+    expect(engine.create.basicMaterial()).toBeDefined();
+    expect(engine.world.createEntity()).toMatchObject({ index: 1, generation: 1 });
+    expect(posted.map((message) => message.type)).toEqual(["command", "command", "command"]);
+  });
+
   it("rejects structural command budgets outside the entity budget", () => {
     const canvas = {} as HTMLCanvasElement;
     expect(() =>

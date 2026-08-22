@@ -47,6 +47,10 @@ export function dispatchCommand(state: EngineState, command: RuntimeCommand): vo
   if (state.status === "disposed" || state.status === "failed") {
     throw new Error(`Cannot update a ${state.status} engine.`);
   }
+  if (state.commandTransaction !== undefined) {
+    state.commandTransaction.push(command);
+    return;
+  }
   if (state.status === "new" || state.status === "initializing") {
     state.pendingCommands.push(command);
   } else if (
@@ -59,6 +63,32 @@ export function dispatchCommand(state: EngineState, command: RuntimeCommand): vo
     state.structuralFallback = true;
     post(state, { type: "command", value: command });
   }
+}
+
+/** Starts a cold-path high-level authoring transaction. */
+export function beginCommandTransaction(state: EngineState): void {
+  if (state.commandTransaction !== undefined) {
+    throw new Error("Nested authoring transactions are not supported.");
+  }
+  state.commandTransaction = [];
+}
+
+/** Publishes all captured commands together, preserving earlier shared ordering. */
+export function commitCommandTransaction(state: EngineState): void {
+  const commands = state.commandTransaction;
+  if (commands === undefined) throw new Error("No authoring transaction is active.");
+  state.commandTransaction = undefined;
+  if (commands.length === 0) return;
+  if (state.status === "new" || state.status === "initializing") {
+    state.pendingCommands.push(...commands);
+    return;
+  }
+  post(state, { type: "batch", value: commands, ordered: true });
+}
+
+/** Discards captured commands before they cross the worker boundary. */
+export function rollbackCommandTransaction(state: EngineState): void {
+  state.commandTransaction = undefined;
 }
 
 export function post(state: Pick<EngineState, "worker">, message: MainToWorkerMessage): void {

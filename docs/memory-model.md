@@ -49,14 +49,19 @@ visibility; reuse changes their logical lifetime, not their capacity or owner.
 
 ## Shared allocation and budget
 
-The allocation has three explicit, immutable budgets: public `entityCapacity`
-for application ECS entities and rendering, advanced
-`transport.transformCapacity` for transform slots and WASM staging, and
-`transport.structuralCommandCapacity` for the SPSC command ring. The engine
-adds one internal entity and transform slot for its active camera, so this does
-not reduce the public entity budget. `transport.transformCapacity` defaults to
-`entityCapacity`; it can be lower when transform-bearing entities are allocated
-in the lower entity index range. The command budget defaults to
+The engine has explicit, immutable public budgets: `entityCapacity`,
+`resourceCapacity`, `componentCapacities` for transforms, mesh renderers,
+cameras, and bounds, plus `transport.structuralCommandCapacity` for the SPSC
+command ring. `resourceCapacity` applies independently to each typed registry;
+built-in geometries occupy geometry slots and do not reduce material capacity.
+The resolved limits are observable through `engine.capacities`.
+
+The engine adds internal entity, transform, camera, and render-camera slots for
+its active camera, so it does not reduce any public budget.
+`transport.transformCapacity` is retained as an alias for
+`componentCapacities.transforms`; it defaults to `entityCapacity` and can be
+lower when transform-bearing entities are allocated in the lower entity index
+range. The command budget defaults to
 `min(entityCapacity, 1,024)`, because short structural bursts
 do not justify reserving 64 bytes per entity. Overflow preserves ordering by
 draining older shared structural and transform publications before the attempted
@@ -168,13 +173,14 @@ overtake either side of the transport boundary and are not semantically dropped.
 
 Capacity is a contract, not a request to grow storage:
 
-| Condition                                           | Observable behavior                                                                                                                                                                        |
-| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Invalid capacity configuration                      | `createEngine` throws `RangeError` before allocating a worker or shared memory.                                                                                                            |
-| Entity or transform capacity exhausted              | The public API throws before publishing the command.                                                                                                                                       |
-| Rust component capacity exhausted                   | The structural command is rejected by Rust; the worker reports an error and the engine transitions to failed rather than silently growing WASM storage.                                    |
-| SAB allocation fails due to browser memory pressure | Browser allocation throws during engine creation; no worker initialization starts. The application must choose a smaller budget or run in the message-transport compatibility environment. |
-| GPU storage-buffer/device limit is exceeded         | Renderer initialization rejects, disposes resources created so far, and initialization rejects.                                                                                            |
+| Condition                                                 | Observable behavior                                                                                                                                                                        |
+| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Invalid capacity configuration                            | `createEngine` throws `RangeError` before allocating a worker or shared memory.                                                                                                            |
+| Entity, component, resource, or render capacity exhausted | The public API throws `EngineCapacityError` with a stable code, capacity kind, and effective limit before publishing a high-level command.                                                 |
+| High-level mesh transaction fails                         | Captured commands are discarded and its entity, component mirrors, resource edges, and newly created default material are rolled back.                                                     |
+| Rust component capacity exhausted                         | The structural command is rejected by Rust; the worker reports an error and the engine transitions to failed rather than silently growing WASM storage.                                    |
+| SAB allocation fails due to browser memory pressure       | Browser allocation throws during engine creation; no worker initialization starts. The application must choose a smaller budget or run in the message-transport compatibility environment. |
+| GPU storage-buffer/device limit is exceeded               | Renderer initialization rejects, disposes resources created so far, and initialization rejects.                                                                                            |
 
 JavaScript has no portable API to reserve or query a browser process memory
 limit. The deterministic budget above is therefore the preflight mechanism;

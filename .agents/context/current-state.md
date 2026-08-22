@@ -1,6 +1,6 @@
 # Current Project State
 
-Last verified: 2026-08-22 on master after issue #21
+Last verified: 2026-08-22 on master after issue #22
 
 This document records the implementation that exists in the repository. It is
 an evidence-based snapshot, not a description of intended future architecture.
@@ -76,6 +76,11 @@ Implemented:
 - Validation of authoring tuples, camera/bounds ranges, and foreign material
   handles before an entity slot is allocated or a command is published.
 - Fixed-capacity entity allocation, free-list reuse, and stale-handle rejection.
+- Observable effective entity, component, typed-resource, and render capacities
+  through `engine.capacities`; the engine-owned camera reservations are excluded
+  from public limits.
+- Machine-readable synchronous capacity errors and transactional high-level mesh
+  creation, including rollback of lazy default-material allocation.
 - Declarative scene components for transform, mesh, bounds, camera, and basic
   material data.
 

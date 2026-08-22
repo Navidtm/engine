@@ -9,7 +9,7 @@ use lume_core::{
 };
 
 /// ABI revision required by the TypeScript runtime before it calls any export.
-pub const ABI_VERSION: u32 = 9;
+pub const ABI_VERSION: u32 = 10;
 
 const TRANSFORM_UPDATE_FLOATS: usize = 10;
 
@@ -33,14 +33,18 @@ pub extern "C" fn lume_abi_version() -> u32 {
 
 /// Allocates the complete fixed-capacity simulation and render core.
 ///
-/// `entity_capacity` bounds ECS/render storage and `transform_capacity` bounds
-/// WASM staging slots. The returned opaque pointer is owned by the caller and
-/// must be released exactly once with [`lume_engine_destroy`].
+/// The arguments independently bound entity/render storage, transform staging,
+/// resource-handle indices, and each component store. The returned opaque
+/// pointer is owned by the caller and must be released exactly once with
+/// [`lume_engine_destroy`].
 #[unsafe(no_mangle)]
 pub extern "C" fn lume_engine_create(
     entity_capacity: u32,
     transform_capacity: u32,
     resource_capacity: u32,
+    mesh_renderer_capacity: u32,
+    camera_capacity: u32,
+    bounds_capacity: u32,
 ) -> *mut c_void {
     let entities = usize::try_from(entity_capacity.max(1))
         .unwrap_or(4_096)
@@ -49,17 +53,27 @@ pub extern "C" fn lume_engine_create(
         .unwrap_or(4_096)
         .min(entities);
     let resources = usize::try_from(resource_capacity.max(1)).unwrap_or(4_096);
+    let mesh_renderers = usize::try_from(mesh_renderer_capacity)
+        .unwrap_or(entities)
+        .min(entities);
+    let cameras = usize::try_from(camera_capacity.max(1))
+        .unwrap_or(8)
+        .min(entities);
+    let bounds = usize::try_from(bounds_capacity)
+        .unwrap_or(entities)
+        .min(entities);
     let capacity = WorldCapacity {
         entities,
-        transforms: entities,
-        mesh_renderers: entities,
-        cameras: 8,
+        transforms,
+        mesh_renderers,
+        cameras,
+        // The capacity includes resource-handle zero, which is reserved by the API.
         materials: resources,
-        bounds: entities,
+        bounds,
     };
     Box::into_raw(Box::new(EngineCore {
         world: World::with_capacity(capacity),
-        render_world: RenderWorld::with_capacity(entities, 8),
+        render_world: RenderWorld::with_capacity(entities, cameras),
         visible: VisibleRenderBuffer::with_capacity(entities),
         visibility_valid: false,
         transform_update_generations: vec![0; transforms].into_boxed_slice(),
@@ -553,7 +567,7 @@ mod tests {
 
     #[test]
     fn abi_can_create_update_and_destroy_a_world() {
-        let engine = lume_engine_create(16, 16, 16);
+        let engine = lume_engine_create(16, 16, 16, 16, 8, 16);
         assert!(!engine.is_null());
         assert_eq!(lume_engine_spawn(engine, 0), 1);
         assert_eq!(lume_engine_spawn(engine, 1), 1);
@@ -630,5 +644,58 @@ mod tests {
         assert_eq!(lume_engine_update(engine), 1);
         // SAFETY: pointer was created above and has not yet been destroyed.
         unsafe { lume_engine_destroy(engine) };
+    }
+
+    #[test]
+    fn abi_enforces_configured_component_resource_and_render_capacities() {
+        let engine = lume_engine_create(4, 3, 3, 1, 2, 1);
+        assert!(!engine.is_null());
+        assert_eq!(lume_transform_update_capacity(engine), 3);
+        assert_eq!(lume_render_entity_capacity(engine), 4);
+        assert_eq!(lume_render_camera_capacity(engine), 2);
+
+        for entity in 0..4 {
+            assert_eq!(lume_engine_spawn(engine, entity), 1);
+        }
+        assert_eq!(lume_engine_spawn(engine, 4), 0);
+
+        for entity in 0..3 {
+            assert_eq!(
+                lume_engine_add_transform(
+                    engine, entity, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0,
+                ),
+                1
+            );
+        }
+        assert_eq!(
+            lume_engine_add_transform(engine, 3, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0,),
+            0
+        );
+
+        assert_eq!(lume_engine_add_material(engine, 1, 1.0, 0.0, 0.0, 1.0), 1);
+        assert_eq!(lume_engine_add_material(engine, 2, 0.0, 1.0, 0.0, 1.0), 1);
+        assert_eq!(lume_engine_add_material(engine, 3, 0.0, 0.0, 1.0, 1.0), 0);
+
+        assert_eq!(lume_engine_add_mesh_renderer(engine, 0, 1, 1), 1);
+        assert_eq!(lume_engine_add_mesh_renderer(engine, 1, 1, 1), 0);
+        assert_eq!(lume_engine_add_camera(engine, 0, 1.0, 0.1, 10.0, 1.0), 1);
+        assert_eq!(lume_engine_add_camera(engine, 1, 1.0, 0.1, 10.0, 1.0), 1);
+        assert_eq!(lume_engine_add_camera(engine, 2, 1.0, 0.1, 10.0, 1.0), 0);
+        assert_eq!(lume_engine_add_bounds(engine, 0, 0.0, 0.0, 0.0, 1.0), 1);
+        assert_eq!(lume_engine_add_bounds(engine, 1, 0.0, 0.0, 0.0, 1.0), 0);
+
+        // SAFETY: pointer was created above and has not yet been destroyed.
+        unsafe { lume_engine_destroy(engine) };
+
+        let zero_components = lume_engine_create(1, 1, 3, 0, 1, 0);
+        assert!(!zero_components.is_null());
+        assert_eq!(lume_engine_spawn(zero_components, 0), 1);
+        assert_eq!(lume_engine_add_mesh_renderer(zero_components, 0, 1, 1), 0);
+        assert_eq!(
+            lume_engine_add_bounds(zero_components, 0, 0.0, 0.0, 0.0, 1.0),
+            0
+        );
+        // SAFETY: pointer was created above and has not yet been destroyed.
+        unsafe { lume_engine_destroy(zero_components) };
     }
 }
