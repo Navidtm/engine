@@ -10,5 +10,6 @@ renderer.dispose();
 ```
 
 The caller owns the renderer lifecycle; the renderer owns the device, surface,
-pipelines, buffers, and mesh registry. Do not retain GPU resources after
-`dispose()`.
+pipelines, buffers, and private generational geometry/material registries.
+Registry slots are mutated only through the worker-facing resource boundary.
+Do not retain GPU resources after `dispose()`.

@@ -1,5 +1,5 @@
-use crate::ecs::{Entity, SparseSet, SparseSetInsertError};
 use crate::math::Color;
+use crate::resource::MaterialHandle;
 
 /// Reserved renderer pipeline for unlit vertex-color/basic materials.
 pub const BASIC_PIPELINE_ID: PipelineId = PipelineId::from_raw(1);
@@ -20,37 +20,6 @@ impl PipelineId {
     #[must_use]
     pub const fn raw(self) -> u32 {
         self.0
-    }
-}
-
-/// Stable entity-backed handle used to look up a material.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[repr(transparent)]
-pub struct MaterialHandle(u32);
-
-impl MaterialHandle {
-    /// Wraps the packed entity representation used for a material.
-    #[must_use]
-    pub const fn from_raw(raw: u32) -> Self {
-        Self(raw)
-    }
-
-    /// Creates a handle for `entity`, preserving its generation.
-    #[must_use]
-    pub const fn from_entity(entity: Entity) -> Self {
-        Self(entity.raw())
-    }
-
-    /// Returns the packed representation shared with transport code.
-    #[must_use]
-    pub const fn raw(self) -> u32 {
-        self.0
-    }
-
-    /// Returns the entity identity represented by this handle.
-    #[must_use]
-    pub const fn entity(self) -> Entity {
-        Entity::from_raw(self.0)
     }
 }
 
@@ -78,15 +47,19 @@ impl Default for BasicMaterial {
 
 /// Data-oriented material storage addressed by compact handles.
 pub struct MaterialRegistry {
-    storage: SparseSet<BasicMaterial>,
+    slots: Vec<Option<BasicMaterial>>,
+    generations: Vec<u16>,
+    len: usize,
 }
 
 impl MaterialRegistry {
-    /// Creates fixed-capacity material storage indexed by entity identity.
+    /// Creates fixed-capacity material storage indexed by resource identity.
     #[must_use]
-    pub fn with_capacity(entity_capacity: usize, material_capacity: usize) -> Self {
+    pub fn with_capacity(material_capacity: usize) -> Self {
         Self {
-            storage: SparseSet::with_capacity(entity_capacity, material_capacity),
+            slots: vec![None; material_capacity],
+            generations: vec![0; material_capacity],
+            len: 0,
         }
     }
 
@@ -95,37 +68,60 @@ impl MaterialRegistry {
         &mut self,
         handle: MaterialHandle,
         material: BasicMaterial,
-    ) -> Result<Option<BasicMaterial>, SparseSetInsertError> {
-        self.storage.insert(handle.entity(), material)
+    ) -> Result<Option<BasicMaterial>, BasicMaterial> {
+        let index = handle.index();
+        if index == 0 || index >= self.slots.len() || self.generations[index] != handle.generation()
+        {
+            return Err(material);
+        }
+        let previous = self.slots[index].replace(material);
+        if previous.is_none() {
+            self.len += 1;
+        }
+        Ok(previous)
     }
 
     /// Returns whether the registry can accept or replace `handle`.
     #[must_use]
     pub fn can_insert(&self, handle: MaterialHandle) -> bool {
-        self.storage.can_insert(handle.entity())
+        let index = handle.index();
+        index > 0 && index < self.slots.len() && self.generations[index] == handle.generation()
     }
 
     /// Borrows the material associated with `handle`, if it is present.
     #[must_use]
     pub fn get(&self, handle: MaterialHandle) -> Option<&BasicMaterial> {
-        self.storage.get(handle.entity())
+        let index = handle.index();
+        if index == 0 || index >= self.slots.len() || self.generations[index] != handle.generation()
+        {
+            return None;
+        }
+        self.slots[index].as_ref()
     }
 
     /// Removes and returns the material associated with `handle`.
     pub fn remove(&mut self, handle: MaterialHandle) -> Option<BasicMaterial> {
-        self.storage.remove(handle.entity())
+        let index = handle.index();
+        if index == 0 || index >= self.slots.len() || self.generations[index] != handle.generation()
+        {
+            return None;
+        }
+        let removed = self.slots[index].take()?;
+        self.generations[index] = self.generations[index].wrapping_add(1) & 0x0fff;
+        self.len -= 1;
+        Some(removed)
     }
 
     /// Returns the number of stored materials.
     #[must_use]
     pub fn len(&self) -> usize {
-        self.storage.len()
+        self.len
     }
 
     /// Returns whether no material is stored.
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        self.storage.is_empty()
+        self.len == 0
     }
 }
 
@@ -135,7 +131,7 @@ mod tests {
 
     #[test]
     fn registry_replaces_and_removes_material_by_handle() {
-        let mut registry = MaterialRegistry::with_capacity(8, 4);
+        let mut registry = MaterialRegistry::with_capacity(4);
         let handle = MaterialHandle::from_raw(3);
         assert!(
             registry
@@ -151,5 +147,8 @@ mod tests {
         assert_eq!(registry.get(handle), Some(&blue));
         assert_eq!(registry.remove(handle), Some(blue));
         assert!(registry.is_empty());
+        assert!(registry.insert(handle, BasicMaterial::default()).is_err());
+        let recycled = MaterialHandle::from_raw((1 << 20) | 3);
+        assert!(registry.insert(recycled, BasicMaterial::default()).is_ok());
     }
 }

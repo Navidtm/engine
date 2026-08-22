@@ -46,6 +46,7 @@ export function initialize(state: EngineState): Promise<void> {
       canvas,
       wasmUrl,
       entityCapacity: state.entityCapacity,
+      resourceCapacity: state.resources.capacity,
       transformCapacity: state.transformCapacity,
       size: {
         width: rect.width,

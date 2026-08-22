@@ -1,7 +1,7 @@
 import type { RendererOptions, SurfaceSize } from "@lume/renderer";
 
 /** Version checked before a main thread and worker exchange runtime messages. */
-export const RUNTIME_PROTOCOL_VERSION = 7;
+export const RUNTIME_PROTOCOL_VERSION = 8;
 
 /** Snapshot returned by {@link Engine.getStats} through the worker boundary. */
 export interface EngineStats {
@@ -60,6 +60,21 @@ export interface EngineStats {
 /** Compact structural command understood by the worker and Rust/WASM core. */
 /** Internal structural operation encoded for the worker or shared command ring. */
 export type RuntimeCommand =
+  | {
+      readonly type: "create-geometry";
+      readonly handle: number;
+      readonly builtin: "triangle" | "cube";
+    }
+  | {
+      readonly type: "create-basic-material";
+      readonly handle: number;
+      readonly color: readonly [number, number, number, number];
+    }
+  | {
+      readonly type: "retire-resource";
+      readonly resourceKind: "geometry" | "basic-material";
+      readonly handle: number;
+    }
   | { readonly type: "spawn"; readonly entity: number }
   | { readonly type: "despawn"; readonly entity: number }
   | {
@@ -68,11 +83,6 @@ export type RuntimeCommand =
       readonly position: readonly [number, number, number];
       readonly rotation: readonly [number, number, number, number];
       readonly scale: readonly [number, number, number];
-    }
-  | {
-      readonly type: "add-material";
-      readonly entity: number;
-      readonly color: readonly [number, number, number, number];
     }
   | {
       readonly type: "add-camera";
@@ -96,7 +106,7 @@ export type RuntimeCommand =
   | {
       readonly type: "remove-component";
       readonly entity: number;
-      readonly component: "transform" | "material" | "camera" | "mesh" | "bounds";
+      readonly component: "transform" | "camera" | "mesh" | "bounds";
     };
 
 /** One-time worker initialization payload. This is runtime-internal, not a public authoring API. */
@@ -109,6 +119,8 @@ export interface RuntimeInit {
   readonly wasmUrl: string;
   /** Maximum live entity count accepted by the WASM world. */
   readonly entityCapacity: number;
+  /** Independent slot capacity for each typed resource registry. */
+  readonly resourceCapacity: number;
   /** Independent fixed capacity for synchronized transform slots. */
   readonly transformCapacity: number;
   /** Initial CSS size and pixel ratio of the render surface. */

@@ -1,6 +1,7 @@
 export type {
   BasicMaterialHandle,
   BasicMaterialOptions,
+  BuiltinGeometryApi,
   CameraPerspectiveOptions,
   CreateApi,
   Engine,
@@ -11,6 +12,7 @@ export type {
   EngineOptions,
   EngineStatus,
   EngineTransportOptions,
+  GeometryHandle,
   MeshHandle,
   MeshOptions,
   PowerPreference,

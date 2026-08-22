@@ -46,16 +46,17 @@ device-loss promise as lifecycle information while retaining ownership of the
 device and every child resource. `dispose` destroys buffers, textures, profiler
 resources, the surface configuration, and the device.
 
-The target lifetime contract for future assets and GPU-backed resources is
-recorded in
+The lifetime contract for assets and GPU-backed resources is recorded in
 [ADR 004](../.agents/decisions/004-resource-lifetime.md). Typed generational
 handles cross engine boundaries; the worker coordinates logical ownership and
 dependencies; ECS components retain handles rather than resources; and renderer
 registries exclusively own WebGPU objects. Resource retirement is deferred
-until tracked users and in-flight GPU submissions have released the resource.
-The current entity-backed basic material remains a compatibility implementation
-that must migrate before textures, PBR materials, asset streaming, or device
-recovery are added.
+until tracked users release the resource. Built-in geometry and basic materials
+now use this foundation: the main thread mirrors liveness for early validation,
+the worker Resource Coordinator owns canonical lifecycle and mesh usage edges,
+Rust stores only fixed-capacity render mirrors, and private renderer registries
+own residency. Submission-serial retirement remains future work for resources
+that can be replaced while GPU commands are in flight.
 
 ## Runtime flow
 

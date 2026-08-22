@@ -1,5 +1,6 @@
 import type { EngineStats, RuntimeCommand, SharedRuntimeViews } from "@lume/runtime";
 
+import type { ResourceState } from "../resource-lifecycle.js";
 import type { EngineConfig, EngineStatus } from "./types.js";
 
 /** Mutable state explicitly owned by one public engine facade. */
@@ -14,6 +15,7 @@ export interface EngineState {
   readonly entityGenerations: Uint16Array;
   readonly entityAlive: Uint8Array;
   readonly freeEntities: Uint32Array;
+  readonly resources: ResourceState;
   nextEntityIndex: number;
   freeEntityCount: number;
   initPromise: Promise<void> | undefined;

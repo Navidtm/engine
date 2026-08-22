@@ -14,6 +14,7 @@ describe("engine validation", () => {
   it("resolves public capacities into reserved-slot internal budgets", () => {
     expect(resolveEngineBudgets({ canvas, entityCapacity: 8 })).toEqual({
       entityCapacity: 9,
+      resourceCapacity: 9,
       transformCapacity: 9,
       structuralCommandCapacity: 8,
     });
@@ -23,7 +24,12 @@ describe("engine validation", () => {
         entityCapacity: 8,
         transport: { transformCapacity: 3, structuralCommandCapacity: 2 },
       }),
-    ).toEqual({ entityCapacity: 9, transformCapacity: 4, structuralCommandCapacity: 2 });
+    ).toEqual({
+      entityCapacity: 9,
+      resourceCapacity: 9,
+      transformCapacity: 4,
+      structuralCommandCapacity: 2,
+    });
   });
 
   it("rejects invalid budgets before engine resources are created", () => {

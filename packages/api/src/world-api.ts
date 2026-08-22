@@ -11,6 +11,12 @@ import {
   releaseEntity,
   validateLiveEntity,
 } from "./entity-lifecycle.js";
+import {
+  commitMeshResources,
+  hasMeshResources,
+  prepareMeshResources,
+  releaseMeshResources,
+} from "./resource-lifecycle.js";
 
 /** Creates the advanced ECS authoring facade backed by one engine state. */
 export function createWorldApi(state: EngineState): WorldApi {
@@ -24,26 +30,36 @@ export function createWorldApi(state: EngineState): WorldApi {
     destroyEntity(entity: Entity) {
       validateLiveEntity(state, entity);
       dispatchCommand(state, { type: "despawn", entity: packEntity(entity) });
+      releaseMeshResources(state, entity);
       releaseEntity(state, entity);
     },
     add(entity: Entity, component: Component) {
       validateLiveEntity(state, entity);
       if (component.kind === "transform") validateTransformSlot(state, entity);
-      dispatchCommand(state, componentCommand(state, entity, component));
+      const prepared =
+        component.kind === "mesh"
+          ? prepareMeshResources(state, entity, component.geometry, component.material)
+          : undefined;
+      dispatchCommand(state, componentCommand(entity, component, prepared));
+      if (prepared !== undefined) commitMeshResources(state, prepared);
     },
     remove(entity: Entity, component: Component["kind"]) {
       validateLiveEntity(state, entity);
+      if (component === "mesh" && !hasMeshResources(state, entity)) {
+        throw new Error("Mesh component is not present on this entity.");
+      }
       dispatchCommand(state, { type: "remove-component", entity: packEntity(entity), component });
+      if (component === "mesh") releaseMeshResources(state, entity);
     },
   };
 }
 
 function componentCommand(
-  state: EngineState,
   entity: Entity,
   component: Component,
+  prepared?: ReturnType<typeof prepareMeshResources>,
 ): RuntimeCommand {
-  validateComponent(state, component);
+  validateComponent(component);
   const packedEntity = packEntity(entity);
   switch (component.kind) {
     case "transform":
@@ -54,8 +70,6 @@ function componentCommand(
         rotation: component.rotation,
         scale: component.scale,
       };
-    case "material":
-      return { type: "add-material", entity: packedEntity, color: component.color };
     case "camera":
       return {
         type: "add-camera",
@@ -65,11 +79,12 @@ function componentCommand(
         far: component.far,
       };
     case "mesh":
+      if (prepared === undefined) throw new Error("Mesh resources were not prepared.");
       return {
         type: "add-mesh",
         entity: packedEntity,
-        geometry: component.geometry.id,
-        material: packEntity(component.material),
+        geometry: prepared.geometry,
+        material: prepared.material,
       };
     case "bounds":
       return {

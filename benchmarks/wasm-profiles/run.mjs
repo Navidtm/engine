@@ -172,7 +172,11 @@ function runStartupSample(mode, wasmPath) {
 async function benchmarkWasmRuntime(module) {
   const instance = await WebAssembly.instantiate(module, {});
   const exports = instance.exports;
-  const engine = exports.lume_engine_create(frameEntities + 2, frameEntities + 2);
+  const engine = exports.lume_engine_create(
+    frameEntities + 2,
+    frameEntities + 2,
+    frameEntities + 2,
+  );
   if (engine === 0) throw new Error("WASM engine allocation failed.");
   try {
     prepareScene(exports, engine, frameEntities);

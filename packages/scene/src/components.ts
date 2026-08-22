@@ -1,9 +1,9 @@
 import type {
+  BasicMaterialHandle,
   BoundsComponent,
   CameraComponent,
   Color,
-  Entity,
-  MaterialComponent,
+  GeometryHandle,
   MeshComponent,
   Quat,
   TransformComponent,
@@ -58,13 +58,13 @@ export interface MaterialOptions {
  *
  * @throws {RangeError} When a channel is non-finite or outside `[0, 1]`.
  */
-export function material(options: MaterialOptions = {}): MaterialComponent {
+export function material(options: MaterialOptions = {}): Readonly<{ color: Color }> {
   const color = options.color ?? ([...WHITE] as Color);
   validateFiniteTuple("material color", color, 4);
   if (color.some((channel) => channel < 0 || channel > 1)) {
     throw new RangeError("material color channels must be between 0 and 1");
   }
-  return { kind: "material", color } as const satisfies MaterialComponent;
+  return { color } as const;
 }
 
 /** Perspective camera options expressed in radians and world units. */
@@ -96,11 +96,11 @@ export function camera(options: CameraOptions = {}): CameraComponent {
 }
 
 /**
- * Creates a mesh descriptor that references a geometry and material entity.
- * Ownership of `materialEntity` is checked by `engine.world.add`.
+ * Creates a mesh descriptor that references engine-owned geometry and material resources.
+ * Handle ownership and lifecycle are checked by `engine.world.add`.
  */
-export function mesh(geometry: MeshComponent["geometry"], materialEntity: Entity): MeshComponent {
-  return { kind: "mesh", geometry, material: materialEntity } as const satisfies MeshComponent;
+export function mesh(geometry: GeometryHandle, material: BasicMaterialHandle): MeshComponent {
+  return { kind: "mesh", geometry, material } as const satisfies MeshComponent;
 }
 
 /** Sphere bounds used by CPU visibility culling. */

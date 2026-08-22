@@ -17,6 +17,16 @@ export interface Entity {
   readonly generation: number;
 }
 
+/** Opaque engine-owned handle for one built-in geometry resource. */
+export interface GeometryHandle {
+  readonly kind: "geometry";
+}
+
+/** Opaque engine-owned handle for one color-only material resource. */
+export interface BasicMaterialHandle {
+  readonly kind: "basic-material";
+}
+
 /** Serializable local transform descriptor. */
 export interface TransformComponent {
   /** Discriminant used by `engine.world.add`. */
@@ -27,14 +37,6 @@ export interface TransformComponent {
   readonly rotation: Quat;
   /** Finite local XYZ scale. */
   readonly scale: Vec3;
-}
-
-/** Color-only material descriptor supported by the current renderer. */
-export interface MaterialComponent {
-  /** Discriminant used by `engine.world.add`. */
-  readonly kind: "material";
-  /** Linear RGBA color with channels in the inclusive `[0, 1]` range. */
-  readonly color: Color;
 }
 
 /** Perspective camera descriptor; clipping planes must satisfy `0 < near < far`. */
@@ -54,9 +56,9 @@ export interface MeshComponent {
   /** Discriminant used by `engine.world.add`. */
   readonly kind: "mesh";
   /** Built-in geometry descriptor to render. */
-  readonly geometry: Geometry;
-  /** Live material entity belonging to the same engine. */
-  readonly material: Entity;
+  readonly geometry: GeometryHandle;
+  /** Live basic-material resource belonging to the same engine. */
+  readonly material: BasicMaterialHandle;
 }
 
 /** World-extraction input for sphere-frustum culling. */
@@ -70,13 +72,4 @@ export interface BoundsComponent {
 }
 
 /** Any component accepted by the advanced `engine.world.add` API. */
-export type Component =
-  TransformComponent | MaterialComponent | CameraComponent | MeshComponent | BoundsComponent;
-
-/** Readonly TypeScript built-in geometry identifier understood by the renderer. */
-export interface Geometry {
-  /** Stable renderer geometry identifier. */
-  readonly id: number;
-  /** Built-in mesh shape selected by this descriptor. */
-  readonly kind: "triangle" | "box";
-}
+export type Component = TransformComponent | CameraComponent | MeshComponent | BoundsComponent;

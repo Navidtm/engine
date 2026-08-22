@@ -7,6 +7,7 @@ import {
 
 import { createEngineCamera } from "../camera-api.js";
 import { createHighLevelApi } from "../resource-api.js";
+import { createBuiltinGeometryApi, createResourceState } from "../resource-lifecycle.js";
 import { createWorldApi } from "../world-api.js";
 import {
   dispose,
@@ -25,6 +26,7 @@ import { resolveEngineBudgets, validateEngineCameraOptions } from "./validation.
 export type {
   BasicMaterialHandle,
   BasicMaterialOptions,
+  BuiltinGeometryApi,
   CameraPerspectiveOptions,
   CreateApi,
   Engine,
@@ -35,6 +37,7 @@ export type {
   EngineOptions,
   EngineStatus,
   EngineTransportOptions,
+  GeometryHandle,
   MeshHandle,
   MeshOptions,
   PowerPreference,
@@ -59,9 +62,10 @@ export function createEngine(
   const config: EngineConfig =
     "canvas" in canvasOrConfig ? canvasOrConfig : { ...options, canvas: canvasOrConfig };
   const state = createEngineState(config);
+  const geometry = createBuiltinGeometryApi(state);
   const world = createWorldApi(state);
   const engineCamera = createEngineCamera(state, world, config.camera);
-  const highLevel = createHighLevelApi(state, world);
+  const highLevel = createHighLevelApi(state, world, geometry);
 
   state.worker.addEventListener("message", (event: MessageEvent<WorkerToMainMessage>) => {
     handleWorkerMessage(state, event.data);
@@ -72,6 +76,7 @@ export function createEngine(
 
   return {
     create: highLevel.create,
+    geometry,
     set: highLevel.set,
     world,
     camera: engineCamera,
@@ -104,6 +109,7 @@ function createEngineState(config: EngineConfig): EngineState {
     entityGenerations: new Uint16Array(budgets.entityCapacity),
     entityAlive: new Uint8Array(budgets.entityCapacity),
     freeEntities: new Uint32Array(budgets.entityCapacity),
+    resources: createResourceState(budgets.resourceCapacity, budgets.entityCapacity),
     nextEntityIndex: 0,
     freeEntityCount: 0,
     initPromise: undefined,

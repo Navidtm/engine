@@ -1,6 +1,7 @@
 use crate::components::{Bounds, Camera, MeshRenderer, Transform};
 use crate::ecs::{Entity, EntityAllocator, SparseSet};
-use crate::material::{BasicMaterial, MaterialHandle, MaterialRegistry};
+use crate::material::{BasicMaterial, MaterialRegistry};
+use crate::resource::MaterialHandle;
 use crate::systems::{update_cameras, update_transforms};
 
 /// Independent fixed capacities for entities and each component store.
@@ -14,7 +15,7 @@ pub struct WorldCapacity {
     pub mesh_renderers: usize,
     /// Maximum number of camera components.
     pub cameras: usize,
-    /// Maximum number of basic material components.
+    /// Maximum number of basic-material resource mirrors.
     pub materials: usize,
     /// Maximum number of explicit or implicit bounds components.
     pub bounds: usize,
@@ -49,7 +50,7 @@ pub struct World {
     pub cameras: SparseSet<Camera>,
     /// Local bounds component storage.
     bounds: SparseSet<Bounds>,
-    /// Basic material component storage.
+    /// Derived basic-material resource mirror used by extraction.
     materials: MaterialRegistry,
 }
 
@@ -65,7 +66,7 @@ impl World {
             mesh_renderers: SparseSet::with_capacity(capacity.entities, capacity.mesh_renderers),
             cameras: SparseSet::with_capacity(capacity.entities, capacity.cameras),
             bounds: SparseSet::with_capacity(capacity.entities, capacity.bounds),
-            materials: MaterialRegistry::with_capacity(capacity.entities, capacity.materials),
+            materials: MaterialRegistry::with_capacity(capacity.materials),
         }
     }
 
@@ -83,11 +84,7 @@ impl World {
     pub fn despawn(&mut self, entity: Entity) -> bool {
         let render_dirty = self.transforms.contains(entity)
             || self.mesh_renderers.contains(entity)
-            || self.bounds.contains(entity)
-            || self
-                .materials
-                .get(MaterialHandle::from_entity(entity))
-                .is_some();
+            || self.bounds.contains(entity);
         if !self.entities.despawn(entity) {
             return false;
         }
@@ -95,7 +92,6 @@ impl World {
         self.mesh_renderers.remove(entity);
         self.cameras.remove(entity);
         self.bounds.remove(entity);
-        self.materials.remove(MaterialHandle::from_entity(entity));
         if render_dirty {
             self.mark_render_dirty();
         }
@@ -241,17 +237,10 @@ impl World {
         inserted
     }
 
-    /// Adds or replaces the basic material owned by `entity`.
-    pub fn add_material(&mut self, entity: Entity, value: BasicMaterial) -> bool {
-        if !self.is_alive(entity) {
-            return false;
-        }
-        let inserted = self
-            .materials
-            .insert(MaterialHandle::from_entity(entity), value)
-            .is_ok();
+    /// Adds or replaces a worker-owned basic-material mirror.
+    pub fn add_material(&mut self, material: MaterialHandle, value: BasicMaterial) -> bool {
+        let inserted = self.materials.insert(material, value).is_ok();
         if inserted {
-            let material = MaterialHandle::from_entity(entity);
             for (mesh_entity, mesh) in self.mesh_renderers.iter() {
                 if mesh.material == material {
                     bump_revision(&mut self.render_revisions[mesh_entity.index()]);
@@ -260,6 +249,15 @@ impl World {
             self.mark_render_dirty();
         }
         inserted
+    }
+
+    /// Removes a matching material generation after its final usage edge is released.
+    pub fn remove_material(&mut self, material: MaterialHandle) -> bool {
+        if self.materials.remove(material).is_none() {
+            return false;
+        }
+        self.mark_render_dirty();
+        true
     }
 
     /// Removes a component selected by the stable transport component ID.
@@ -272,26 +270,14 @@ impl World {
         }
         let removed = match component {
             1 => self.transforms.remove(entity).is_some(),
-            2 => self
-                .materials
-                .remove(MaterialHandle::from_entity(entity))
-                .is_some(),
+            2 => false,
             3 => self.cameras.remove(entity).is_some(),
             4 => self.mesh_renderers.remove(entity).is_some(),
             5 => self.bounds.remove(entity).is_some(),
             _ => false,
         };
         if removed {
-            if component == 2 {
-                let material = MaterialHandle::from_entity(entity);
-                for (mesh_entity, mesh) in self.mesh_renderers.iter() {
-                    if mesh.material == material {
-                        bump_revision(&mut self.render_revisions[mesh_entity.index()]);
-                    }
-                }
-            } else {
-                bump_revision(&mut self.render_revisions[entity.index()]);
-            }
+            bump_revision(&mut self.render_revisions[entity.index()]);
             if component != 3 {
                 self.mark_render_dirty();
             }
@@ -396,7 +382,7 @@ mod tests {
         assert!(!world.add_mesh_renderer(
             second,
             MeshRenderer {
-                geometry: 0,
+                geometry: crate::GeometryHandle::from_raw(0),
                 material: MaterialHandle::from_raw(0),
             },
         ));

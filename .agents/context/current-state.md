@@ -1,6 +1,6 @@
 # Current Project State
 
-Last verified: 2026-08-17 on master after issue #17
+Last verified: 2026-08-22 on master after issue #18
 
 This document records the implementation that exists in the repository. It is
 an evidence-based snapshot, not a description of intended future architecture.
@@ -70,6 +70,8 @@ Implemented:
 - Lower-level `world` API for entity creation/destruction and component
   addition/removal.
 - Immutable engine-owned entity handles shaped as `{ index, generation }`.
+- Typed engine-owned generational geometry and basic-material handles with
+  main-thread ownership/liveness validation.
 - Validation of handle ownership, liveness, index, and generation before use.
 - Validation of authoring tuples, camera/bounds ranges, and foreign material
   handles before an entity slot is allocated or a command is published.
@@ -77,8 +79,10 @@ Implemented:
 - Declarative scene components for transform, mesh, bounds, camera, and basic
   material data.
 
-Current content support is deliberately small: built-in triangle and box
-geometry plus a color-only basic material.
+Current content support is deliberately small: worker-coordinated built-in
+triangle and box resources plus color-only basic-material resources. Mesh
+replacement/removal updates tracked usage edges transactionally, and retirement
+waits for existing mesh users before logical destruction.
 
 ### Rust/WASM Core and ECS
 
@@ -88,8 +92,8 @@ Implemented:
   entity/component capacity limits; normal operation does not grow WASM memory.
 - A 32-bit packed handle: 20-bit index and 12-bit generation.
 - Safe destroy/recycle behavior in both TypeScript and Rust allocators.
-- Data-oriented stores for transforms, mesh renderers, cameras, bounds, and
-  materials.
+- Data-oriented stores for transforms, mesh renderers, cameras, bounds, and a
+  derived fixed-capacity material resource mirror.
 - Preallocated WASM staging arrays for shared transform updates.
 - ABI versioning and capacity checks at the TypeScript/WASM boundary.
 - Batched application of dirty transform ranges with per-field masks.
@@ -142,7 +146,8 @@ Implemented:
 - A committed 16-scenario Chrome/WebGPU upload matrix: static 10k frames write
   zero bytes versus the previous 800,128 bytes; dirty 1%, 10%, and 100% medians
   are 8KB, 80KB, and 800KB with one queue write.
-- Vertex/index buffers and a built-in mesh registry.
+- Private generational geometry/material registries; geometry registry entries
+  own the built-in vertex/index buffers.
 - Depth target creation and resize handling.
 - Timestamp queries when supported, with CPU timing fallback metrics.
 - Indexed drawing and CPU-prepared instancing: consecutive compatible visible

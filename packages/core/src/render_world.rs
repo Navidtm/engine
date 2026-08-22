@@ -153,7 +153,7 @@ impl RenderWorld {
                 }
                 self.entities.push(entity.raw());
                 self.slots.push(slot as u32);
-                self.geometries.push(mesh.geometry);
+                self.geometries.push(mesh.geometry.raw());
                 self.pipelines.push(material.pipeline.raw());
                 self.materials.push(mesh.material.raw());
                 let render_revision = world.render_revision(entity);
@@ -421,9 +421,9 @@ mod tests {
     #[test]
     fn extraction_joins_components_into_gpu_layout() {
         let mut world = World::with_capacity(WorldCapacity::default());
-        let material_entity = world.spawn().unwrap();
+        let material = MaterialHandle::from_raw(1);
         world.add_material(
-            material_entity,
+            material,
             Material {
                 color: Color::new([1.0, 0.0, 0.0, 1.0]),
                 ..Material::default()
@@ -434,8 +434,8 @@ mod tests {
         world.add_mesh_renderer(
             mesh_entity,
             MeshRenderer {
-                geometry: 2,
-                material: MaterialHandle::from_entity(material_entity),
+                geometry: crate::GeometryHandle::from_raw(2),
+                material,
             },
         );
         world.update();
@@ -473,7 +473,7 @@ mod tests {
         );
 
         world.add_material(
-            material_entity,
+            material,
             Material {
                 color: Color::new([0.0, 1.0, 0.0, 1.0]),
                 ..Material::default()
@@ -507,16 +507,16 @@ mod tests {
     #[test]
     fn extraction_reports_capacity_instead_of_allocating() {
         let mut world = World::with_capacity(WorldCapacity::default());
-        let material_entity = world.spawn().unwrap();
-        world.add_material(material_entity, Material::default());
+        let material = MaterialHandle::from_raw(1);
+        world.add_material(material, Material::default());
         for geometry in 1..=2 {
             let entity = world.spawn().unwrap();
             world.add_transform(entity, Transform::default());
             world.add_mesh_renderer(
                 entity,
                 MeshRenderer {
-                    geometry,
-                    material: MaterialHandle::from_entity(material_entity),
+                    geometry: crate::GeometryHandle::from_raw(geometry),
+                    material,
                 },
             );
         }
@@ -530,7 +530,7 @@ mod tests {
     #[test]
     fn extraction_coalesces_dirty_slots_and_overwrites_recycled_generations() {
         let mut world = World::with_capacity(WorldCapacity::default());
-        let material = world.spawn().unwrap();
+        let material = MaterialHandle::from_raw(1);
         world.add_material(material, Material::default());
         let mut meshes = Vec::new();
         for geometry in 1..=3 {
@@ -539,8 +539,8 @@ mod tests {
             world.add_mesh_renderer(
                 entity,
                 MeshRenderer {
-                    geometry,
-                    material: MaterialHandle::from_entity(material),
+                    geometry: crate::GeometryHandle::from_raw(geometry),
+                    material,
                 },
             );
             meshes.push(entity);
@@ -548,7 +548,7 @@ mod tests {
         world.update();
         let mut render_world = RenderWorld::with_capacity(8, 1);
         render_world.extract(&world).unwrap();
-        assert_eq!(render_world.dirty_range_starts(), &[1]);
+        assert_eq!(render_world.dirty_range_starts(), &[0]);
         assert_eq!(render_world.dirty_range_counts(), &[3]);
 
         let mut moved = Transform::default();
@@ -557,7 +557,7 @@ mod tests {
         world.add_transform(meshes[2], moved);
         world.update();
         render_world.extract(&world).unwrap();
-        assert_eq!(render_world.dirty_range_starts(), &[1, 3]);
+        assert_eq!(render_world.dirty_range_starts(), &[0, 2]);
         assert_eq!(render_world.dirty_range_counts(), &[1, 1]);
 
         let recycled_slot = meshes[0].index();
@@ -574,8 +574,8 @@ mod tests {
         world.add_mesh_renderer(
             recycled,
             MeshRenderer {
-                geometry: 7,
-                material: MaterialHandle::from_entity(material),
+                geometry: crate::GeometryHandle::from_raw(7),
+                material,
             },
         );
         world.update();

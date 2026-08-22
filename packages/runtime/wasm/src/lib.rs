@@ -3,12 +3,12 @@
 use core::ffi::c_void;
 use lume_core::math::{Color, Quat, Vec3};
 use lume_core::{
-    Bounds, Camera, Entity, GpuCamera, GpuInstance, Material, MaterialHandle, MeshRenderer,
-    RenderWorld, Transform, VisibleRenderBuffer, World, WorldCapacity,
+    Bounds, Camera, Entity, GeometryHandle, GpuCamera, GpuInstance, Material, MaterialHandle,
+    MeshRenderer, RenderWorld, Transform, VisibleRenderBuffer, World, WorldCapacity,
 };
 
 /// ABI revision required by the TypeScript runtime before it calls any export.
-pub const ABI_VERSION: u32 = 7;
+pub const ABI_VERSION: u32 = 8;
 
 const TRANSFORM_UPDATE_FLOATS: usize = 10;
 
@@ -36,15 +36,20 @@ pub extern "C" fn lume_abi_version() -> u32 {
 /// WASM staging slots. The returned opaque pointer is owned by the caller and
 /// must be released exactly once with [`lume_engine_destroy`].
 #[unsafe(no_mangle)]
-pub extern "C" fn lume_engine_create(entity_capacity: u32, transform_capacity: u32) -> *mut c_void {
+pub extern "C" fn lume_engine_create(
+    entity_capacity: u32,
+    transform_capacity: u32,
+    resource_capacity: u32,
+) -> *mut c_void {
     let entities = usize::try_from(entity_capacity.max(1)).unwrap_or(4_096);
     let transforms = usize::try_from(transform_capacity.max(1)).unwrap_or(4_096);
+    let resources = usize::try_from(resource_capacity.max(1)).unwrap_or(4_096);
     let capacity = WorldCapacity {
         entities,
         transforms: entities,
         mesh_renderers: entities,
         cameras: 8,
-        materials: entities.min(1_024),
+        materials: resources,
         bounds: entities,
     };
     Box::into_raw(Box::new(EngineCore {
@@ -117,6 +122,15 @@ pub extern "C" fn lume_engine_add_transform(
                 ..Transform::default()
             },
         )
+    }) as u32
+}
+
+/// Removes a matching basic-material resource generation; returns `1` on success.
+#[unsafe(no_mangle)]
+pub extern "C" fn lume_engine_remove_material(engine: *mut c_void, material_raw: u32) -> u32 {
+    with_engine(engine, |core| {
+        core.world
+            .remove_material(MaterialHandle::from_raw(material_raw))
     }) as u32
 }
 
@@ -207,7 +221,7 @@ pub extern "C" fn lume_engine_apply_transform_ranges(engine: *mut c_void, range_
 #[unsafe(no_mangle)]
 pub extern "C" fn lume_engine_add_material(
     engine: *mut c_void,
-    entity_raw: u32,
+    material_raw: u32,
     red: f32,
     green: f32,
     blue: f32,
@@ -215,7 +229,7 @@ pub extern "C" fn lume_engine_add_material(
 ) -> u32 {
     with_engine(engine, |core| {
         core.world.add_material(
-            Entity::from_raw(entity_raw),
+            MaterialHandle::from_raw(material_raw),
             Material {
                 color: Color::new([red, green, blue, alpha]),
                 ..Material::default()
@@ -236,7 +250,7 @@ pub extern "C" fn lume_engine_add_mesh_renderer(
         core.world.add_mesh_renderer(
             Entity::from_raw(entity_raw),
             MeshRenderer {
-                geometry,
+                geometry: GeometryHandle::from_raw(geometry),
                 material: MaterialHandle::from_raw(material_raw),
             },
         )
@@ -507,7 +521,7 @@ mod tests {
 
     #[test]
     fn abi_can_create_update_and_destroy_a_world() {
-        let engine = lume_engine_create(16, 16);
+        let engine = lume_engine_create(16, 16, 16);
         assert!(!engine.is_null());
         assert_eq!(lume_engine_spawn(engine, 0), 1);
         assert_eq!(lume_engine_spawn(engine, 1), 1);
@@ -516,8 +530,8 @@ mod tests {
             lume_engine_add_transform(engine, 0, 0.0, 0.0, -5.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0,),
             1
         );
-        assert_eq!(lume_engine_add_material(engine, 1, 1.0, 0.0, 0.0, 1.0), 1);
-        assert_eq!(lume_engine_add_mesh_renderer(engine, 0, 1, 1), 1);
+        assert_eq!(lume_engine_add_material(engine, 3, 1.0, 0.0, 0.0, 1.0), 1);
+        assert_eq!(lume_engine_add_mesh_renderer(engine, 0, 1, 3), 1);
         assert_eq!(lume_engine_add_bounds(engine, 0, 0.0, 0.0, 0.0, 1.0), 1);
         assert_eq!(
             lume_engine_add_transform(engine, 2, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0,),

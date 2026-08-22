@@ -1,5 +1,5 @@
-use crate::material::MaterialHandle;
 use crate::math::{Mat4, Quat, Vec3};
+use crate::resource::{GeometryHandle, MaterialHandle};
 
 /// Local transform and cached world matrix stored by the ECS.
 ///
@@ -41,8 +41,8 @@ impl Default for Transform {
 #[repr(C)]
 pub struct MeshRenderer {
     /// Application-defined geometry identifier resolved by the renderer.
-    pub geometry: u32,
-    /// Handle of the material component to use for this mesh.
+    pub geometry: GeometryHandle,
+    /// Handle of the worker-owned material resource to use for this mesh.
     pub material: MaterialHandle,
 }
 

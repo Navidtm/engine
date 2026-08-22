@@ -9,7 +9,7 @@ use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use lume_core::math::{Color, Vec3};
 use lume_core::{
-    Bounds, Camera, Material, MaterialHandle, MeshRenderer, RenderWorld, Transform,
+    Bounds, Camera, GeometryHandle, Material, MaterialHandle, MeshRenderer, RenderWorld, Transform,
     VisibleRenderBuffer, World, WorldCapacity,
 };
 
@@ -249,9 +249,9 @@ fn benchmark_render_extraction(
     update_percent: usize,
 ) -> ResultRecord {
     let mut world = World::with_capacity(capacity(count + 1));
-    let material_entity = world.spawn().expect("material entity");
+    let material = MaterialHandle::from_raw(1);
     world.add_material(
-        material_entity,
+        material,
         Material {
             color: Color::new([0.3, 0.6, 1.0, 1.0]),
             ..Material::default()
@@ -264,8 +264,8 @@ fn benchmark_render_extraction(
         world.add_mesh_renderer(
             entity,
             MeshRenderer {
-                geometry: 2,
-                material: MaterialHandle::from_entity(material_entity),
+                geometry: GeometryHandle::from_raw(2),
+                material,
             },
         );
         mesh_entities.push(entity);
@@ -317,8 +317,8 @@ fn benchmark_render_extraction(
 fn benchmark_frustum_culling(scenario: &'static str, visible_percent: usize) -> ResultRecord {
     const COUNT: usize = 100_000;
     let mut world = World::with_capacity(capacity(COUNT + 2));
-    let material_entity = world.spawn().expect("material entity");
-    world.add_material(material_entity, Material::default());
+    let material = MaterialHandle::from_raw(1);
+    world.add_material(material, Material::default());
     let camera_entity = world.spawn().expect("camera entity");
     world.add_transform(camera_entity, Transform::default());
     world.add_camera(
@@ -349,8 +349,8 @@ fn benchmark_frustum_culling(scenario: &'static str, visible_percent: usize) -> 
         world.add_mesh_renderer(
             entity,
             MeshRenderer {
-                geometry: 2,
-                material: MaterialHandle::from_entity(material_entity),
+                geometry: GeometryHandle::from_raw(2),
+                material,
             },
         );
         world.add_bounds(

@@ -1,4 +1,5 @@
 import type { MainToWorkerMessage, WorkerToMainMessage } from "@lume/runtime";
+import { type GeometryHandle, mesh as meshComponent } from "@lume/scene";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createEngine } from "./index.js";
@@ -25,6 +26,15 @@ describe("high-level engine API", () => {
         workerFactory: () => ({}) as Worker,
       }),
     ).toThrow("transport.transformCapacity");
+  });
+
+  it("rejects a resource capacity that cannot hold both built-in geometries", () => {
+    expect(() =>
+      createEngine({} as HTMLCanvasElement, {
+        resourceCapacity: 1,
+        workerFactory: () => ({}) as Worker,
+      }),
+    ).toThrow("resourceCapacity");
   });
 
   it("validates engine camera configuration before creating a worker", () => {
@@ -57,6 +67,59 @@ describe("high-level engine API", () => {
       "position",
     );
     expect(second.world.createEntity()).toMatchObject({ index: 1, generation: 0 });
+  });
+
+  it("rejects wrong-kind, foreign, retired, and destroyed resource handles", () => {
+    const workerFactory = () =>
+      ({
+        addEventListener: vi.fn(),
+        postMessage: vi.fn(),
+        terminate: vi.fn(),
+      }) as unknown as Worker;
+    const first = createEngine({} as HTMLCanvasElement, { autoResize: false, workerFactory });
+    const second = createEngine({} as HTMLCanvasElement, { autoResize: false, workerFactory });
+    const material = first.create.basicMaterial();
+    const mesh = first.create.mesh({ geometry: "cube", material });
+
+    expect(() => first.create.mesh({ geometry: material as unknown as GeometryHandle })).toThrow(
+      "Expected a geometry",
+    );
+    expect(() => first.create.mesh({ geometry: second.geometry.cube })).toThrow("does not belong");
+
+    first.destroy(material);
+    expect(() => first.create.mesh({ geometry: "cube", material })).toThrow("retired");
+    first.destroy(mesh);
+    expect(() => first.create.mesh({ geometry: "cube", material })).toThrow("stale");
+
+    first.destroy(first.geometry.triangle);
+    expect(() => first.create.mesh({ geometry: "triangle" })).toThrow("stale");
+  });
+
+  it("updates mesh resource usage transactionally across replacement and removal", () => {
+    const posted: MainToWorkerMessage[] = [];
+    const worker = {
+      addEventListener: vi.fn(),
+      postMessage: vi.fn((message: MainToWorkerMessage) => posted.push(message)),
+      terminate: vi.fn(),
+    } as unknown as Worker;
+    const engine = createEngine({} as HTMLCanvasElement, {
+      autoResize: false,
+      workerFactory: () => worker,
+    });
+    const first = engine.create.basicMaterial({ color: [1, 0, 0, 1] });
+    const second = engine.create.basicMaterial({ color: [0, 0, 1, 1] });
+    const mesh = engine.create.mesh({ geometry: "cube", material: first });
+
+    engine.world.add(mesh.id, meshComponent(engine.geometry.cube, second));
+    engine.destroy(first);
+    expect(() => engine.world.add(mesh.id, meshComponent(engine.geometry.cube, first))).toThrow(
+      "stale",
+    );
+    const commandsBeforeRemoval = posted.length;
+    engine.destroy(second);
+    engine.world.remove(mesh.id, "mesh");
+    expect(posted).toHaveLength(commandsBeforeRemoval);
+    expect(() => engine.create.mesh({ geometry: "cube", material: second })).toThrow("stale");
   });
 
   it("creates a scene without exposing ECS commands", async () => {
@@ -107,11 +170,12 @@ describe("high-level engine API", () => {
     expect(batch?.type).toBe("batch");
     if (batch?.type === "batch") {
       expect(batch.value.map((command) => command.type)).toEqual([
+        "create-geometry",
+        "create-geometry",
         "spawn",
         "add-transform",
         "add-camera",
-        "spawn",
-        "add-material",
+        "create-basic-material",
         "spawn",
         "add-transform",
         "add-mesh",

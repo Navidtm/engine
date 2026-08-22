@@ -7,6 +7,7 @@ import {
   type RuntimeCommand,
   type WorkerToMainMessage,
 } from "./protocol.js";
+import { createResourceCoordinator, type ResourceCoordinator } from "./resource-coordinator.js";
 import { SharedHeader } from "./shared-memory/layout.js";
 import { openSharedRuntimeViews, type SharedRuntimeViews } from "./shared-memory/views.js";
 import { createWasmCore, type WasmCore } from "./wasm.js";
@@ -14,6 +15,7 @@ import { createWasmCore, type WasmCore } from "./wasm.js";
 interface WorkerRuntimeState {
   renderer: MeshRenderer | undefined;
   core: WasmCore | undefined;
+  coordinator: ResourceCoordinator | undefined;
   size: SurfaceSize | undefined;
   frameRequest: number | undefined;
   running: boolean;
@@ -43,6 +45,7 @@ export function createWorkerRuntime(host: WorkerHost): (message: MainToWorkerMes
   const state: WorkerRuntimeState = {
     renderer: undefined,
     core: undefined,
+    coordinator: undefined,
     size: undefined,
     frameRequest: undefined,
     running: false,
@@ -86,6 +89,7 @@ export function createWorkerRuntime(host: WorkerHost): (message: MainToWorkerMes
     state.frameRequest = undefined;
     try {
       const frameStart = performance.now();
+      updateSharedCommands();
       const renderFrame = state.core?.update();
       if (renderFrame !== undefined) state.renderer?.execute(renderFrame);
       const frameEnd = performance.now();
@@ -102,9 +106,24 @@ export function createWorkerRuntime(host: WorkerHost): (message: MainToWorkerMes
 
   const apply = (command: RuntimeCommand): void => {
     const core = state.core;
+    const coordinator = state.coordinator;
+    const renderer = state.renderer;
     const size = state.size;
-    if (core === undefined || size === undefined) throw new Error("Runtime is not initialized.");
-    core.apply(command, size.width / Math.max(size.height, 1));
+    if (
+      core === undefined ||
+      coordinator === undefined ||
+      renderer === undefined ||
+      size === undefined
+    ) {
+      throw new Error("Runtime is not initialized.");
+    }
+    coordinator.apply(command, core, renderer, size.width / Math.max(size.height, 1));
+  };
+
+  const applySharedCommand = (command: RuntimeCommand): void => apply(command);
+
+  const updateSharedCommands = (): void => {
+    state.core?.updateSharedCommands(applySharedCommand);
   };
 
   const initialize = async (
@@ -119,13 +138,14 @@ export function createWorkerRuntime(host: WorkerHost): (message: MainToWorkerMes
           message.value.size,
           message.value.entityCapacity,
           message.value.renderer,
+          message.value.resourceCapacity,
         ),
         createWasmCore(
           message.value.wasmUrl,
           message.value.entityCapacity,
           message.value.transformCapacity,
           message.value.sharedMemory,
-          message.value.size.width / Math.max(message.value.size.height, 1),
+          message.value.resourceCapacity,
         ),
       ]);
       if (rendererResult.status === "fulfilled") renderer = rendererResult.value;
@@ -141,6 +161,10 @@ export function createWorkerRuntime(host: WorkerHost): (message: MainToWorkerMes
         throw new Error("Runtime initialization failed.");
       state.renderer = renderer;
       state.core = core;
+      state.coordinator = createResourceCoordinator(
+        message.value.resourceCapacity,
+        message.value.entityCapacity,
+      );
       void renderer.lost.then((info) => {
         if (state.disposed || state.renderer !== renderer) return;
         stopScheduling();
@@ -182,7 +206,7 @@ export function createWorkerRuntime(host: WorkerHost): (message: MainToWorkerMes
           break;
         }
         case "command":
-          state.core?.updateSharedCommands();
+          updateSharedCommands();
           state.core?.updateSharedTransforms();
           apply(message.value);
           break;
@@ -210,7 +234,7 @@ export function createWorkerRuntime(host: WorkerHost): (message: MainToWorkerMes
           state.renderer?.resize(message.value);
           break;
         case "get-stats": {
-          state.core?.updateSharedCommands();
+          updateSharedCommands();
           const coreStats = state.core?.stats();
           const rendererStats = state.renderer?.stats();
           host.postMessage({
@@ -250,6 +274,9 @@ export function createWorkerRuntime(host: WorkerHost): (message: MainToWorkerMes
         case "dispose":
           stopScheduling();
           state.disposed = true;
+          if (state.core !== undefined && state.renderer !== undefined) {
+            state.coordinator?.dispose(state.core, state.renderer);
+          }
           state.renderer?.dispose();
           state.core?.dispose();
           host.postMessage({ type: "disposed" });

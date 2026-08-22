@@ -2,7 +2,12 @@ import { describe, expect, it, vi } from "vitest";
 
 import { allocateSharedRuntimeMemory } from "./allocator.js";
 import { SHARED_TRANSFORM_FLOATS, SharedHeader, TransformField } from "./layout.js";
-import { drainSharedCommands, StructuralOpcode, writeSharedCommand } from "./structural.js";
+import {
+  decodeSharedCommand,
+  drainSharedCommands,
+  StructuralOpcode,
+  writeSharedCommand,
+} from "./structural.js";
 import { drainSharedTransforms, writeSharedTransform } from "./synchronization.js";
 import { openSharedRuntimeViews } from "./views.js";
 
@@ -178,5 +183,29 @@ describe("shared runtime memory", () => {
     expect(received).toEqual([StructuralOpcode.Spawn, 3, StructuralOpcode.AddCamera, 3]);
     expect(Atomics.load(views.header, SharedHeader.DroppedCommands)).toBe(1);
     expect(Atomics.load(views.header, SharedHeader.CommandPending)).toBe(0);
+  });
+
+  it("round-trips typed resource commands through the structural ring", () => {
+    const views = allocateSharedRuntimeMemory(8, 3);
+    writeSharedCommand(views, { type: "create-geometry", handle: 2, builtin: "cube" });
+    writeSharedCommand(views, {
+      type: "create-basic-material",
+      handle: 1,
+      color: [0.25, 0.5, 0.75, 1],
+    });
+    writeSharedCommand(views, {
+      type: "retire-resource",
+      resourceKind: "basic-material",
+      handle: 1,
+    });
+    const commands: unknown[] = [];
+    drainSharedCommands(views, (opcode, identity, offset, shared) => {
+      commands.push(decodeSharedCommand(opcode, identity, offset, shared));
+    });
+    expect(commands).toEqual([
+      { type: "create-geometry", handle: 2, builtin: "cube" },
+      { type: "create-basic-material", handle: 1, color: [0.25, 0.5, 0.75, 1] },
+      { type: "retire-resource", resourceKind: "basic-material", handle: 1 },
+    ]);
   });
 });

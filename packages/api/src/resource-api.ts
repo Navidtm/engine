@@ -1,20 +1,12 @@
 import { TransformField } from "@lume/runtime";
-import {
-  bounds,
-  boxGeometry,
-  material,
-  mesh,
-  type Quat,
-  transform,
-  triangleGeometry,
-  type Vec3,
-} from "@lume/scene";
+import { bounds, material, mesh, type Quat, transform, type Vec3 } from "@lume/scene";
 
 import type { EngineState } from "./engine/state.js";
 import { publishTransform } from "./engine/transport.js";
 import type {
   BasicMaterialHandle,
   BasicMaterialOptions,
+  BuiltinGeometryApi,
   CreateApi,
   EngineHandle,
   MeshOptions,
@@ -27,6 +19,7 @@ import {
   validateColor,
   validateMeshOptions,
 } from "./engine/validation.js";
+import { createBasicMaterialResource, retireResource } from "./resource-lifecycle.js";
 import {
   copyQuat,
   copyVec3,
@@ -42,14 +35,17 @@ export interface HighLevelApi {
 }
 
 /** Creates high-level material and mesh authoring over the advanced world facade. */
-export function createHighLevelApi(state: EngineState, world: WorldApi): HighLevelApi {
+export function createHighLevelApi(
+  state: EngineState,
+  world: WorldApi,
+  geometryApi: BuiltinGeometryApi,
+): HighLevelApi {
   let defaultMaterial: BasicMaterialHandle | undefined;
   const transforms = new WeakMap<SceneHandle, MutableTransformValue>();
   const createBasicMaterial = (options: BasicMaterialOptions = {}): BasicMaterialHandle => {
     if (options.color !== undefined) validateColor(options.color);
-    const entity = world.createEntity();
-    world.add(entity, material(options));
-    return { kind: "basic-material", id: entity } as const satisfies BasicMaterialHandle;
+    const descriptor = material(options);
+    return createBasicMaterialResource(state, descriptor.color);
   };
   const defaultBasicMaterial = (): BasicMaterialHandle => {
     defaultMaterial ??= createBasicMaterial();
@@ -74,8 +70,13 @@ export function createHighLevelApi(state: EngineState, world: WorldApi): HighLev
           ...(options.scale === undefined ? {} : { scale: options.scale }),
         }),
       );
-      const geometry = options.geometry === "cube" ? boxGeometry() : triangleGeometry();
-      world.add(entity, mesh(geometry, materialHandle.id));
+      const geometry =
+        options.geometry === "cube"
+          ? geometryApi.cube
+          : options.geometry === "triangle"
+            ? geometryApi.triangle
+            : options.geometry;
+      world.add(entity, mesh(geometry, materialHandle));
       if (options.bounds !== undefined) world.add(entity, bounds(options.bounds));
       const handle = createMeshHandle(state, entity, initialTransform);
       transforms.set(handle, initialTransform);
@@ -107,7 +108,14 @@ export function createHighLevelApi(state: EngineState, world: WorldApi): HighLev
     create,
     set,
     destroy(handle: EngineHandle) {
-      world.destroyEntity(handle.id);
+      if (handle.kind === "mesh") {
+        if (!transforms.has(handle))
+          throw new Error("Scene handle does not belong to this engine.");
+        world.destroyEntity(handle.id);
+        transforms.delete(handle);
+        return;
+      }
+      retireResource(state, handle);
       if (handle === defaultMaterial) defaultMaterial = undefined;
     },
   };

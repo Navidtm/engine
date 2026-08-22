@@ -2,7 +2,7 @@ import type { RenderFrame } from "@lume/renderer";
 
 import type { RuntimeCommand } from "./protocol.js";
 import { SHARED_TRANSFORM_FLOATS, TransformField } from "./shared-memory/layout.js";
-import { drainSharedCommands, StructuralOpcode } from "./shared-memory/structural.js";
+import { decodeSharedCommand, drainSharedCommands } from "./shared-memory/structural.js";
 import { drainSharedTransforms } from "./shared-memory/synchronization.js";
 import { openSharedRuntimeViews } from "./shared-memory/views.js";
 import { LUME_WASM_ABI_VERSION } from "./wasm-abi.js";
@@ -13,7 +13,11 @@ const CAMERA_FLOATS = 32;
 interface LumeWasmExports extends WebAssembly.Exports {
   readonly memory: WebAssembly.Memory;
   lume_abi_version(): number;
-  lume_engine_create(entityCapacity: number, transformCapacity: number): number;
+  lume_engine_create(
+    entityCapacity: number,
+    transformCapacity: number,
+    resourceCapacity: number,
+  ): number;
   lume_engine_destroy(engine: number): void;
   lume_engine_spawn(engine: number, entity: number): number;
   lume_engine_despawn(engine: number, entity: number): number;
@@ -40,12 +44,13 @@ interface LumeWasmExports extends WebAssembly.Exports {
   lume_engine_apply_transform_ranges(engine: number, rangeCount: number): number;
   lume_engine_add_material(
     engine: number,
-    entity: number,
+    handle: number,
     red: number,
     green: number,
     blue: number,
     alpha: number,
   ): number;
+  lume_engine_remove_material(engine: number, handle: number): number;
   lume_engine_add_camera(
     engine: number,
     entity: number,
@@ -113,10 +118,14 @@ export interface WasmStats {
 
 /** Worker-only façade over the raw WASM ABI. */
 export interface WasmCore {
+  /** Creates the Rust render mirror for one worker-owned basic material. */
+  createBasicMaterial(handle: number, color: readonly [number, number, number, number]): void;
+  /** Removes a logically destroyed basic-material mirror. */
+  removeBasicMaterial(handle: number): void;
   /** Applies one fallback structural command using the current camera aspect. */
   apply(command: RuntimeCommand, aspect: number): void;
   /** Drains the shared structural SPSC ring when that transport is active. */
-  updateSharedCommands(): void;
+  updateSharedCommands(consume: (command: RuntimeCommand) => void): void;
   /** Applies shared transforms published before an ordered fallback command. */
   updateSharedTransforms(): void;
   /** Updates all camera aspects after a valid surface resize. */
@@ -135,7 +144,7 @@ export async function createWasmCore(
   entityCapacity: number,
   transformCapacity: number,
   sharedMemory?: SharedArrayBuffer,
-  initialAspect = 1,
+  resourceCapacity = entityCapacity,
 ): Promise<WasmCore> {
   let response: Response;
   try {
@@ -180,7 +189,7 @@ export async function createWasmCore(
     );
   }
   const exports = module.instance.exports as LumeWasmExports;
-  const handle = exports.lume_engine_create(entityCapacity, transformCapacity);
+  const handle = exports.lume_engine_create(entityCapacity, transformCapacity, resourceCapacity);
   if (handle === 0) throw new Error("Lume WASM core allocation failed.");
   const visibleCapacity = exports.lume_visible_capacity(handle);
   const renderEntityCapacity = exports.lume_render_entity_capacity(handle);
@@ -300,27 +309,19 @@ export async function createWasmCore(
     stagedTransformCount += 1;
   };
   let disposed = false;
-  let currentAspect = initialAspect;
-  const applyShared = (
-    opcode: StructuralOpcode,
-    entity: number,
-    offset: number,
-    views: ReturnType<typeof openSharedRuntimeViews>,
-  ): void => {
-    const accepted = applySharedCommand(
-      exports,
-      handle,
-      opcode,
-      entity,
-      offset,
-      views,
-      currentAspect,
-    );
-    if (accepted === 0) throw new Error(`WASM rejected shared structural command ${opcode}.`);
+  let sharedCommandConsumer: (command: RuntimeCommand) => void = () => undefined;
+  const decodeAndConsumeSharedCommand: Parameters<typeof drainSharedCommands>[1] = (
+    opcode,
+    identity,
+    offset,
+    views,
+  ) => {
+    sharedCommandConsumer(decodeSharedCommand(opcode, identity, offset, views));
   };
-  const updateSharedCommands = (): void => {
+  const updateSharedCommands = (consume: (command: RuntimeCommand) => void): void => {
     if (sharedViews === undefined) return;
-    drainSharedCommands(sharedViews, applyShared);
+    sharedCommandConsumer = consume;
+    drainSharedCommands(sharedViews, decodeAndConsumeSharedCommand);
   };
   const updateSharedTransforms = (): void => {
     if (sharedViews === undefined) return;
@@ -340,6 +341,18 @@ export async function createWasmCore(
   };
 
   const core: WasmCore = {
+    createBasicMaterial(materialHandle, color) {
+      if (disposed) return;
+      if (exports.lume_engine_add_material(handle, materialHandle, ...color) === 0) {
+        throw new Error(`WASM rejected basic-material resource ${materialHandle}.`);
+      }
+    },
+    removeBasicMaterial(materialHandle) {
+      if (disposed) return;
+      if (exports.lume_engine_remove_material(handle, materialHandle) === 0) {
+        throw new Error(`WASM rejected basic-material removal ${materialHandle}.`);
+      }
+    },
     apply(command: RuntimeCommand, aspect: number) {
       if (disposed) return;
       const accepted = applyCommand(exports, handle, command, aspect);
@@ -401,7 +414,6 @@ export async function createWasmCore(
         );
       }
       if (sharedViews !== undefined) {
-        updateSharedCommands();
         updateSharedTransforms();
       }
       if (!disposed && exports.lume_engine_update(handle) === 0) {
@@ -415,7 +427,6 @@ export async function createWasmCore(
       return frame;
     },
     resize(aspect: number) {
-      currentAspect = aspect;
       if (!disposed && exports.lume_engine_set_camera_aspect(handle, aspect) === 0) {
         throw new Error("WASM camera resize failed.");
       }
@@ -495,6 +506,10 @@ function applyCommand(
   aspect: number,
 ): number {
   switch (command.type) {
+    case "create-geometry":
+    case "create-basic-material":
+    case "retire-resource":
+      throw new Error(`Resource command '${command.type}' bypassed the coordinator.`);
     case "spawn":
       return wasm.lume_engine_spawn(engine, command.entity);
     case "despawn":
@@ -507,8 +522,6 @@ function applyCommand(
         ...command.rotation,
         ...command.scale,
       );
-    case "add-material":
-      return wasm.lume_engine_add_material(engine, command.entity, ...command.color);
     case "add-camera":
       return wasm.lume_engine_add_camera(
         engine,
@@ -536,68 +549,12 @@ function applyCommand(
   }
 }
 
-function applySharedCommand(
-  wasm: LumeWasmExports,
-  engine: number,
-  opcode: StructuralOpcode,
-  entity: number,
-  offset: number,
-  views: ReturnType<typeof openSharedRuntimeViews>,
-  aspect: number,
-): number {
-  const floats = views.commandFloats;
-  const words = views.commandWords;
-  const float = (word: number): number => floats[offset + word] ?? 0;
-  const integer = (word: number): number => words[offset + word] ?? 0;
-  switch (opcode) {
-    case StructuralOpcode.Spawn:
-      return wasm.lume_engine_spawn(engine, entity);
-    case StructuralOpcode.Despawn:
-      return wasm.lume_engine_despawn(engine, entity);
-    case StructuralOpcode.AddTransform:
-      return wasm.lume_engine_add_transform(
-        engine,
-        entity,
-        float(2),
-        float(3),
-        float(4),
-        float(5),
-        float(6),
-        float(7),
-        float(8),
-        float(9),
-        float(10),
-        float(11),
-      );
-    case StructuralOpcode.AddMaterial:
-      return wasm.lume_engine_add_material(engine, entity, float(2), float(3), float(4), float(5));
-    case StructuralOpcode.AddCamera:
-      return wasm.lume_engine_add_camera(engine, entity, float(2), float(3), float(4), aspect);
-    case StructuralOpcode.AddMesh:
-      return wasm.lume_engine_add_mesh_renderer(engine, entity, integer(2), integer(3));
-    case StructuralOpcode.AddBounds:
-      return wasm.lume_engine_add_bounds(engine, entity, float(2), float(3), float(4), float(5));
-    case StructuralOpcode.RemoveTransform:
-    case StructuralOpcode.RemoveMaterial:
-    case StructuralOpcode.RemoveCamera:
-    case StructuralOpcode.RemoveMesh:
-    case StructuralOpcode.RemoveBounds:
-      return wasm.lume_engine_remove_component(
-        engine,
-        entity,
-        opcode - StructuralOpcode.RemoveTransform + 1,
-      );
-  }
-}
-
 function componentCode(
   component: Extract<RuntimeCommand, { type: "remove-component" }>["component"],
 ): number {
   switch (component) {
     case "transform":
       return 1;
-    case "material":
-      return 2;
     case "camera":
       return 3;
     case "mesh":

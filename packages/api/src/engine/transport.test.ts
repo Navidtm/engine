@@ -9,6 +9,7 @@ import {
 import { describe, expect, it, vi } from "vitest";
 
 import { allocateEntity, packEntity, releaseEntity } from "../entity-lifecycle.js";
+import { createResourceState } from "../resource-lifecycle.js";
 import type { EngineState } from "./state.js";
 import { dispatchCommand, publishTransform } from "./transport.js";
 
@@ -86,7 +87,9 @@ describe("engine transport ordering", () => {
     expect(replacement.generation).toBe(original.generation + 1);
     expect(
       posted.map((message) =>
-        message.type === "command" ? [message.value.type, message.value.entity] : [],
+        message.type === "command" && "entity" in message.value
+          ? [message.value.type, message.value.entity]
+          : [],
       ),
     ).toEqual([
       ["spawn", packEntity(original)],
@@ -120,6 +123,7 @@ function createState(): {
     entityGenerations: new Uint16Array(entityCapacity),
     entityAlive: new Uint8Array(entityCapacity),
     freeEntities: new Uint32Array(entityCapacity),
+    resources: createResourceState(4, entityCapacity),
     nextEntityIndex: 0,
     freeEntityCount: 0,
     initPromise: undefined,

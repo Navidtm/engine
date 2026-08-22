@@ -1,7 +1,7 @@
 /** Readonly-TypeScript CPU-side mesh source accepted by the built-in mesh registry. */
 export interface CpuMeshData {
-  /** Positive renderer-local geometry identifier. */
-  readonly handle: number;
+  /** Built-in replay descriptor selected by the worker coordinator. */
+  readonly builtin: "triangle" | "cube";
   /** Diagnostic label used for WebGPU resources and validation errors. */
   readonly label: string;
   /** Interleaved position.xyz and normal.xyz values. */
@@ -46,16 +46,16 @@ for (let face = 0; face < 6; face += 1) {
   }
 }
 
-/** Readonly-TypeScript triangle and cube source meshes addressed by scene geometry IDs. */
+/** Replayable CPU sources for the two built-in geometry resource kinds. */
 export const BUILTIN_MESHES = [
   {
-    handle: 1,
+    builtin: "triangle",
     label: "Lume triangle mesh",
     vertices: TRIANGLE_VERTICES,
     indices: TRIANGLE_INDICES,
   },
   {
-    handle: 2,
+    builtin: "cube",
     label: "Lume indexed cube mesh",
     vertices: CUBE_VERTICES,
     indices: CUBE_INDICES,

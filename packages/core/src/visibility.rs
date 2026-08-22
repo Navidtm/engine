@@ -365,8 +365,8 @@ mod tests {
     #[test]
     fn visible_items_are_compacted_and_grouped() {
         let mut world = World::with_capacity(WorldCapacity::default());
-        let first_material = world.spawn().unwrap();
-        let second_material = world.spawn().unwrap();
+        let first_material = MaterialHandle::from_raw(1);
+        let second_material = MaterialHandle::from_raw(2);
         world.add_material(first_material, Material::default());
         world.add_material(second_material, Material::default());
         let mut mesh_entities = Vec::new();
@@ -380,8 +380,8 @@ mod tests {
             world.add_mesh_renderer(
                 entity,
                 MeshRenderer {
-                    geometry,
-                    material: MaterialHandle::from_entity(material),
+                    geometry: crate::GeometryHandle::from_raw(geometry),
+                    material,
                 },
             );
             mesh_entities.push(entity);
@@ -414,8 +414,8 @@ mod tests {
         assert!(world.add_mesh_renderer(
             mesh_entities[0],
             MeshRenderer {
-                geometry: 2,
-                material: MaterialHandle::from_entity(second_material),
+                geometry: crate::GeometryHandle::from_raw(2),
+                material: second_material,
             },
         ));
         render_world.extract(&world).unwrap();

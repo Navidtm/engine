@@ -1,13 +1,12 @@
 export { bounds, camera, material, mesh, transform } from "./components.js";
-export { boxGeometry, triangleGeometry } from "./geometry.js";
 export type {
+  BasicMaterialHandle,
   BoundsComponent,
   CameraComponent,
   Color,
   Component,
   Entity,
-  Geometry,
-  MaterialComponent,
+  GeometryHandle,
   MeshComponent,
   Quat,
   TransformComponent,

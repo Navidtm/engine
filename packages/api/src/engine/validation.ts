@@ -1,6 +1,7 @@
 import type { Color, Component, Quat } from "@lume/scene";
 
-import { peekEntityIndex, validateLiveEntity } from "../entity-lifecycle.js";
+import { peekEntityIndex } from "../entity-lifecycle.js";
+import { validateResourceHandle } from "../resource-lifecycle.js";
 import type { EngineState } from "./state.js";
 import type {
   CameraPerspectiveOptions,
@@ -17,6 +18,7 @@ export interface CameraPerspective {
 
 export interface EngineBudgets {
   readonly entityCapacity: number;
+  readonly resourceCapacity: number;
   readonly transformCapacity: number;
   readonly structuralCommandCapacity: number;
 }
@@ -38,6 +40,15 @@ export function resolveEngineBudgets(config: EngineConfig): EngineBudgets {
     throw new RangeError("entityCapacity must be an integer between 1 and 1,048,575.");
   }
   const userTransformCapacity = config.transport?.transformCapacity ?? userEntityCapacity;
+  const userResourceCapacity =
+    config.resourceCapacity ?? Math.min(Math.max(userEntityCapacity, 2), 1_024);
+  if (
+    !Number.isSafeInteger(userResourceCapacity) ||
+    userResourceCapacity < 2 ||
+    userResourceCapacity >= 1 << 20
+  ) {
+    throw new RangeError("resourceCapacity must be an integer between 2 and 1,048,575.");
+  }
   if (
     !Number.isSafeInteger(userTransformCapacity) ||
     userTransformCapacity <= 0 ||
@@ -60,6 +71,7 @@ export function resolveEngineBudgets(config: EngineConfig): EngineBudgets {
   }
   return {
     entityCapacity: userEntityCapacity + 1,
+    resourceCapacity: userResourceCapacity + 1,
     transformCapacity: userTransformCapacity + 1,
     structuralCommandCapacity,
   };
@@ -86,13 +98,13 @@ export function resolveCameraPerspective(
 
 export function validateMeshOptions(state: EngineState, options: MeshOptions): void {
   if (options.geometry !== "cube" && options.geometry !== "triangle") {
-    throw new RangeError("Mesh geometry must be 'cube' or 'triangle'.");
+    validateResourceHandle(state, options.geometry, "geometry");
   }
   if (options.material !== undefined && options.material !== "basic") {
     if (options.material.kind !== "basic-material") {
       throw new TypeError("A mesh requires a basic-material handle.");
     }
-    validateLiveEntity(state, options.material.id);
+    validateResourceHandle(state, options.material, "basic-material");
   }
   if (options.position !== undefined) validateFiniteTuple("position", options.position, 3);
   if (options.rotation !== undefined) validateQuaternion(options.rotation);
@@ -122,24 +134,17 @@ export function validateCameraPerspective(options: CameraPerspective): void {
   }
 }
 
-export function validateComponent(state: EngineState, component: Component): void {
+export function validateComponent(component: Component): void {
   switch (component.kind) {
     case "transform":
       validateFiniteTuple("position", component.position, 3);
       validateQuaternion(component.rotation);
       validateFiniteTuple("scale", component.scale, 3);
       return;
-    case "material":
-      validateColor(component.color);
-      return;
     case "camera":
       validateCameraPerspective(component);
       return;
     case "mesh":
-      if (!Number.isSafeInteger(component.geometry.id) || component.geometry.id < 0) {
-        throw new RangeError("Mesh geometry id must be a non-negative safe integer.");
-      }
-      validateLiveEntity(state, component.material);
       return;
     case "bounds":
       validateFiniteTuple("bounds center", component.center, 3);

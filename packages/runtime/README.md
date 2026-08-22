@@ -19,3 +19,8 @@ The exported shared-memory helpers are intended for runtime integration and
 benchmarks: allocate once, publish with `writeSharedTransform`, and drain only
 from the single worker consumer. Do not expose transport buffers as application
 state or mutate them from more than one producer.
+
+The worker Resource Coordinator is the canonical owner of logical geometry and
+basic-material lifetime. It validates generational keys, tracks ECS mesh usage
+edges, and publishes ordered changes to Rust render mirrors and private renderer
+registries. Resource lifecycle state is not exposed as transport state.

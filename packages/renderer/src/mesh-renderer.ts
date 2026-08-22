@@ -12,6 +12,7 @@ import { createPipelineCache, type PipelineCache } from "./pipeline/cache.js";
 import { getMeshPipeline } from "./pipeline/mesh.js";
 import { requestAdapter } from "./webgpu/adapter.js";
 import { requestDevice } from "./webgpu/device.js";
+import { createMaterialRegistry, type MaterialRegistry } from "./webgpu/material-registry.js";
 import { createMeshRegistry, type MeshRegistry } from "./webgpu/mesh-registry.js";
 import {
   createSurface,
@@ -111,6 +112,14 @@ export interface RendererStats {
 export interface MeshRenderer {
   /** Resolves when the owned GPU device is lost. */
   readonly lost: Promise<GPUDeviceLostInfo>;
+  /** Registers a built-in geometry under a worker-owned generational key. */
+  registerGeometry(handle: number, builtin: "triangle" | "cube"): void;
+  /** Removes a matching geometry generation from future submissions. */
+  removeGeometry(handle: number): void;
+  /** Registers a basic-material key used by extracted draw runs. */
+  registerBasicMaterial(handle: number): void;
+  /** Removes a matching material generation from future submissions. */
+  removeBasicMaterial(handle: number): void;
   /** Uploads and renders one extracted frame. */
   execute(frame: RenderFrame): void;
   /** Reconfigures the surface and depth attachment if physical size changed. */
@@ -127,6 +136,7 @@ interface RendererState {
   readonly pipeline: GPURenderPipeline;
   readonly pipelineCache: PipelineCache;
   readonly meshes: MeshRegistry;
+  readonly materials: MaterialRegistry;
   readonly cameraBuffer: GPUBuffer;
   readonly instanceBuffer: GPUBuffer;
   readonly visibleSlotBuffer: GPUBuffer;
@@ -163,6 +173,7 @@ export async function createMeshRenderer(
   size: SurfaceSize,
   instanceCapacity: number,
   options: RendererOptions = {},
+  resourceCapacity = instanceCapacity,
 ): Promise<MeshRenderer> {
   const adapter = await requestAdapter(
     options.powerPreference === undefined ? {} : { powerPreference: options.powerPreference },
@@ -175,6 +186,7 @@ export async function createMeshRenderer(
   const pipelineCache = createPipelineCache();
   let surface: SurfaceState | undefined;
   let meshes: MeshRegistry | undefined;
+  let materials: MaterialRegistry | undefined;
   let profiler: GpuTimestampProfiler | undefined;
   let cameraBuffer: GPUBuffer | undefined;
   let instanceBuffer: GPUBuffer | undefined;
@@ -192,7 +204,8 @@ export async function createMeshRenderer(
 
     surface = createSurface(device, canvas, size, options.alphaMode ?? "opaque");
     const pipeline = await getMeshPipeline(device, pipelineCache, surface.format);
-    meshes = createMeshRegistry(device, BUILTIN_MESHES);
+    meshes = createMeshRegistry(device, resourceCapacity);
+    materials = createMaterialRegistry(resourceCapacity);
     profiler = createGpuTimestampProfiler(device);
     cameraBuffer = device.createBuffer({
       label: "Lume camera uniform",
@@ -232,6 +245,7 @@ export async function createMeshRenderer(
       pipeline,
       pipelineCache,
       meshes,
+      materials,
       cameraBuffer,
       instanceBuffer,
       visibleSlotBuffer,
@@ -260,6 +274,17 @@ export async function createMeshRenderer(
 
     const renderer: MeshRenderer = {
       lost: device.lost,
+      registerGeometry(handle, builtin) {
+        const source = builtinGeometrySource(builtin);
+        state.meshes.register(handle, source);
+      },
+      removeGeometry(handle) {
+        if (!state.meshes.remove(handle)) throw new Error(`Unknown geometry handle: ${handle}`);
+      },
+      registerBasicMaterial: (handle) => state.materials.register(handle),
+      removeBasicMaterial(handle) {
+        if (!state.materials.remove(handle)) throw new Error(`Unknown material handle: ${handle}`);
+      },
       execute(frame) {
         if (state.disposed) return;
         frameContext.frame = frame;
@@ -292,6 +317,7 @@ export async function createMeshRenderer(
     cameraBuffer?.destroy();
     if (profiler !== undefined) destroyGpuTimestampProfiler(profiler);
     meshes?.dispose();
+    materials?.dispose();
     pipelineCache.clear();
     if (surface !== undefined) destroySurface(surface);
     device.destroy();
@@ -425,7 +451,7 @@ function encodeMainPass(context: RendererFrameContext): void {
     ) {
       runEnd += 1;
     }
-    if (pipeline === BASIC_PIPELINE_ID && mesh !== undefined) {
+    if (pipeline === BASIC_PIPELINE_ID && mesh !== undefined && state.materials.has(material)) {
       pass.setVertexBuffer(0, mesh.vertexBuffer);
       pass.setIndexBuffer(mesh.indexBuffer, "uint32");
       pass.drawIndexed(mesh.indexCount, runEnd - instance, 0, 0, instance);
@@ -451,6 +477,7 @@ function dispose(state: RendererState): void {
   if (state.disposed) return;
   state.disposed = true;
   state.meshes.dispose();
+  state.materials.dispose();
   destroyGpuTimestampProfiler(state.profiler);
   state.cameraBuffer.destroy();
   state.instanceBuffer.destroy();
@@ -458,4 +485,11 @@ function dispose(state: RendererState): void {
   state.pipelineCache.clear();
   destroySurface(state.surface);
   state.device.destroy();
+}
+
+function builtinGeometrySource(builtin: "triangle" | "cube") {
+  for (const source of BUILTIN_MESHES) {
+    if (source.builtin === builtin) return source;
+  }
+  throw new Error(`Unknown built-in geometry: ${builtin}`);
 }

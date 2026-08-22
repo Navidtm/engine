@@ -1,5 +1,15 @@
 import type { EngineStats } from "@lume/runtime";
-import type { Color, Component, Entity, Quat, Vec3 } from "@lume/scene";
+import type {
+  BasicMaterialHandle,
+  Color,
+  Component,
+  Entity,
+  GeometryHandle,
+  Quat,
+  Vec3,
+} from "@lume/scene";
+
+export type { BasicMaterialHandle, GeometryHandle } from "@lume/scene";
 
 /** Lifecycle state exposed by an engine instance. */
 export type EngineStatus =
@@ -59,6 +69,8 @@ export interface EngineConfig {
   readonly wasmUrl?: string | URL;
   /** Maximum application-owned entity slots, from 1 through 1,048,575. */
   readonly entityCapacity?: number;
+  /** Maximum slots in each typed resource registry; defaults to `min(max(entityCapacity, 2), 1,024)`. */
+  readonly resourceCapacity?: number;
   /** Optional initial state for the engine-owned active camera. */
   readonly camera?: EngineCameraOptions;
   /** Advanced SharedArrayBuffer and worker transport budgets. */
@@ -79,14 +91,6 @@ export interface EngineConfig {
 
 /** Configuration for the overload of {@link createEngine} that receives a canvas first. */
 export type EngineOptions = Omit<EngineConfig, "canvas">;
-
-/** Opaque handle for a color-only material owned by one engine. */
-export interface BasicMaterialHandle {
-  /** Type discriminant for narrowing engine handles. */
-  readonly kind: "basic-material";
-  /** Stable material entity owned by this engine. */
-  readonly id: Entity;
-}
 
 /** Mesh handle plus live transform controls. Do not construct this object manually. */
 export interface MeshHandle {
@@ -129,7 +133,7 @@ export interface QuaternionControl {
 }
 
 /** Any high-level resource handle that can be passed to {@link Engine.destroy}. */
-export type EngineHandle = BasicMaterialHandle | MeshHandle;
+export type EngineHandle = BasicMaterialHandle | GeometryHandle | MeshHandle;
 /** A high-level handle with a user-authored transform. */
 export type SceneHandle = MeshHandle;
 
@@ -142,7 +146,7 @@ export interface BasicMaterialOptions {
 /** Creation options for a built-in triangle or cube mesh. */
 export interface MeshOptions {
   /** Built-in mesh geometry. */
-  readonly geometry: "cube" | "triangle";
+  readonly geometry: "cube" | "triangle" | GeometryHandle;
   /** Material handle, or `"basic"`/omitted for the engine shared default. */
   readonly material?: BasicMaterialHandle | "basic";
   /** Initial local XYZ position. */
@@ -161,6 +165,12 @@ export interface CreateApi {
   basicMaterial(options?: BasicMaterialOptions): BasicMaterialHandle;
   /** Creates a triangle or cube mesh with transform and mesh components. */
   mesh(options: MeshOptions): MeshHandle;
+}
+
+/** Engine-owned handles for the immutable built-in geometry resources. */
+export interface BuiltinGeometryApi {
+  readonly cube: GeometryHandle;
+  readonly triangle: GeometryHandle;
 }
 
 /** Batched transform setter available as `engine.set`. */
@@ -203,6 +213,8 @@ export interface WorldApi {
 export interface Engine {
   /** High-level creation API. */
   readonly create: CreateApi;
+  /** Typed handles for built-in geometry registered by this engine. */
+  readonly geometry: BuiltinGeometryApi;
   /** Partial transform updates. */
   readonly set: SetApi;
   /** Advanced component API. */
@@ -221,7 +233,7 @@ export interface Engine {
   resize(): void;
   /** Requests a worker statistics snapshot. */
   getStats(): Promise<EngineStats>;
-  /** Destroys a high-level handle and recycles its entity slot. */
+  /** Destroys an entity handle or retires an owned resource handle. */
   destroy(handle: EngineHandle): void;
   /** Stops the engine and releases worker, WASM, and GPU resources. */
   dispose(): void;

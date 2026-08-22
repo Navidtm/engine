@@ -45,6 +45,7 @@ function initMessage(): MainToWorkerMessage {
       canvas: {} as OffscreenCanvas,
       wasmUrl: "/lume_core.wasm",
       entityCapacity: 16,
+      resourceCapacity: 16,
       transformCapacity: 16,
       size: { width: 640, height: 360, devicePixelRatio: 1 },
       renderer: {},
@@ -58,6 +59,10 @@ describe("worker runtime resource ownership", () => {
     const coreResult = deferred<WasmCore>();
     const renderer = {
       lost: new Promise<GPUDeviceLostInfo>(() => undefined),
+      registerGeometry: vi.fn(),
+      removeGeometry: vi.fn(),
+      registerBasicMaterial: vi.fn(),
+      removeBasicMaterial: vi.fn(),
       execute: vi.fn(),
       resize: vi.fn(),
       stats: vi.fn(),
@@ -114,12 +119,18 @@ describe("worker runtime resource ownership", () => {
     const order: string[] = [];
     const renderer = {
       lost: new Promise<GPUDeviceLostInfo>(() => undefined),
+      registerGeometry: vi.fn(),
+      removeGeometry: vi.fn(),
+      registerBasicMaterial: vi.fn(),
+      removeBasicMaterial: vi.fn(),
       execute: vi.fn(),
       resize: vi.fn(),
       stats: vi.fn(),
       dispose: vi.fn(),
     } satisfies MeshRenderer;
     const core = {
+      createBasicMaterial: vi.fn(),
+      removeBasicMaterial: vi.fn(),
       apply: vi.fn((command: { readonly type: string }) => order.push(`apply:${command.type}`)),
       updateSharedCommands: vi.fn(() => order.push("shared-commands")),
       updateSharedTransforms: vi.fn(() => order.push("shared-transforms")),
@@ -157,12 +168,18 @@ describe("worker runtime resource ownership", () => {
   it("rejects stale scheduler callbacks across stop, restart, and disposal", async () => {
     const renderer = {
       lost: new Promise<GPUDeviceLostInfo>(() => undefined),
+      registerGeometry: vi.fn(),
+      removeGeometry: vi.fn(),
+      registerBasicMaterial: vi.fn(),
+      removeBasicMaterial: vi.fn(),
       execute: vi.fn(),
       resize: vi.fn(),
       stats: vi.fn(),
       dispose: vi.fn(),
     } satisfies MeshRenderer;
     const core = {
+      createBasicMaterial: vi.fn(),
+      removeBasicMaterial: vi.fn(),
       apply: vi.fn(),
       updateSharedCommands: vi.fn(),
       updateSharedTransforms: vi.fn(),
