@@ -87,7 +87,8 @@ memory while Rust retains canonical ECS ownership. See
 [milestone-5.md](milestone-5.md) for the copy, lifetime, overflow, and stale
 handle contracts.
 
-Renderer scalability begins with persistent, entity-indexed instance storage.
+Implemented renderer foundation (ADR 007): renderer scalability begins with
+persistent, entity-indexed instance storage.
 Render extraction publishes coalesced changed-slot ranges while visibility
 publishes a compact list of stable slots in grouped draw order. The renderer
 updates only those ranges and the mesh shader resolves each visible slot through
@@ -96,7 +97,8 @@ one storage-buffer indirection. This preserves CPU visibility and the
 from unchanged frames. See
 [ADR 007](../.agents/decisions/007-persistent-instance-storage.md).
 
-Mostly-static frames reuse the retained `RenderWorld` snapshot through a
+Implemented and measured extraction policy (ADR 008): mostly-static frames reuse
+the retained `RenderWorld` snapshot through a
 world-owned render change epoch. Unchanged instance metadata and bounds are not
 rebuilt, and visibility grouping is retained when camera records are also
 unchanged. Any canonical render mutation takes the existing full linear path,
@@ -104,14 +106,20 @@ so dynamic scenes keep contiguous deterministic extraction without a second
 incremental data structure. See
 [ADR 008](../.agents/decisions/008-epoch-gated-render-extraction.md).
 
-Before persistent slots become direct compute-visibility input, every slot will
-gain explicit active and packed generational identity metadata. Removal makes a
+Accepted design, pending implementation (ADR 009): before persistent slots
+become direct compute-visibility input, every slot will gain explicit active and
+packed generational identity metadata. Removal makes a
 slot ineligible without requiring payload zeroing, generation replacement
 publishes a complete new record, and GPU buffers remain rebuildable derived
 cache state. CPU visibility remains the reference and fallback path. The
 lifecycle, multi-camera constraints, correctness tests, and benchmark matrix are
 defined in
 [ADR 009](../.agents/decisions/009-active-persistent-gpu-slots.md).
+
+The renderer-scalability entry gates and implementation order are recorded in
+[milestone-6.md](milestone-6.md). Gate completion means the transport and
+identity foundations are stable enough to proceed; it does not mean active-slot
+storage, compute visibility, or indirect drawing already exists.
 
 Detailed byte layout and browser-thread responsibilities are documented in
 [memory-model.md](memory-model.md) and [threading-model.md](threading-model.md).

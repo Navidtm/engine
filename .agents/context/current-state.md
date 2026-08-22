@@ -1,6 +1,6 @@
 # Current Project State
 
-Last verified: 2026-08-22 on master after issue #24
+Last verified: 2026-08-22 on master after issue #25
 
 This document records the implementation that exists in the repository. It is
 an evidence-based snapshot, not a description of intended future architecture.
@@ -8,9 +8,11 @@ an evidence-based snapshot, not a description of intended future architecture.
 ## Executive Status
 
 The engine has completed its runtime-foundation and transport-hardening work.
-The actual implementation is ready to move from Milestone 5 into Milestone 6,
-Renderer Scalability, with controlled browser validation retained as an
-acceptance task.
+The explicit renderer-entry gates are complete, so implementation can proceed
+within Milestone 6, Renderer Scalability. This readiness statement does not mean
+the milestone itself is complete: ADR 007 persistent storage and ADR 008
+epoch-gated reuse are implemented, while ADR 009 active/generational slot state,
+compute visibility, and indirect drawing remain pending.
 
 Transport Hardening is complete. All Phase 4 mechanisms are implemented,
 tested, documented, and covered by a committed Node benchmark result. Controlled
@@ -320,18 +322,42 @@ device loss, and disposal. A failing state-machine seed can be rerun with
 `LUME_TEST_SEED=<unsigned-u32>`. End-to-end browser tests for the complete
 main-thread/worker/WASM/WebGPU path are not yet part of CI.
 
+## Renderer Scalability Entry Gate
+
+The transition from transport hardening into renderer scalability is based on
+explicit completed issues rather than a general readiness claim:
+
+| Gate                                           | Completed issue                                                                                        |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Persistent instance storage and dirty uploads  | [#8](https://github.com/Navidtm/engine/issues/8)                                                       |
+| Epoch-gated extraction and controlled evidence | [#9](https://github.com/Navidtm/engine/issues/9)                                                       |
+| SAB/message fallback ordering                  | [#16](https://github.com/Navidtm/engine/issues/16)                                                     |
+| Stop/restart scheduler epochs                  | [#17](https://github.com/Navidtm/engine/issues/17)                                                     |
+| Typed generational resource identity           | [#18](https://github.com/Navidtm/engine/issues/18)                                                     |
+| Active persistent-slot design gate             | [#19](https://github.com/Navidtm/engine/issues/19)                                                     |
+| Allocation-safe and pull-sampled profiling     | [#20](https://github.com/Navidtm/engine/issues/20), [#21](https://github.com/Navidtm/engine/issues/21) |
+| Explicit capacity and transactional creation   | [#22](https://github.com/Navidtm/engine/issues/22)                                                     |
+| Generation exhaustion without stale aliasing   | [#23](https://github.com/Navidtm/engine/issues/23)                                                     |
+| Deterministic composed boundary coverage       | [#24](https://github.com/Navidtm/engine/issues/24)                                                     |
+
+Issue #19 completed the ADR 009 design gate only. Production slot activity,
+generation metadata, compute visibility, and indirect commands remain subject
+to ADR 009's correctness and benchmark acceptance criteria. The complete
+implemented/accepted/pending split is in
+[`docs/milestone-6.md`](../../docs/milestone-6.md).
+
 ## Roadmap Comparison
 
-| Roadmap phase                 | Roadmap label | Actual repository state                                                  |
-| ----------------------------- | ------------- | ------------------------------------------------------------------------ |
-| 1. Runtime Foundation         | Completed     | Implemented                                                              |
-| 2. Render Architecture        | Completed     | Implemented                                                              |
-| 3. Performance Infrastructure | Completed     | Implemented                                                              |
-| 4. Transport Hardening        | Completed     | Implemented; browser validation remains an acceptance activity           |
-| 6. Renderer Scalability       | Planned       | Baseline CPU instancing exists; scalable GPU-driven work has not started |
-| 6. Asset Pipeline             | Planned       | Not implemented                                                          |
-| 7. Advanced Graphics          | Planned       | Not implemented                                                          |
-| 8. Developer Ecosystem        | Planned       | Not implemented                                                          |
+| Roadmap phase                 | Roadmap label | Actual repository state                                                                                     |
+| ----------------------------- | ------------- | ----------------------------------------------------------------------------------------------------------- |
+| 1. Runtime Foundation         | Completed     | Implemented                                                                                                 |
+| 2. Render Architecture        | Completed     | Implemented                                                                                                 |
+| 3. Performance Infrastructure | Completed     | Implemented                                                                                                 |
+| 4. Transport Hardening        | Completed     | Implemented; browser validation remains an acceptance activity                                              |
+| 6. Renderer Scalability       | Active        | ADR 007/008 foundation implemented; ADR 009 slot state, compute visibility, and indirect submission pending |
+| 6. Asset Pipeline             | Planned       | Not implemented                                                                                             |
+| 7. Advanced Graphics          | Planned       | Not implemented                                                                                             |
+| 8. Developer Ecosystem        | Planned       | Not implemented                                                                                             |
 
 ## Intentionally Not Implemented
 
@@ -367,19 +393,22 @@ claim that GPU slot-state storage or compute submission exists today.
 ## Current Priority
 
 Transport semantics should now be treated as stable unless browser evidence
-finds a correctness or material performance problem. The next development
-milestone should focus on renderer scalability:
+finds a correctness or material performance problem. The next implementation
+sequence starts from the persistent representation already delivered by ADR 007
+and the reuse policy delivered by ADR 008:
 
-1. Establish controlled Chrome and Edge baselines for the complete runtime.
-2. Scale batching beyond consecutive CPU-prepared instance runs.
-3. Introduce indirect command storage and indirect drawing.
-4. Move visibility/culling to GPU compute when measurements justify it.
-5. Preserve the existing ECS/RenderWorld/renderer ownership boundaries while
-   doing so.
+1. Implement ADR 009 CPU slot activity/identity and lifecycle tests.
+2. Add renderer-owned slot-state storage and dirty uploads while retaining CPU
+   visibility.
+3. Implement compute visibility beside the CPU reference and prove equivalent
+   membership.
+4. Introduce indirect command storage and drawing only after lifecycle and
+   visibility correctness are stable.
+5. Run ADR 009's controlled correctness and benchmark matrix before selecting
+   any runtime policy.
 
-ADR 009 makes explicit slot activity, generation replacement, derived GPU cache
-ownership, CPU fallback, and the required correctness/benchmark matrix
-prerequisites for steps 3 and 4.
+This sequence preserves ECS/RenderWorld/renderer ownership and separates
+pending implementation from measured claims.
 
 Textures, lighting, animation, physics, and asset loading remain out of scope
 until the renderer scalability foundation is measured and stable.

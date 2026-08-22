@@ -14,8 +14,9 @@ render-throughput benchmark.
 
 Adds immutable geometry handles, indexed cube geometry, a dedicated RenderWorld,
 camera uniforms, fixed-capacity instance storage, explicit GPU mesh ownership,
-and consecutive-geometry instanced submission. Dirty-range uploads, visibility
-lists, and material arenas remain follow-up optimizations.
+and consecutive-geometry instanced submission. Persistent dirty-range uploads
+and stable visibility-slot lists were delivered later by ADR 007; material
+arenas remain future work.
 
 Benchmark focus: transform updates per millisecond, draw preparation cost,
 buffer upload bytes, and CPU cost per visible mesh.
@@ -51,15 +52,29 @@ handles, entity slot recycling, transport metrics, and scale benchmarks.
 Benchmark focus: 10k through 1M shared updates, 10k through 500k structural
 commands, lifecycle reuse, staging bytes, ranges, and overflow visibility.
 
-## Milestone 6 — rendering scalability (planned)
+## Milestone 6 — rendering scalability (active; foundation implemented)
 
-Introduce persistent GPU instance storage, dirty-range uploads, indirect command
-storage, GPU culling, scalable instancing, and render-graph resource lifetime
-analysis. Textures, lighting, material variants, and asset streaming remain out
-of scope until this scalability baseline is measured and stable.
+The implemented starting point is the persistent entity-indexed GPU instance
+representation and dirty-range upload path from
+[ADR 007](../.agents/decisions/007-persistent-instance-storage.md), plus the
+epoch-gated RenderWorld/visibility reuse from
+[ADR 008](../.agents/decisions/008-epoch-gated-render-extraction.md). Their
+controlled measurements are committed; they are not future Milestone 6 work.
 
-Benchmark focus: pipeline-cache hit rate, bind-group churn, transient GPU memory,
-draw/dispatch counts, and GPU frame time.
+The next implementation slice starts with explicit active and generational GPU
+slot metadata from [ADR 009](../.agents/decisions/009-active-persistent-gpu-slots.md).
+It then validates compute visibility against the existing CPU reference path
+before introducing indirect command storage and indirect drawing. Render-graph
+resource lifetime analysis remains pending. Textures, lighting, material
+variants, and asset streaming stay out of scope until this scalability path is
+measured and stable.
+
+The completed entry gates, pending implementation, and measurement requirements
+are separated in [milestone-6.md](milestone-6.md).
+
+Benchmark focus: active/tested/visible slots, occupancy and dirtiness ratios,
+CPU/GPU visibility equivalence, dirty-domain upload bytes, draw/dispatch counts,
+CPU/GPU stage time, missed frames, and owned CPU/WASM/GPU memory.
 
 ## Known future bottlenecks
 

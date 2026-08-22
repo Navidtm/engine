@@ -213,32 +213,39 @@ measurement remains an acceptance activity, not unfinished transport design.
 
 ## Status
 
-Planned
+Active; persistent representation foundation implemented
 
 ## Objective
 
 Move from basic rendering to large-scale GPU rendering.
 
-Goals:
+Implemented foundation:
+
+- persistent entity-indexed RenderWorld and renderer instance storage (ADR 007)
+- coalesced changed-slot uploads and stable visible-slot indirection (ADR 007)
+- epoch-gated RenderWorld snapshot and visibility reuse (ADR 008)
+- controlled browser evidence for static and dirty workloads
+
+Next implementation sequence:
 
 ## Instancing
 
-Support:
+Preserve:
 
 - thousands of identical objects
-- efficient instance buffers
+- the existing efficient persistent instance buffers
 
 ## GPU Buffers
 
-Improve:
+Add:
 
-- storage buffers
+- explicit active/generational slot-state storage from ADR 009
 - indirect buffers
-- persistent resources
+- domain-specific dirty publication required by ADR 009
 
 ## GPU Driven Rendering
 
-Move toward:
+Validate and move toward:
 
 ```
 Scene Data
@@ -259,6 +266,11 @@ Indirect Draw
 
 GPU
 ```
+
+ADR 009 is accepted design, not implemented state. CPU visibility remains the
+reference path until compute membership equivalence and the required benchmark
+matrix pass. Indirect command generation follows lifecycle correctness rather
+than being developed in parallel with it.
 
 ---
 
@@ -424,14 +436,18 @@ before:
 
 Current development focus:
 
-Transport Hardening
+Renderer Scalability
 
 Primary questions:
 
-- Can the runtime scale to very large scenes?
-- Can JS/WASM communication become near-zero overhead?
-- Can memory ownership remain explicit?
-- Can frame execution remain predictable?
+- Can explicit active/generational slot state make persistent storage safe for
+  direct compute consumption?
+- Can GPU visibility match the existing CPU reference across sparse occupancy,
+  churn, and multiple cameras?
+- Do indirect commands improve end-to-end CPU/GPU time without compromising
+  deterministic fallback or ownership?
+- Can the frame graph express publication, visibility, and submission ordering
+  while keeping derived GPU state rebuildable?
 
 ---
 

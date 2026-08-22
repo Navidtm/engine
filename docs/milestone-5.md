@@ -113,3 +113,12 @@ queue depth:
 
 These values make transport regressions observable without a profiler and are
 also emitted by the benchmark harness.
+
+## Exit into renderer scalability
+
+Milestone 5 is complete, including the ordering, scheduler, resource-identity,
+capacity, generation, and deterministic boundary-test gates required before
+expanding renderer state. Their issue-linked completion criteria and the exact
+implemented/pending boundary are recorded in
+[milestone-6.md](milestone-6.md). This exit does not claim that ADR 009 slot
+metadata, compute visibility, or indirect drawing is implemented.

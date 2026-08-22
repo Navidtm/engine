@@ -47,6 +47,14 @@ visibility-valid flag. Browser measurements report identical WASM heap and GPU
 buffer sizes before and after. Snapshot arrays remain owned by `RenderWorld` and
 visibility; reuse changes their logical lifetime, not their capacity or owner.
 
+ADR 009 accepts the next representation but does not describe currently
+allocated memory. Its initial active/generational GPU slot-state record is 16
+bytes per render-capacity slot, with matching CPU metadata and separate
+visibility/indirect budgets. Those bytes must not be included in current memory
+totals until the slot-state implementation exists and reports owned CPU, WASM,
+and GPU memory. See [milestone-6.md](milestone-6.md) for the implementation and
+measurement gates.
+
 ## Shared allocation and budget
 
 The engine has explicit, immutable public budgets: `entityCapacity`,
