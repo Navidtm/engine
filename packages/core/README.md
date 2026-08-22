@@ -10,5 +10,13 @@ basic-material mirror required for allocation-free render extraction.
 
 Use `World` for canonical ECS state, run `update`, then extract into
 `RenderWorld`. Capacities are hard limits: insertion reports failure instead of
-growing storage during a frame. Public Rust items use Rustdoc comments; run
-`cargo doc -p lume-core --open` to browse them locally.
+growing storage during a frame. Entity capacity is clamped once to the 20-bit
+handle limit, and all entity-indexed stores use that same effective capacity.
+
+Meshes without explicit local bounds are treated as conservatively unbounded;
+the core never assumes that an arbitrary geometry fits a unit cube. Camera and
+transform authoring values are finite-validated at `World` mutation boundaries,
+and accepted quaternions are normalized before derived matrices are computed.
+
+Public Rust items use Rustdoc comments; run `cargo doc -p lume-core --open` to
+browse them locally.

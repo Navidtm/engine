@@ -4,8 +4,11 @@ const INDEX_BITS: u32 = 20;
 const INDEX_MASK: u32 = (1 << INDEX_BITS) - 1;
 const MAX_GENERATION: u16 = (1 << (32 - INDEX_BITS)) - 1;
 
+/// Maximum number of distinct entity indices representable by [`Entity`].
+pub const MAX_ENTITY_CAPACITY: usize = (INDEX_MASK as usize) + 1;
+
 /// A compact entity handle containing a 20-bit index and 12-bit generation.
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Default)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(transparent)]
 pub struct Entity(u32);
 
@@ -28,7 +31,11 @@ impl Entity {
         if index > INDEX_MASK || generation > MAX_GENERATION {
             return None;
         }
-        Some(Self(((generation as u32) << INDEX_BITS) | index))
+        let raw = ((generation as u32) << INDEX_BITS) | index;
+        if raw == Self::INVALID.raw() {
+            return None;
+        }
+        Some(Self(raw))
     }
 
     /// Returns the transport-ready packed representation.
@@ -47,6 +54,12 @@ impl Entity {
     #[must_use]
     pub const fn generation(self) -> u16 {
         (self.0 >> INDEX_BITS) as u16
+    }
+}
+
+impl Default for Entity {
+    fn default() -> Self {
+        Self::INVALID
     }
 }
 
@@ -73,8 +86,9 @@ impl EntityAllocator {
     /// Creates a fixed-capacity allocator; allocation never grows past this bound.
     #[must_use]
     pub fn with_capacity(capacity: usize) -> Self {
+        let capacity = capacity.min(MAX_ENTITY_CAPACITY);
         Self {
-            capacity: capacity.min((INDEX_MASK as usize) + 1),
+            capacity,
             generations: Vec::with_capacity(capacity),
             alive: Vec::with_capacity(capacity),
             free: Vec::with_capacity(capacity),
@@ -84,11 +98,16 @@ impl EntityAllocator {
 
     /// Allocates a live entity, reusing a free slot when possible.
     pub fn spawn(&mut self) -> Option<Entity> {
-        if let Some(index) = self.free.pop() {
+        while let Some(index) = self.free.pop() {
             let index_usize = index as usize;
+            let Some(entity) = Entity::from_parts(index, self.generations[index_usize]) else {
+                // The all-ones sentinel is the only packed field combination
+                // that cannot be allocated. Dropping it retires that slot.
+                continue;
+            };
             self.alive[index_usize] = true;
             self.alive_count += 1;
-            return Entity::from_parts(index, self.generations[index_usize]);
+            return Some(entity);
         }
 
         if self.generations.len() >= self.capacity {
@@ -106,16 +125,35 @@ impl EntityAllocator {
     /// main-thread API can return entity IDs synchronously. Returns false for a
     /// live, stale, or out-of-capacity handle.
     pub fn claim(&mut self, entity: Entity) -> bool {
+        if entity == Entity::INVALID {
+            return false;
+        }
         let index = entity.index();
         if index > INDEX_MASK as usize || index >= self.capacity {
             return false;
         }
         if index >= self.generations.len() {
+            if entity.generation() != 0 {
+                return false;
+            }
+            let previous_len = self.generations.len();
             self.generations.resize(index + 1, 0);
             self.alive.resize(index + 1, false);
-        }
-        if self.alive[index] || self.generations[index] != entity.generation() {
-            return false;
+            for vacant in previous_len..index {
+                self.free.push(vacant as u32);
+            }
+        } else {
+            if self.alive[index] || self.generations[index] != entity.generation() {
+                return false;
+            }
+            let Some(free_index) = self
+                .free
+                .iter()
+                .rposition(|candidate| *candidate as usize == index)
+            else {
+                return false;
+            };
+            self.free.swap_remove(free_index);
         }
         self.alive[index] = true;
         self.alive_count += 1;
@@ -148,6 +186,12 @@ impl EntityAllocator {
         self.alive_count
     }
 
+    /// Maximum number of entity indices this allocator can represent.
+    #[must_use]
+    pub const fn capacity(&self) -> usize {
+        self.capacity
+    }
+
     /// Returns whether no entity slots are live.
     #[must_use]
     pub const fn is_empty(&self) -> bool {
@@ -177,6 +221,66 @@ mod tests {
         let external = Entity::from_parts(3, 0).unwrap();
         assert!(entities.claim(external));
         assert!(!entities.claim(external));
+    }
+
+    #[test]
+    fn claiming_a_recycled_slot_removes_it_from_the_free_list() {
+        let mut entities = EntityAllocator::with_capacity(2);
+        let first = entities.spawn().unwrap();
+        assert!(entities.despawn(first));
+        let claimed = Entity::from_parts(first.index() as u32, 1).unwrap();
+        assert!(entities.claim(claimed));
+
+        let spawned = entities.spawn().unwrap();
+        assert_ne!(spawned.index(), claimed.index());
+        assert_eq!(entities.len(), 2);
+        assert!(entities.is_alive(claimed));
+        assert!(entities.is_alive(spawned));
+        assert!(entities.spawn().is_none());
+    }
+
+    #[test]
+    fn sparse_claim_leaves_lower_indices_available() {
+        let mut entities = EntityAllocator::with_capacity(4);
+        let external = Entity::from_parts(3, 0).unwrap();
+        assert!(entities.claim(external));
+
+        let mut spawned = [usize::MAX; 3];
+        for slot in &mut spawned {
+            *slot = entities.spawn().unwrap().index();
+        }
+        spawned.sort_unstable();
+        assert_eq!(spawned, [0, 1, 2]);
+        assert_eq!(entities.len(), 4);
+        assert!(entities.spawn().is_none());
+    }
+
+    #[test]
+    fn default_and_all_ones_entity_are_invalid() {
+        assert_eq!(Entity::default(), Entity::INVALID);
+        assert_eq!(Entity::from_parts(INDEX_MASK, MAX_GENERATION), None);
+
+        let mut entities = EntityAllocator::with_capacity(MAX_ENTITY_CAPACITY);
+        assert!(!entities.claim(Entity::INVALID));
+        assert!(entities.is_empty());
+
+        let mut current = Entity::from_parts(INDEX_MASK, 0).unwrap();
+        assert!(entities.claim(current));
+        for _ in 0..MAX_GENERATION {
+            assert!(entities.despawn(current));
+            current = entities.spawn().unwrap();
+            assert_ne!(current, Entity::INVALID);
+        }
+        assert_ne!(current.index(), INDEX_MASK as usize);
+    }
+
+    #[test]
+    fn requested_capacity_is_clamped_before_reserving_storage() {
+        let entities = EntityAllocator::with_capacity(usize::MAX);
+        assert_eq!(entities.capacity(), MAX_ENTITY_CAPACITY);
+        assert_eq!(entities.generations.capacity(), MAX_ENTITY_CAPACITY);
+        assert_eq!(entities.alive.capacity(), MAX_ENTITY_CAPACITY);
+        assert_eq!(entities.free.capacity(), MAX_ENTITY_CAPACITY);
     }
 
     #[test]

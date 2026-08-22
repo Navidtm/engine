@@ -1,4 +1,4 @@
-use crate::ecs::SparseSet;
+use crate::ecs::{Entity, SparseSet};
 use crate::math::{compose, perspective, view_from_transform};
 use crate::{Camera, Transform};
 
@@ -6,13 +6,28 @@ use crate::{Camera, Transform};
 ///
 /// The caller owns the component storage; this system allocates nothing.
 pub fn update_transforms(transforms: &mut SparseSet<Transform>) {
-    for transform in transforms.values_mut() {
+    update_transforms_with(transforms, |_| {});
+}
+
+/// Recomputes matrices and reports only records whose derived matrix changed.
+///
+/// This internal publication hook lets [`crate::World`] advance render
+/// revisions after derived data changes without allocating a dirty list.
+pub(crate) fn update_transforms_with(
+    transforms: &mut SparseSet<Transform>,
+    mut publish_changed: impl FnMut(Entity),
+) {
+    for (entity, transform) in transforms.iter_mut() {
+        let previous = transform.world_matrix;
         compose(
             &mut transform.world_matrix,
             &transform.local_position,
             &transform.rotation,
             &transform.scale,
         );
+        if transform.world_matrix != previous {
+            publish_changed(entity);
+        }
     }
 }
 

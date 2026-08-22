@@ -17,7 +17,7 @@ pub mod visibility;
 pub mod world;
 
 pub use components::{Bounds, Camera, MeshRenderer, Transform};
-pub use ecs::{Entity, EntityAllocator, SparseSet, SparseSetInsertError};
+pub use ecs::{Entity, EntityAllocator, MAX_ENTITY_CAPACITY, SparseSet, SparseSetInsertError};
 pub use material::{BASIC_PIPELINE_ID, BasicMaterial, MaterialRegistry, PipelineId};
 pub use resource::{GeometryHandle, MaterialHandle};
 pub type Material = BasicMaterial;

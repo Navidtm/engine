@@ -1,5 +1,6 @@
 use core::fmt;
 
+use crate::MAX_ENTITY_CAPACITY;
 use crate::math::{Color, Mat4};
 use crate::world::World;
 
@@ -31,6 +32,13 @@ pub struct GpuBounds {
     pub center_radius: [f32; 4],
 }
 
+impl GpuBounds {
+    /// Conservative visibility input for renderables without known local bounds.
+    pub const UNBOUNDED: Self = Self {
+        center_radius: [0.0, 0.0, 0.0, f32::INFINITY],
+    };
+}
+
 /// Counts produced by one [`RenderWorld::extract`] call.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct ExtractionStats {
@@ -47,6 +55,8 @@ pub struct ExtractionStats {
 pub enum ExtractionError {
     /// Renderable instance capacity was exhausted.
     InstanceCapacity { capacity: usize },
+    /// An entity index cannot address the persistent slot storage.
+    SlotCapacity { capacity: usize, slot: usize },
     /// Camera capacity was exhausted.
     CameraCapacity { capacity: usize },
 }
@@ -58,6 +68,12 @@ impl fmt::Display for ExtractionError {
                 write!(
                     formatter,
                     "RenderWorld instance capacity exceeded ({capacity})"
+                )
+            }
+            Self::SlotCapacity { capacity, slot } => {
+                write!(
+                    formatter,
+                    "RenderWorld slot {slot} exceeds persistent slot capacity ({capacity})"
                 )
             }
             Self::CameraCapacity { capacity } => {
@@ -99,6 +115,8 @@ impl RenderWorld {
     /// Allocates reusable renderer-facing storage with independent capacities.
     #[must_use]
     pub fn with_capacity(entity_capacity: usize, camera_capacity: usize) -> Self {
+        let entity_capacity = entity_capacity.min(MAX_ENTITY_CAPACITY);
+        let camera_capacity = camera_capacity.min(MAX_ENTITY_CAPACITY);
         Self {
             entity_capacity,
             camera_capacity,
@@ -146,9 +164,15 @@ impl RenderWorld {
                     continue;
                 };
                 let slot = entity.index();
-                if self.entities.len() == self.entity_capacity || slot >= self.entity_capacity {
+                if self.entities.len() == self.entity_capacity {
                     return Err(ExtractionError::InstanceCapacity {
                         capacity: self.entity_capacity,
+                    });
+                }
+                if slot >= self.entity_capacity {
+                    return Err(ExtractionError::SlotCapacity {
+                        capacity: self.entity_capacity,
+                        slot,
                     });
                 }
                 self.entities.push(entity.raw());
@@ -156,7 +180,7 @@ impl RenderWorld {
                 self.geometries.push(mesh.geometry.raw());
                 self.pipelines.push(material.pipeline.raw());
                 self.materials.push(mesh.material.raw());
-                let render_revision = world.render_revision(entity);
+                let render_revision = world.render_revision_unchecked(entity);
                 if self.slot_entities[slot] != entity.raw()
                     || self.slot_render_revisions[slot] != render_revision
                 {
@@ -168,15 +192,21 @@ impl RenderWorld {
                     };
                     self.dirty_slots.push(slot as u32);
                 }
-                let local_bounds = world.bounds().get(entity).copied().unwrap_or_default();
-                self.bounds
-                    .push(world_space_bounds(&transform.world_matrix, local_bounds));
+                self.bounds.push(
+                    world
+                        .bounds()
+                        .get(entity)
+                        .copied()
+                        .map_or(GpuBounds::UNBOUNDED, |local_bounds| {
+                            world_space_bounds(&transform.world_matrix, local_bounds)
+                        }),
+                );
             }
 
             self.build_dirty_ranges();
         }
 
-        for (entity, camera) in world.cameras.iter() {
+        for (entity, camera) in world.cameras().iter() {
             if self.cameras.len() == self.camera_capacity {
                 return Err(ExtractionError::CameraCapacity {
                     capacity: self.camera_capacity,
@@ -238,7 +268,10 @@ impl RenderWorld {
         self.cameras.clear();
     }
 
-    /// Returns the maximum number of renderable instances.
+    /// Returns both the maximum renderable count and addressable slot count.
+    ///
+    /// Because persistent instances are entity-indexed, every extracted entity
+    /// index must also be lower than this capacity.
     #[must_use]
     pub const fn entity_capacity(&self) -> usize {
         self.entity_capacity
@@ -416,7 +449,7 @@ fn world_space_bounds(matrix: &Mat4, bounds: crate::Bounds) -> GpuBounds {
 mod tests {
     use super::*;
     use crate::math::{Color, Vec3};
-    use crate::{Bounds, Material, MaterialHandle, MeshRenderer, Transform, WorldCapacity};
+    use crate::{Bounds, Entity, Material, MaterialHandle, MeshRenderer, Transform, WorldCapacity};
 
     #[test]
     fn extraction_joins_components_into_gpu_layout() {
@@ -525,6 +558,113 @@ mod tests {
             render_world.extract(&world),
             Err(ExtractionError::InstanceCapacity { capacity: 1 })
         );
+    }
+
+    #[test]
+    fn extraction_distinguishes_persistent_slot_capacity() {
+        let mut world = World::with_capacity(WorldCapacity {
+            entities: 101,
+            transforms: 1,
+            mesh_renderers: 1,
+            cameras: 0,
+            materials: 2,
+            bounds: 0,
+        });
+        let material = MaterialHandle::from_raw(1);
+        assert!(world.add_material(material, Material::default()));
+        let entity = Entity::from_parts(100, 0).unwrap();
+        assert!(world.claim(entity));
+        assert!(world.add_transform(entity, Transform::default()));
+        assert!(world.add_mesh_renderer(
+            entity,
+            MeshRenderer {
+                geometry: crate::GeometryHandle::from_raw(1),
+                material,
+            },
+        ));
+
+        let mut render_world = RenderWorld::with_capacity(10, 0);
+        assert_eq!(
+            render_world.extract(&world),
+            Err(ExtractionError::SlotCapacity {
+                capacity: 10,
+                slot: 100,
+            })
+        );
+    }
+
+    #[test]
+    fn missing_or_removed_bounds_are_conservatively_unbounded() {
+        let mut world = World::with_capacity(WorldCapacity::default());
+        let material = MaterialHandle::from_raw(1);
+        assert!(world.add_material(material, Material::default()));
+        let entity = world.spawn().unwrap();
+        assert!(world.add_transform(entity, Transform::default()));
+        assert!(world.add_mesh_renderer(
+            entity,
+            MeshRenderer {
+                geometry: crate::GeometryHandle::from_raw(1),
+                material,
+            },
+        ));
+        world.update();
+
+        let mut render_world = RenderWorld::with_capacity(4, 0);
+        render_world.extract(&world).unwrap();
+        assert_eq!(render_world.bounds(), &[GpuBounds::UNBOUNDED]);
+
+        assert!(world.add_bounds(
+            entity,
+            Bounds {
+                center: Vec3::default(),
+                radius: 2.0,
+            },
+        ));
+        render_world.extract(&world).unwrap();
+        assert_eq!(render_world.bounds()[0].center_radius[3], 2.0);
+
+        assert!(world.remove_component(entity, 5));
+        render_world.extract(&world).unwrap();
+        assert_eq!(render_world.bounds(), &[GpuBounds::UNBOUNDED]);
+    }
+
+    #[test]
+    fn update_after_early_extraction_republishes_the_derived_matrix() {
+        let mut world = World::with_capacity(WorldCapacity::default());
+        let material = MaterialHandle::from_raw(1);
+        assert!(world.add_material(material, Material::default()));
+        let entity = world.spawn().unwrap();
+        assert!(world.add_transform(entity, Transform::default()));
+        assert!(world.add_mesh_renderer(
+            entity,
+            MeshRenderer {
+                geometry: crate::GeometryHandle::from_raw(1),
+                material,
+            },
+        ));
+        world.update();
+        let mut render_world = RenderWorld::with_capacity(4, 0);
+        render_world.extract(&world).unwrap();
+
+        world.for_each_transform_mut(|candidate, transform| {
+            if candidate == entity {
+                transform.local_position.0[0] = 3.0;
+            }
+        });
+        render_world.extract(&world).unwrap();
+        assert_eq!(
+            render_world.instances()[entity.index()].world_matrix.0[12],
+            0.0
+        );
+
+        world.update();
+        render_world.extract(&world).unwrap();
+        assert!(render_world.snapshot_changed());
+        assert_eq!(
+            render_world.instances()[entity.index()].world_matrix.0[12],
+            3.0
+        );
+        assert_eq!(render_world.dirty_range_starts(), &[entity.index() as u32]);
     }
 
     #[test]

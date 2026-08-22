@@ -3,8 +3,9 @@
 use core::ffi::c_void;
 use lume_core::math::{Color, Quat, Vec3};
 use lume_core::{
-    Bounds, Camera, Entity, GeometryHandle, GpuCamera, GpuInstance, Material, MaterialHandle,
-    MeshRenderer, RenderWorld, Transform, VisibleRenderBuffer, World, WorldCapacity,
+    Bounds, Camera, Entity, GeometryHandle, GpuCamera, GpuInstance, MAX_ENTITY_CAPACITY, Material,
+    MaterialHandle, MeshRenderer, RenderWorld, Transform, VisibleRenderBuffer, World,
+    WorldCapacity,
 };
 
 /// ABI revision required by the TypeScript runtime before it calls any export.
@@ -41,8 +42,12 @@ pub extern "C" fn lume_engine_create(
     transform_capacity: u32,
     resource_capacity: u32,
 ) -> *mut c_void {
-    let entities = usize::try_from(entity_capacity.max(1)).unwrap_or(4_096);
-    let transforms = usize::try_from(transform_capacity.max(1)).unwrap_or(4_096);
+    let entities = usize::try_from(entity_capacity.max(1))
+        .unwrap_or(4_096)
+        .min(MAX_ENTITY_CAPACITY);
+    let transforms = usize::try_from(transform_capacity.max(1))
+        .unwrap_or(4_096)
+        .min(entities);
     let resources = usize::try_from(resource_capacity.max(1)).unwrap_or(4_096);
     let capacity = WorldCapacity {
         entities,
@@ -341,13 +346,7 @@ pub extern "C" fn lume_engine_update(engine: *mut c_void) -> u32 {
 /// Updates all cameras to a positive viewport aspect ratio; returns `1` on success.
 #[unsafe(no_mangle)]
 pub extern "C" fn lume_engine_set_camera_aspect(engine: *mut c_void, aspect: f32) -> u32 {
-    with_engine(engine, |core| {
-        if aspect <= 0.0 {
-            return false;
-        }
-        core.world.set_camera_aspect(aspect);
-        true
-    }) as u32
+    with_engine(engine, |core| core.world.set_camera_aspect(aspect)) as u32
 }
 
 /// Returns the number of live ECS entities, or zero for a null engine pointer.
@@ -541,6 +540,11 @@ mod tests {
             lume_engine_add_camera(engine, 2, 60.0_f32.to_radians(), 0.1, 100.0, 1.0),
             1
         );
+        assert_eq!(
+            lume_engine_add_camera(engine, 2, f32::NAN, 0.1, 100.0, 1.0),
+            0
+        );
+        assert_eq!(lume_engine_set_camera_aspect(engine, f32::NAN), 0);
         assert_eq!(lume_engine_update(engine), 1);
         assert_eq!(lume_render_instance_count(engine), 1);
         assert_eq!(lume_visible_count(engine), 1);

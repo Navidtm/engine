@@ -1,4 +1,4 @@
-use super::Entity;
+use super::{Entity, MAX_ENTITY_CAPACITY};
 
 const VACANT: usize = usize::MAX;
 
@@ -23,6 +23,8 @@ impl<T> SparseSet<T> {
     /// Creates a sparse lookup and dense value storage with immutable capacities.
     #[must_use]
     pub fn with_capacity(entity_capacity: usize, component_capacity: usize) -> Self {
+        let entity_capacity = entity_capacity.min(MAX_ENTITY_CAPACITY);
+        let component_capacity = component_capacity.min(entity_capacity);
         Self {
             sparse: vec![VACANT; entity_capacity],
             entities: Vec::with_capacity(component_capacity),
@@ -51,14 +53,22 @@ impl<T> SparseSet<T> {
 
     /// Inserts or replaces `entity`'s value without growing either backing array.
     ///
-    /// A replacement returns the previous value. A new insertion can fail when
-    /// the entity lookup or dense component capacity is exhausted.
+    /// At most one generation may occupy an entity index. Inserting another
+    /// generation replaces that index's existing entity and value, returning
+    /// the previous value. `World` liveness validation determines which
+    /// generation is canonical before it calls this storage primitive. A new
+    /// insertion can fail when the lookup or dense capacity is exhausted.
     pub fn insert(&mut self, entity: Entity, value: T) -> Result<Option<T>, SparseSetInsertError> {
         if entity.index() >= self.sparse.len() {
             return Err(SparseSetInsertError::EntityCapacity);
         }
-        if let Some(index) = self.dense_index(entity) {
-            return Ok(Some(core::mem::replace(&mut self.values[index], value)));
+        let occupied_index = self.sparse[entity.index()];
+        if occupied_index != VACANT {
+            self.entities[occupied_index] = entity;
+            return Ok(Some(core::mem::replace(
+                &mut self.values[occupied_index],
+                value,
+            )));
         }
         if self.values.len() == self.component_capacity {
             return Err(SparseSetInsertError::ComponentCapacity);
@@ -75,7 +85,8 @@ impl<T> SparseSet<T> {
     #[must_use]
     pub fn can_insert(&self, entity: Entity) -> bool {
         entity.index() < self.sparse.len()
-            && (self.contains(entity) || self.values.len() < self.component_capacity)
+            && (self.sparse[entity.index()] != VACANT
+                || self.values.len() < self.component_capacity)
     }
 
     /// Borrows the value associated with `entity`, if present and generation-valid.
@@ -169,6 +180,22 @@ mod tests {
     }
 
     #[test]
+    fn generation_replacement_cannot_orphan_the_previous_dense_entry() {
+        let stale = Entity::from_parts(0, 0).unwrap();
+        let current = Entity::from_parts(0, 1).unwrap();
+        let mut set = SparseSet::with_capacity(1, 1);
+        set.insert(stale, 10).unwrap();
+
+        assert!(set.can_insert(current));
+        assert_eq!(set.insert(current, 20), Ok(Some(10)));
+        assert_eq!(set.len(), 1);
+        assert_eq!(set.entities(), &[current]);
+        assert_eq!(set.values(), &[20]);
+        assert_eq!(set.get(stale), None);
+        assert_eq!(set.get(current), Some(&20));
+    }
+
+    #[test]
     fn insertion_rejects_entity_and_component_capacity_overflow() {
         let mut set = SparseSet::with_capacity(1, 1);
         set.insert(Entity::from_raw(0), 1).unwrap();
@@ -178,7 +205,7 @@ mod tests {
         );
         assert_eq!(
             set.insert(Entity::from_parts(0, 1).unwrap(), 2),
-            Err(SparseSetInsertError::ComponentCapacity)
+            Ok(Some(1))
         );
     }
 }
