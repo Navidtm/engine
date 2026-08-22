@@ -147,8 +147,11 @@ function benchmarkLifecycle(count) {
   let freeCount = 0;
   for (let index = 0; index < count; index += 1) {
     alive[index] = 0;
-    generations[index] = ((generations[index] ?? 0) + 1) & 0x0fff;
-    free[freeCount++] = index;
+    const generation = generations[index] ?? 0;
+    if (generation < 0x0fff) {
+      generations[index] = generation + 1;
+      free[freeCount++] = index;
+    }
   }
   const destroyMs = performance.now() - destroyStarted;
   const reuseStarted = performance.now();

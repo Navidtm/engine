@@ -176,7 +176,9 @@ Entity handles are allocated synchronously on the main thread so authoring
 remains ergonomic. Each handle carries an index and generation and is packed to
 the same representation used by Rust when crossing the transport boundary.
 Destroyed slots return to a fixed free list; reuse increments the generation so
-stale references fail validation.
+stale references fail validation. A slot is permanently retired before its
+12-bit generation could wrap, preserving the stale-handle guarantee for the
+engine lifetime as defined by ADR 010.
 
 `engine.capacities` exposes the effective application budgets for entities,
 transforms, mesh renderers, cameras, typed resources, bounds, and extracted

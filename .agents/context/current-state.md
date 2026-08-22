@@ -1,6 +1,6 @@
 # Current Project State
 
-Last verified: 2026-08-22 on master after issue #22
+Last verified: 2026-08-22 on master after issue #23
 
 This document records the implementation that exists in the repository. It is
 an evidence-based snapshot, not a description of intended future architecture.
@@ -75,7 +75,8 @@ Implemented:
 - Validation of handle ownership, liveness, index, and generation before use.
 - Validation of authoring tuples, camera/bounds ranges, and foreign material
   handles before an entity slot is allocated or a command is published.
-- Fixed-capacity entity allocation, free-list reuse, and stale-handle rejection.
+- Fixed-capacity entity allocation, free-list reuse, permanent retirement before
+  12-bit generation wrap, and engine-lifetime stale-handle rejection.
 - Observable effective entity, component, typed-resource, and render capacities
   through `engine.capacities`; the engine-owned camera reservations are excluded
   from public limits.
@@ -103,9 +104,12 @@ Implemented:
 - ABI versioning and capacity checks at the TypeScript/WASM boundary.
 - Batched application of dirty transform ranges with per-field masks.
 
-The 12-bit generation wraps after 4,096 destructions of the same slot. This is
-an accepted compact-handle tradeoff, but it is not protection against an
-indefinitely retained handle across that full wrap interval.
+ADR 010 keeps the compact 20-bit index and 12-bit generation ABI but retires a
+slot after its generation-4095 entity is destroyed. Retained stale handles
+therefore cannot alias a new entity during the engine lifetime. The bounded
+tradeoff is at most 4,096 allocations per slot before reusable capacity
+declines; measured Node lifecycle cost remains within the wrapping baseline's
+observed range.
 
 ### Render Extraction and Visibility
 
@@ -288,6 +292,13 @@ The repository also contains Rust ECS/extraction benchmarks and browser
 renderer/comparison/transport harnesses. Controlled Chrome results now cover
 persistent upload and incremental RenderWorld decisions; equivalent Edge
 results remain outstanding.
+
+`benchmarks/results/entity-generation-latest.json` compares one million
+same-slot lifecycle operations, five million validation operations, Node Atomics
+publication cost, and deterministic memory/layout effects for wrapping 20/12,
+retiring 20/12, packed 16/16, split 32/32, and BigUint64 identities. Retirement
+measured within the wrapping lifecycle range while preserving the existing ABI;
+ADR 010 records the decision and its bounded lifetime reuse budget.
 
 ## Quality and Tooling
 

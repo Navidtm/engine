@@ -31,6 +31,28 @@ function dependencies() {
 }
 
 describe("worker resource coordinator", () => {
+  it("accepts the engine-owned entity-zero camera lifecycle", () => {
+    const coordinator = createResourceCoordinator(8);
+    const { core, renderer } = dependencies();
+
+    coordinator.apply({ type: "spawn", entity: 0 }, core, renderer, 1);
+    coordinator.apply(
+      {
+        type: "add-camera",
+        entity: 0,
+        verticalFov: 1,
+        near: 0.1,
+        far: 100,
+      },
+      core,
+      renderer,
+      1,
+    );
+    coordinator.apply({ type: "despawn", entity: 0 }, core, renderer, 1);
+
+    expect(core.apply).toHaveBeenCalledTimes(3);
+  });
+
   it("keeps retired resources alive until the last mesh usage edge is released", () => {
     const coordinator = createResourceCoordinator(8);
     const { core, renderer } = dependencies();

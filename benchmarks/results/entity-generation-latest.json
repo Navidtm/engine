@@ -1,0 +1,246 @@
+{
+  "schemaVersion": 1,
+  "benchmark": "entity-generation-strategies",
+  "generatedAt": "2026-08-22T19:38:14.407Z",
+  "environment": {
+    "runtime": "node",
+    "node": "v24.19.0",
+    "platform": "darwin",
+    "architecture": "arm64"
+  },
+  "workload": {
+    "reuseOperations": 1000000,
+    "reusePoolCapacity": 256,
+    "validationOperations": 5000000,
+    "atomicOperations": 1000000,
+    "warmupSamples": 5,
+    "measuredSamples": 15
+  },
+  "notes": [
+    "Lifecycle samples model a LIFO hot slot, matching the production allocator's worst realistic concentration of churn.",
+    "Validation samples isolate identity decoding/comparison in Node; they are not browser or WASM timings.",
+    "Memory records are deterministic layout accounting, not process heap measurements.",
+    "The split layout keeps the existing 64-byte structural record by consuming one currently spare word."
+  ],
+  "lifecycleResults": [
+    {
+      "strategy": "packed-20-12-wrap",
+      "operations": 1000000,
+      "poolCapacity": 256,
+      "medianMs": 4.265292000000002,
+      "minMs": 4.2605,
+      "maxMs": 4.309916000000001,
+      "retiredSlots": 0,
+      "runtimeAllocationsPerCycle": 0,
+      "checksum": 2100493760
+    },
+    {
+      "strategy": "packed-20-12-retire",
+      "operations": 1000000,
+      "poolCapacity": 256,
+      "medianMs": 4.271541999999982,
+      "minMs": 4.259958000000012,
+      "maxMs": 4.2955829999999935,
+      "retiredSlots": 244,
+      "runtimeAllocationsPerCycle": 0,
+      "checksum": 1978923200
+    },
+    {
+      "strategy": "split-index-u32-generation-u32",
+      "operations": 1000000,
+      "poolCapacity": 256,
+      "medianMs": 4.3073750000000075,
+      "minMs": 4.2603750000000105,
+      "maxMs": 4.34941699999996,
+      "retiredSlots": 0,
+      "runtimeAllocationsPerCycle": 0,
+      "checksum": 1783305952
+    }
+  ],
+  "validationResults": [
+    {
+      "strategy": "packed-20-12",
+      "operations": 5000000,
+      "medianMs": 4.332416000000023,
+      "nanosecondsPerValidation": 0.8664832000000047,
+      "minMs": 4.275500000000022,
+      "maxMs": 4.404042000000004,
+      "checksum": 4687500
+    },
+    {
+      "strategy": "packed-16-16",
+      "operations": 5000000,
+      "medianMs": 4.380417000000023,
+      "nanosecondsPerValidation": 0.8760834000000045,
+      "minMs": 4.245124999999973,
+      "maxMs": 4.488792000000046,
+      "checksum": 4687500
+    },
+    {
+      "strategy": "split-u32-u32",
+      "operations": 5000000,
+      "medianMs": 5.370374999999967,
+      "nanosecondsPerValidation": 1.0740749999999935,
+      "minMs": 5.308874999999944,
+      "maxMs": 5.3950000000000955,
+      "checksum": 4687500
+    },
+    {
+      "strategy": "packed-biguint64",
+      "operations": 5000000,
+      "medianMs": 133.78158299999996,
+      "nanosecondsPerValidation": 26.75631659999999,
+      "minMs": 131.89641699999993,
+      "maxMs": 164.1512499999999,
+      "checksum": 4687500
+    }
+  ],
+  "atomicsResults": [
+    {
+      "strategy": "packed-int32-publication",
+      "operations": 1000000,
+      "medianMs": 9.246417000000292,
+      "minMs": 9.156124999999975,
+      "maxMs": 9.895167000000129,
+      "checksum": -1524572448
+    },
+    {
+      "strategy": "split-two-int32-publications",
+      "operations": 1000000,
+      "medianMs": 19.431916,
+      "minMs": 19.270500000000084,
+      "maxMs": 22.23462500000005,
+      "checksum": 1790793664
+    },
+    {
+      "strategy": "packed-biguint64-publication",
+      "operations": 1000000,
+      "medianMs": 34.842375000000175,
+      "minMs": 34.71116700000039,
+      "maxMs": 35.07391699999971,
+      "checksum": -1524572448
+    }
+  ],
+  "memoryResults": [
+    {
+      "strategy": "packed-20-12-wrap",
+      "requestedCapacity": 10000,
+      "effectiveCapacity": 10000,
+      "maxEntities": 1048576,
+      "typescriptGenerationBytes": 20000,
+      "sharedTransformBytes": 625600,
+      "structuralRecordBytes": 64,
+      "rustEntityBytes": 4
+    },
+    {
+      "strategy": "packed-20-12-retire",
+      "requestedCapacity": 10000,
+      "effectiveCapacity": 10000,
+      "maxEntities": 1048576,
+      "typescriptGenerationBytes": 20000,
+      "sharedTransformBytes": 625600,
+      "structuralRecordBytes": 64,
+      "rustEntityBytes": 4
+    },
+    {
+      "strategy": "packed-16-16",
+      "requestedCapacity": 10000,
+      "effectiveCapacity": 10000,
+      "maxEntities": 65536,
+      "typescriptGenerationBytes": 20000,
+      "sharedTransformBytes": 625600,
+      "structuralRecordBytes": 64,
+      "rustEntityBytes": 4
+    },
+    {
+      "strategy": "split-u32-u32",
+      "requestedCapacity": 10000,
+      "effectiveCapacity": 10000,
+      "maxEntities": 1048576,
+      "typescriptGenerationBytes": 40000,
+      "sharedTransformBytes": 665600,
+      "structuralRecordBytes": 64,
+      "rustEntityBytes": 8
+    },
+    {
+      "strategy": "packed-20-12-wrap",
+      "requestedCapacity": 100000,
+      "effectiveCapacity": 100000,
+      "maxEntities": 1048576,
+      "typescriptGenerationBytes": 200000,
+      "sharedTransformBytes": 5665600,
+      "structuralRecordBytes": 64,
+      "rustEntityBytes": 4
+    },
+    {
+      "strategy": "packed-20-12-retire",
+      "requestedCapacity": 100000,
+      "effectiveCapacity": 100000,
+      "maxEntities": 1048576,
+      "typescriptGenerationBytes": 200000,
+      "sharedTransformBytes": 5665600,
+      "structuralRecordBytes": 64,
+      "rustEntityBytes": 4
+    },
+    {
+      "strategy": "packed-16-16",
+      "requestedCapacity": 100000,
+      "effectiveCapacity": 65536,
+      "maxEntities": 65536,
+      "typescriptGenerationBytes": 131072,
+      "sharedTransformBytes": 3735616,
+      "structuralRecordBytes": 64,
+      "rustEntityBytes": 4
+    },
+    {
+      "strategy": "split-u32-u32",
+      "requestedCapacity": 100000,
+      "effectiveCapacity": 100000,
+      "maxEntities": 1048576,
+      "typescriptGenerationBytes": 400000,
+      "sharedTransformBytes": 6065600,
+      "structuralRecordBytes": 64,
+      "rustEntityBytes": 8
+    },
+    {
+      "strategy": "packed-20-12-wrap",
+      "requestedCapacity": 1000000,
+      "effectiveCapacity": 1000000,
+      "maxEntities": 1048576,
+      "typescriptGenerationBytes": 2000000,
+      "sharedTransformBytes": 56065600,
+      "structuralRecordBytes": 64,
+      "rustEntityBytes": 4
+    },
+    {
+      "strategy": "packed-20-12-retire",
+      "requestedCapacity": 1000000,
+      "effectiveCapacity": 1000000,
+      "maxEntities": 1048576,
+      "typescriptGenerationBytes": 2000000,
+      "sharedTransformBytes": 56065600,
+      "structuralRecordBytes": 64,
+      "rustEntityBytes": 4
+    },
+    {
+      "strategy": "packed-16-16",
+      "requestedCapacity": 1000000,
+      "effectiveCapacity": 65536,
+      "maxEntities": 65536,
+      "typescriptGenerationBytes": 131072,
+      "sharedTransformBytes": 3735616,
+      "structuralRecordBytes": 64,
+      "rustEntityBytes": 4
+    },
+    {
+      "strategy": "split-u32-u32",
+      "requestedCapacity": 1000000,
+      "effectiveCapacity": 1000000,
+      "maxEntities": 1048576,
+      "typescriptGenerationBytes": 4000000,
+      "sharedTransformBytes": 60065600,
+      "structuralRecordBytes": 64,
+      "rustEntityBytes": 8
+    }
+  ]
+}

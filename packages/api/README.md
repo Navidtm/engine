@@ -63,3 +63,9 @@ Capacity exhaustion throws `EngineCapacityError` synchronously with
 `code === "LUME_CAPACITY_EXHAUSTED"`, plus `capacityKind` and `capacity` fields.
 High-level mesh creation preflights all required slots and publishes its entity,
 components, lazy default material, and commands as one transaction.
+
+Entity handles remain stale for the complete engine lifetime. A slot supports
+at most 4,096 generations and is then permanently retired instead of returning to
+generation zero. Churn-heavy applications should reuse live entities or budget
+enough entity slots; eventual retirement exhaustion reports the normal
+machine-readable entity-capacity error.

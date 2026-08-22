@@ -16,6 +16,7 @@
     "benchmark:renderer-uploads": "node benchmarks/renderer/run-upload-matrix.mjs",
     "benchmark:render-world": "node benchmarks/renderer/run-extraction-comparison.mjs",
     "benchmark:transport": "pnpm --filter @lume/runtime build && node --expose-gc benchmarks/transport/run.mjs",
+    "benchmark:entity-generation": "node benchmarks/entity-generation/run.mjs",
     "format": "prettier --write . && cargo fmt --all",
     "format:check": "prettier --check . && cargo fmt --all -- --check",
     "lint": "eslint . && cargo clippy --workspace --all-targets -- -D warnings",

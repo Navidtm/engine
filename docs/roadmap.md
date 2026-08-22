@@ -73,7 +73,8 @@ draw/dispatch counts, and GPU frame time.
    scale. Phase 2 uses aligned arenas and dynamic offsets.
 5. **Device loss:** recovery currently terminates the runtime with a clear error.
    Asset descriptors must become replayable before transparent recovery.
-6. **Generation wrap:** compact 12-bit generations repeat after 4096 reuses of
-   one slot. Long-retained handles beyond that window are unsupported.
+6. **Generation exhaustion:** ADR 010 preserves compact 20/12 identities and
+   retires a slot after 4,096 allocations. Stale handles cannot alias, but
+   extreme lifetime churn can reduce reusable capacity.
 7. **Browser worker variance:** WebGPU worker support and canvas transfer remain
    platform-sensitive. Capability errors are explicit and testable.

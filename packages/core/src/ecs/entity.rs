@@ -160,15 +160,19 @@ impl EntityAllocator {
         true
     }
 
-    /// Despawns a matching live entity and increments its recycled generation.
+    /// Despawns a matching live entity and recycles it while generations remain.
     pub fn despawn(&mut self, entity: Entity) -> bool {
         if !self.is_alive(entity) {
             return false;
         }
         let index = entity.index();
         self.alive[index] = false;
-        self.generations[index] = (self.generations[index] + 1) & MAX_GENERATION;
-        self.free.push(index as u32);
+        if self.generations[index] < MAX_GENERATION {
+            self.generations[index] += 1;
+            if Entity::from_parts(index as u32, self.generations[index]).is_some() {
+                self.free.push(index as u32);
+            }
+        }
         self.alive_count -= 1;
         true
     }
@@ -213,6 +217,26 @@ mod tests {
         assert_ne!(first.generation(), second.generation());
         assert!(!entities.is_alive(first));
         assert!(entities.is_alive(second));
+    }
+
+    #[test]
+    fn generation_exhaustion_retires_a_slot_before_wrap() {
+        let mut entities = EntityAllocator::with_capacity(2);
+        let retained = entities.spawn().unwrap();
+        let mut current = retained;
+        for expected_generation in 1..=MAX_GENERATION {
+            assert!(entities.despawn(current));
+            current = entities.spawn().unwrap();
+            assert_eq!(current.index(), retained.index());
+            assert_eq!(current.generation(), expected_generation);
+        }
+
+        assert!(entities.despawn(current));
+        let replacement = entities.spawn().unwrap();
+        assert_eq!(replacement.index(), 1);
+        assert_eq!(replacement.generation(), 0);
+        assert!(!entities.is_alive(retained));
+        assert!(!entities.is_alive(current));
     }
 
     #[test]

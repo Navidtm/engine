@@ -33,12 +33,18 @@ export function allocateEntity(state: EntityLifecycleState): Entity {
   return entity;
 }
 
-/** Releases a live handle, increments its generation, and returns its slot to the free list. */
+/** Releases a live handle, recycling it unless its generation budget is exhausted. */
 export function releaseEntity(state: EntityLifecycleState, entity: Entity): void {
   validateLiveEntity(state, entity);
   state.entityAlive[entity.index] = 0;
-  state.entityGenerations[entity.index] = (entity.generation + 1) & MAX_ENTITY_GENERATION;
-  state.freeEntities[state.freeEntityCount++] = entity.index;
+  const nextGeneration = entity.generation + 1;
+  if (
+    nextGeneration <= MAX_ENTITY_GENERATION &&
+    (entity.index < MAX_ENTITY_INDEX || nextGeneration < MAX_ENTITY_GENERATION)
+  ) {
+    state.entityGenerations[entity.index] = nextGeneration;
+    state.freeEntities[state.freeEntityCount++] = entity.index;
+  }
 }
 
 /** Throws when a handle is foreign, stale, malformed, or no longer live. */

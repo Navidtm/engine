@@ -15,7 +15,7 @@ After Milestone 5:
 | batching      | adjacent indices merge into reusable dirty ranges                         |
 | structure     | bounded 16-word SPSC ring with ordered message fallback                   |
 | identity      | `{index, generation}` handles packed as 20+12 bits                        |
-| reuse         | fixed free list with generation increment                                 |
+| reuse         | fixed free list; generation-4095 slots retire instead of wrapping         |
 | observability | messages, shared writes, ranges, uploaded bytes, depth, overflow attempts |
 
 ## Performance model
@@ -88,7 +88,8 @@ missed-frame rate, and peak heap. Raw Node results are in
 1. Every published entity still pays Atomics and a seqlock read.
 2. SAB-to-WASM copying remains necessary under exclusive Rust ownership.
 3. Fragmented producer order creates more ranges; the runtime does not sort.
-4. The 12-bit generation protection window wraps after 4096 slot reuses.
+4. Each entity slot has at most 4,096 lifetime allocations before permanent retirement;
+   exhaustion fails closed instead of wrapping a stale identity.
 5. Browser scheduling and worker WebGPU support remain platform-dependent.
 
 The transport correctness contract is complete, but its latency budget is

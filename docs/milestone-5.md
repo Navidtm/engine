@@ -94,9 +94,10 @@ starts.
 
 An entity handle is `{ index, generation }`. The packed transport value reserves
 20 bits for the index and 12 bits for the generation. Destroy returns the index
-to a fixed free list and advances the generation before reuse. Every TypeScript,
-worker, and Rust operation validates both fields, so a retained old handle cannot
-mutate a replacement entity occupying the same slot.
+to a fixed free list and advances the generation before reuse. A slot retires
+permanently at generation 4095 rather than wrapping to zero. Every TypeScript,
+worker, and Rust operation validates both fields, so a retained old handle
+cannot mutate a replacement entity occupying the same slot.
 
 ## Metrics contract
 

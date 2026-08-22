@@ -146,8 +146,9 @@ staging masks for reuse.
 Public handles are readonly TypeScript `{index, generation}` values associated
 with one engine; ordinary API objects are not runtime-frozen. Transport packs
 20 index bits and 12 generation bits into a `u32`. Destroy advances the
-generation and pushes the index onto a fixed TypeScript free list. Recreate pops
-that slot. TypeScript rejects stale or foreign handles before publication; Rust
+generation and pushes the index onto a fixed TypeScript free list while another
+generation remains. Destroying a generation-4095 entity permanently retires the
+slot. TypeScript rejects stale or foreign handles before publication; Rust
 validates the packed generation again.
 
 When a producer publishes a transform for a new generation, its mask replaces
@@ -156,9 +157,11 @@ generation and mask as one atomic word and verifies the seqlock again after the
 claim. This prevents both cross-generation field leakage and a same-field write
 from being swallowed during consumption.
 
-Generation wraps after 4096 reuses of the same slot. Applications that retain a
-handle across that many destroy/recreate cycles exceed the protection window of
-the compact format.
+The packed generation never wraps during an engine lifetime. Each slot supports
+at most 4,096 allocations and is then removed from reusable capacity. This keeps every
+retained stale handle invalid without changing the compact transport ABI;
+extreme churn can eventually surface the normal entity-capacity error. ADR 010
+records the benchmark evidence and wider-identity alternatives.
 
 ## Capacity, allocation failure, and fallback
 

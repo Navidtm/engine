@@ -141,6 +141,22 @@ uploads range below the nominal eight-megabyte batch. The median was 5,070,720
 bytes; this is retained as observed production scheduling, not normalized into
 a synthetic single-frame result.
 
+## Entity generation strategy suite
+
+Run:
+
+```sh
+pnpm benchmark:entity-generation
+```
+
+The Node suite compares packed wrapping and retiring 20/12 identities, packed
+16/16, split 32-bit index/generation fields, and BigUint64. It measures a
+one-million-operation LIFO reuse workload, five million identity validations,
+one million SharedArrayBuffer atomic publication cycles, and deterministic
+memory/layout costs at 10k, 100k, and 1M slots. The committed result is
+`benchmarks/results/entity-generation-latest.json`; ADR 010 defines the decision
+and limits the interpretation of Node microbenchmarks.
+
 ## Interpreting results
 
 Native timings isolate ECS and extraction architecture. Browser timings include

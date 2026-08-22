@@ -98,7 +98,8 @@ export function createResourceCoordinator(
           const index = entityIndex(command.entity);
           releaseMesh(index, core, renderer);
           entityAlive[index] = 0;
-          entityGenerations[index] = ((entityGenerations[index] ?? 0) + 1) & GENERATION_MASK;
+          const generation = entityGenerations[index] ?? 0;
+          if (generation < GENERATION_MASK) entityGenerations[index] = generation + 1;
           return;
         }
         case "add-mesh": {
@@ -234,12 +235,7 @@ function finalizeIfUnused(registry: RegistryState, handle: number, finalize: () 
 
 function validateEntity(raw: number, alive: Uint8Array, generations: Uint16Array): number {
   const index = entityIndex(raw);
-  if (
-    index <= 0 ||
-    index >= alive.length ||
-    alive[index] === 0 ||
-    generations[index] !== entityGeneration(raw)
-  ) {
+  if (index >= alive.length || alive[index] === 0 || generations[index] !== entityGeneration(raw)) {
     throw new Error(`Invalid or stale entity handle: ${raw}`);
   }
   return index;
