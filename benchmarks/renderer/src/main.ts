@@ -111,6 +111,7 @@ const report = {
     cpuTimesMs,
     bufferUploadCpuTimesMs: uploadTimesMs,
     framePreparationCpuTimesMs: preparationTimesMs,
+    cpuStageTimings: stats.timings.cpuStages,
     bufferUploadBytes: uploadBytes,
     bufferWriteCounts,
     jsHeapBytes: performance.memory?.usedJSHeapSize ?? null,

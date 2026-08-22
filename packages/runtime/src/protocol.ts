@@ -1,13 +1,25 @@
 import type { RendererOptions, SurfaceSize } from "@lume/renderer";
 
 /** Version checked before a main thread and worker exchange runtime messages. */
-export const RUNTIME_PROTOCOL_VERSION = 8;
+export const RUNTIME_PROTOCOL_VERSION = 9;
+
+/** CPU milliseconds attributed to one pull-sampled worker frame. */
+export interface FrameCpuStageTimings {
+  readonly transportApply: number;
+  readonly systems: number;
+  readonly extraction: number;
+  readonly visibility: number;
+  readonly bufferUpload: number;
+  readonly renderPreparation: number;
+  readonly commandEncoding: number;
+  readonly queueSubmit: number;
+}
 
 /** Snapshot returned by {@link Engine.getStats} through the worker boundary. */
 export interface EngineStats {
   /** Time between the starts of the two most recent worker frames, in milliseconds. */
   readonly frameTime: number;
-  /** CPU time spent advancing WASM and encoding the most recent frame. */
+  /** CPU time spent applying transport, advancing WASM, and rendering the latest frame. */
   readonly cpuTime: number;
   /** Latest asynchronous GPU timestamp duration, or `null` when unavailable. */
   readonly gpuTime: number | null;
@@ -36,8 +48,17 @@ export interface EngineStats {
     readonly bufferUploadBytes: number;
     /** GPU queue buffer writes issued during the latest frame. */
     readonly bufferWriteCount: number;
-    /** CPU milliseconds spent preparing extraction/visibility work. */
+    /** Total CPU milliseconds spent in the renderer's latest frame execution. */
     readonly framePreparationCpuTime: number;
+    /** Pull-sampled split CPU stages; ordinary frames do not run these timers. */
+    readonly cpuStages: {
+      /** Number of completed sampled frames accumulated since initialization. */
+      readonly sampleCount: number;
+      /** Durations from the most recently completed sampled frame. */
+      readonly latest: FrameCpuStageTimings;
+      /** Sum of all completed sampled-frame durations since initialization. */
+      readonly cumulative: FrameCpuStageTimings;
+    };
   };
   readonly transport: {
     /** Active transport: shared memory when isolated, otherwise worker messages. */

@@ -59,6 +59,12 @@ describe("worker runtime resource ownership", () => {
     const coreResult = deferred<WasmCore>();
     const renderer = {
       lost: new Promise<GPUDeviceLostInfo>(() => undefined),
+      frameTimings: {
+        bufferUploadCpuTimeMs: 0,
+        renderPreparationCpuTimeMs: 0,
+        commandEncodingCpuTimeMs: 0,
+        queueSubmitCpuTimeMs: 0,
+      },
       registerGeometry: vi.fn(),
       removeGeometry: vi.fn(),
       registerBasicMaterial: vi.fn(),
@@ -119,6 +125,12 @@ describe("worker runtime resource ownership", () => {
     const order: string[] = [];
     const renderer = {
       lost: new Promise<GPUDeviceLostInfo>(() => undefined),
+      frameTimings: {
+        bufferUploadCpuTimeMs: 0,
+        renderPreparationCpuTimeMs: 0,
+        commandEncodingCpuTimeMs: 0,
+        queueSubmitCpuTimeMs: 0,
+      },
       registerGeometry: vi.fn(),
       removeGeometry: vi.fn(),
       registerBasicMaterial: vi.fn(),
@@ -129,6 +141,11 @@ describe("worker runtime resource ownership", () => {
       dispose: vi.fn(),
     } satisfies MeshRenderer;
     const core = {
+      frameTimings: {
+        systemsCpuTimeMs: 0,
+        extractionCpuTimeMs: 0,
+        visibilityCpuTimeMs: 0,
+      },
       createBasicMaterial: vi.fn(),
       removeBasicMaterial: vi.fn(),
       apply: vi.fn((command: { readonly type: string }) => order.push(`apply:${command.type}`)),
@@ -168,6 +185,12 @@ describe("worker runtime resource ownership", () => {
   it("rejects stale scheduler callbacks across stop, restart, and disposal", async () => {
     const renderer = {
       lost: new Promise<GPUDeviceLostInfo>(() => undefined),
+      frameTimings: {
+        bufferUploadCpuTimeMs: 0,
+        renderPreparationCpuTimeMs: 0,
+        commandEncodingCpuTimeMs: 0,
+        queueSubmitCpuTimeMs: 0,
+      },
       registerGeometry: vi.fn(),
       removeGeometry: vi.fn(),
       registerBasicMaterial: vi.fn(),
@@ -178,6 +201,11 @@ describe("worker runtime resource ownership", () => {
       dispose: vi.fn(),
     } satisfies MeshRenderer;
     const core = {
+      frameTimings: {
+        systemsCpuTimeMs: 0,
+        extractionCpuTimeMs: 0,
+        visibilityCpuTimeMs: 0,
+      },
       createBasicMaterial: vi.fn(),
       removeBasicMaterial: vi.fn(),
       apply: vi.fn(),
@@ -234,5 +262,116 @@ describe("worker runtime resource ownership", () => {
     callbacks.get(3)?.(48);
     expect(core.update).toHaveBeenCalledTimes(3);
     expect(host.requestAnimationFrame).toHaveBeenCalledTimes(3);
+  });
+
+  it("samples split timings only after a stats pull and accumulates completed samples", async () => {
+    const renderer = {
+      lost: new Promise<GPUDeviceLostInfo>(() => undefined),
+      frameTimings: {
+        bufferUploadCpuTimeMs: 4,
+        renderPreparationCpuTimeMs: 5,
+        commandEncodingCpuTimeMs: 6,
+        queueSubmitCpuTimeMs: 7,
+      },
+      registerGeometry: vi.fn(),
+      removeGeometry: vi.fn(),
+      registerBasicMaterial: vi.fn(),
+      removeBasicMaterial: vi.fn(),
+      execute: vi.fn(),
+      resize: vi.fn(),
+      stats: vi.fn(() => ({
+        gpuBufferBytes: 0,
+        drawCalls: 0,
+        submittedInstances: 0,
+        bufferUploadCpuTimeMs: 0,
+        bufferUploadBytes: 0,
+        bufferWriteCount: 0,
+        framePreparationCpuTimeMs: 0,
+        gpuTimeMs: null,
+        browserObjectsPerFrame: 0,
+      })),
+      dispose: vi.fn(),
+    } satisfies MeshRenderer;
+    const core = {
+      frameTimings: {
+        systemsCpuTimeMs: 1,
+        extractionCpuTimeMs: 2,
+        visibilityCpuTimeMs: 3,
+      },
+      createBasicMaterial: vi.fn(),
+      removeBasicMaterial: vi.fn(),
+      apply: vi.fn(),
+      updateSharedCommands: vi.fn(),
+      updateSharedTransforms: vi.fn(),
+      resize: vi.fn(),
+      update: vi.fn(() => ({}) as never),
+      stats: vi.fn(() => ({
+        entities: 0,
+        renderInstances: 0,
+        visibleObjects: 0,
+        sharedTransformUpdates: 0,
+        dirtyRanges: 0,
+        bytesUploaded: 0,
+        wasmHeapBytes: 0,
+      })),
+      dispose: vi.fn(),
+    } satisfies WasmCore;
+    mocks.createMeshRenderer.mockResolvedValueOnce(renderer);
+    mocks.createWasmCore.mockResolvedValueOnce(core);
+    const posted: WorkerToMainMessage[] = [];
+    const callbacks: FrameRequestCallback[] = [];
+    const host: WorkerHost = {
+      postMessage: (message) => posted.push(message),
+      requestAnimationFrame: vi.fn((callback) => {
+        callbacks.push(callback);
+        return callbacks.length;
+      }),
+      cancelAnimationFrame: vi.fn(),
+    };
+    const receive = createWorkerRuntime(host);
+
+    receive(initMessage());
+    await vi.waitFor(() => expect(posted[0]?.type).toBe("ready"));
+    receive({ type: "start", lifecycleEpoch: 1 });
+    expect(core.update).toHaveBeenLastCalledWith(false);
+
+    receive({ type: "get-stats", requestId: 1 });
+    const initial = posted.find(
+      (message): message is Extract<WorkerToMainMessage, { type: "stats" }> =>
+        message.type === "stats" && message.requestId === 1,
+    );
+    expect(initial?.value.timings.cpuStages.sampleCount).toBe(0);
+
+    callbacks[0]?.(16);
+    expect(core.update).toHaveBeenLastCalledWith(true);
+    expect(renderer.execute).toHaveBeenLastCalledWith({}, true);
+    expect(posted.filter((message) => message.type === "stats")).toHaveLength(1);
+
+    receive({ type: "get-stats", requestId: 2 });
+    const sampled = posted.find(
+      (message): message is Extract<WorkerToMainMessage, { type: "stats" }> =>
+        message.type === "stats" && message.requestId === 2,
+    );
+    expect(sampled?.value.timings.cpuStages).toMatchObject({
+      sampleCount: 1,
+      latest: {
+        systems: 1,
+        extraction: 2,
+        visibility: 3,
+        bufferUpload: 4,
+        renderPreparation: 5,
+        commandEncoding: 6,
+        queueSubmit: 7,
+      },
+      cumulative: {
+        systems: 1,
+        extraction: 2,
+        visibility: 3,
+        bufferUpload: 4,
+        renderPreparation: 5,
+        commandEncoding: 6,
+        queueSubmit: 7,
+      },
+    });
   });
 });

@@ -1,6 +1,15 @@
 import { createMeshRenderer, type MeshRenderer, type SurfaceSize } from "@lume/renderer";
 
 import {
+  beginFrameSample,
+  completeFrameSample,
+  createFrameInstrumentation,
+  type FrameInstrumentation,
+  FrameStage,
+  recordFrameStage,
+  requestFrameSample,
+} from "./frame-instrumentation.js";
+import {
   type EngineStats,
   type MainToWorkerMessage,
   RUNTIME_PROTOCOL_VERSION,
@@ -28,6 +37,7 @@ interface WorkerRuntimeState {
   previousFrameStart: number;
   sharedMemory: SharedRuntimeViews | undefined;
   messages: number;
+  readonly instrumentation: FrameInstrumentation;
 }
 
 /** Small worker-global abstraction used by the runtime and deterministic tests. */
@@ -58,6 +68,7 @@ export function createWorkerRuntime(host: WorkerHost): (message: MainToWorkerMes
     previousFrameStart: 0,
     sharedMemory: undefined,
     messages: 0,
+    instrumentation: createFrameInstrumentation(),
   };
 
   const report = (error: unknown): void => {
@@ -89,9 +100,55 @@ export function createWorkerRuntime(host: WorkerHost): (message: MainToWorkerMes
     state.frameRequest = undefined;
     try {
       const frameStart = performance.now();
+      const profileStages = beginFrameSample(state.instrumentation);
+      const transportStart = profileStages ? performance.now() : 0;
       updateSharedCommands();
-      const renderFrame = state.core?.update();
-      if (renderFrame !== undefined) state.renderer?.execute(renderFrame);
+      state.core?.updateSharedTransforms();
+      if (profileStages) {
+        recordFrameStage(
+          state.instrumentation,
+          FrameStage.TransportApply,
+          performance.now() - transportStart,
+        );
+      }
+      const renderFrame = state.core?.update(profileStages);
+      if (renderFrame !== undefined) state.renderer?.execute(renderFrame, profileStages);
+      if (profileStages && state.core !== undefined && state.renderer !== undefined) {
+        const coreTimings = state.core.frameTimings;
+        const rendererTimings = state.renderer.frameTimings;
+        recordFrameStage(state.instrumentation, FrameStage.Systems, coreTimings.systemsCpuTimeMs);
+        recordFrameStage(
+          state.instrumentation,
+          FrameStage.Extraction,
+          coreTimings.extractionCpuTimeMs,
+        );
+        recordFrameStage(
+          state.instrumentation,
+          FrameStage.Visibility,
+          coreTimings.visibilityCpuTimeMs,
+        );
+        recordFrameStage(
+          state.instrumentation,
+          FrameStage.BufferUpload,
+          rendererTimings.bufferUploadCpuTimeMs,
+        );
+        recordFrameStage(
+          state.instrumentation,
+          FrameStage.RenderPreparation,
+          rendererTimings.renderPreparationCpuTimeMs,
+        );
+        recordFrameStage(
+          state.instrumentation,
+          FrameStage.CommandEncoding,
+          rendererTimings.commandEncodingCpuTimeMs,
+        );
+        recordFrameStage(
+          state.instrumentation,
+          FrameStage.QueueSubmit,
+          rendererTimings.queueSubmitCpuTimeMs,
+        );
+        completeFrameSample(state.instrumentation);
+      }
       const frameEnd = performance.now();
       state.lastCpuTimeMs = frameEnd - frameStart;
       state.lastFrameTimeMs =
@@ -260,6 +317,11 @@ export function createWorkerRuntime(host: WorkerHost): (message: MainToWorkerMes
                 bufferUploadBytes: rendererStats?.bufferUploadBytes ?? 0,
                 bufferWriteCount: rendererStats?.bufferWriteCount ?? 0,
                 framePreparationCpuTime: rendererStats?.framePreparationCpuTimeMs ?? 0,
+                cpuStages: {
+                  sampleCount: state.instrumentation.sampleCount,
+                  latest: frameStageSnapshot(state.instrumentation.latest),
+                  cumulative: frameStageSnapshot(state.instrumentation.cumulative),
+                },
               },
               transport: transportStats(
                 state.sharedMemory,
@@ -269,6 +331,7 @@ export function createWorkerRuntime(host: WorkerHost): (message: MainToWorkerMes
               ),
             },
           });
+          requestFrameSample(state.instrumentation);
           break;
         }
         case "dispose":
@@ -285,6 +348,19 @@ export function createWorkerRuntime(host: WorkerHost): (message: MainToWorkerMes
     } catch (error) {
       report(error);
     }
+  };
+}
+
+function frameStageSnapshot(values: Float64Array<ArrayBuffer>) {
+  return {
+    transportApply: values[FrameStage.TransportApply] ?? 0,
+    systems: values[FrameStage.Systems] ?? 0,
+    extraction: values[FrameStage.Extraction] ?? 0,
+    visibility: values[FrameStage.Visibility] ?? 0,
+    bufferUpload: values[FrameStage.BufferUpload] ?? 0,
+    renderPreparation: values[FrameStage.RenderPreparation] ?? 0,
+    commandEncoding: values[FrameStage.CommandEncoding] ?? 0,
+    queueSubmit: values[FrameStage.QueueSubmit] ?? 0,
   };
 }
 

@@ -19,6 +19,12 @@ overhead. Normal frames that are not followed by diagnostic polling do not pay
 that readback or JavaScript-allocation cost. `allocationsPerFrame` reports only
 mandatory WebGPU frame objects and does not include this opt-in diagnostic work.
 
+The same pull also requests split CPU instrumentation for one following frame.
+The report retains the latest and cumulative stage totals plus their sample
+count. Normal frames use the combined WASM update path and do not execute the
+additional split-stage clocks; benchmark polling intentionally opts into that
+diagnostic overhead.
+
 Add `updateRatio=0`, `0.01`, `0.1`, or `1` to mutate that fraction of instances
 on each sampled frame. Each result includes raw per-frame buffer-upload bytes
 and `GPUQueue.writeBuffer` call counts. From the repository root,

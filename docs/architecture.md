@@ -146,6 +146,16 @@ remain accepted design rather than an available public API.
   query resolve, a buffer copy, one `mapAsync` promise, and one short-lived
   `BigUint64Array` view. This diagnostic overhead is intentionally excluded from
   `allocationsPerFrame`, which only counts mandatory WebGPU frame objects.
+- Split CPU instrumentation is also pull-triggered. A statistics read requests
+  one following-frame sample for transport apply, ECS systems, extraction,
+  visibility, buffer upload, renderer preparation, command encoding, and queue
+  submission. Normal frames use the combined WASM update and run no split-stage
+  clocks. Latest and cumulative values live in fixed typed arrays; only the
+  on-demand `getStats()` response creates snapshot objects. A sampled frame
+  replaces one combined WASM update with three stage calls and runs the extra
+  CPU clocks; when timestamp queries are supported, its encoding time also
+  includes the separately documented timestamp diagnostic work requested by
+  the same statistics pull.
 - Pipeline and shader creation is confined to initialization/cache misses.
 - Persistent instance, visible-slot, dirty-range, camera, and visibility arrays
   are capacity-sized or reserved during initialization and reused per frame.

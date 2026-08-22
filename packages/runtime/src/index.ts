@@ -1,5 +1,6 @@
 export type {
   EngineStats,
+  FrameCpuStageTimings,
   MainToWorkerMessage,
   RuntimeCommand,
   RuntimeInit,

@@ -116,7 +116,7 @@ It uses the production worker, WASM core, and WebGPU renderer in controlled
 Chrome runs at 1k, 10k, 50k, and 100k entities with 0%, 1%, 10%, and 100%
 per-frame transform updates. The committed report retains raw upload bytes,
 write counts, upload CPU time, complete worker/render CPU time, GPU timestamps,
-and renderer/WASM memory. The `before` section links the last committed browser
+split worker CPU stages, and renderer/WASM memory. The `before` section links the last committed browser
 run from the pre-change commit; it does not relabel a post-change run as a
 baseline.
 
@@ -147,3 +147,20 @@ Native timings isolate ECS and extraction architecture. Browser timings include
 worker scheduling, WebAssembly staging, WebGPU command preparation, and browser
 variance. Compare raw samples within the same suite; do not compare a native
 mean directly with an end-to-end browser frame.
+
+`getStats().timings.cpuStages` is pull-sampled. `latest` describes the most
+recent completed sampled frame, `cumulative` sums completed samples since
+initialization, and `sampleCount` is their common denominator. Calling
+`getStats()` requests one following-frame sample and coalesces repeated requests
+before that frame. The stages are transport apply, ECS systems, RenderWorld
+extraction, visibility, GPU-buffer upload, renderer attachment/descriptor
+preparation, WebGPU command encoding, and `GPUQueue.submit`. They are CPU wall
+times and must not be interpreted as GPU execution duration.
+`transportApply` covers shared structural commands and transform publications
+drained at the worker-frame boundary; ordered fallback commands applied when
+their message arrives are outside that sampled frame stage.
+Sampling replaces the combined WASM update with separate systems, extraction,
+and visibility calls and runs additional CPU clocks. When GPU timestamps are
+supported, the sampled command-encoding value also includes the timestamp
+resolve/copy requested by the same statistics pull. These diagnostic samples
+therefore characterize stage attribution, not an uninstrumented release frame.

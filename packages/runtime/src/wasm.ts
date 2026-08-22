@@ -75,6 +75,9 @@ interface LumeWasmExports extends WebAssembly.Exports {
   ): number;
   lume_engine_remove_component(engine: number, entity: number, component: number): number;
   lume_engine_update(engine: number): number;
+  lume_engine_update_systems(engine: number): number;
+  lume_engine_extract(engine: number): number;
+  lume_engine_update_visibility(engine: number): number;
   lume_engine_set_camera_aspect(engine: number, aspect: number): number;
   lume_engine_entity_count(engine: number): number;
   lume_render_instance_count(engine: number): number;
@@ -116,8 +119,17 @@ export interface WasmStats {
   readonly wasmHeapBytes: number;
 }
 
+/** Reused timings written only by an explicitly profiled update. */
+export interface WasmFrameTimings {
+  systemsCpuTimeMs: number;
+  extractionCpuTimeMs: number;
+  visibilityCpuTimeMs: number;
+}
+
 /** Worker-only façade over the raw WASM ABI. */
 export interface WasmCore {
+  /** Stable, allocation-free split timings for the most recent sampled update. */
+  readonly frameTimings: WasmFrameTimings;
   /** Creates the Rust render mirror for one worker-owned basic material. */
   createBasicMaterial(handle: number, color: readonly [number, number, number, number]): void;
   /** Removes a logically destroyed basic-material mirror. */
@@ -130,8 +142,8 @@ export interface WasmCore {
   updateSharedTransforms(): void;
   /** Updates all camera aspects after a valid surface resize. */
   resize(aspect: number): void;
-  /** Drains shared transforms, advances ECS, and returns borrowed render views. */
-  update(): RenderFrame;
+  /** Advances ECS/render stages and returns borrowed render views. */
+  update(profileStages?: boolean): RenderFrame;
   /** Returns non-allocating runtime and transport counters. */
   stats(): WasmStats;
   /** Idempotently frees the Rust engine allocation. */
@@ -262,6 +274,11 @@ export async function createWasmCore(
   let lastSharedTransformUpdates = 0;
   let totalDirtyRanges = 0;
   let totalBytesUploaded = 0;
+  const frameTimings: WasmFrameTimings = {
+    systemsCpuTimeMs: 0,
+    extractionCpuTimeMs: 0,
+    visibilityCpuTimeMs: 0,
+  };
   const stageTransform = (
     entity: number,
     fieldMask: number,
@@ -341,6 +358,7 @@ export async function createWasmCore(
   };
 
   const core: WasmCore = {
+    frameTimings,
     createBasicMaterial(materialHandle, color) {
       if (disposed) return;
       if (exports.lume_engine_add_material(handle, materialHandle, ...color) === 0) {
@@ -362,7 +380,7 @@ export async function createWasmCore(
     },
     updateSharedCommands,
     updateSharedTransforms,
-    update() {
+    update(profileStages = false) {
       if (exports.memory.buffer !== observedMemory) {
         observedMemory = exports.memory.buffer;
         const refreshed = createFrameViews(
@@ -413,11 +431,23 @@ export async function createWasmCore(
           transformUpdateCapacity,
         );
       }
-      if (sharedViews !== undefined) {
-        updateSharedTransforms();
-      }
-      if (!disposed && exports.lume_engine_update(handle) === 0) {
-        throw new Error("WASM world update failed.");
+      if (!disposed) {
+        if (profileStages) {
+          let stageStart = performance.now();
+          const systemsUpdated = exports.lume_engine_update_systems(handle);
+          frameTimings.systemsCpuTimeMs = performance.now() - stageStart;
+          stageStart = performance.now();
+          const extracted = exports.lume_engine_extract(handle);
+          frameTimings.extractionCpuTimeMs = performance.now() - stageStart;
+          stageStart = performance.now();
+          const visibilityUpdated = exports.lume_engine_update_visibility(handle);
+          frameTimings.visibilityCpuTimeMs = performance.now() - stageStart;
+          if (systemsUpdated === 0 || extracted === 0 || visibilityUpdated === 0) {
+            throw new Error("WASM world update failed.");
+          }
+        } else if (exports.lume_engine_update(handle) === 0) {
+          throw new Error("WASM world update failed.");
+        }
       }
       frame.instanceCount = exports.lume_visible_count(handle);
       frame.dirtyRangeCount = exports.lume_render_dirty_range_count(handle);

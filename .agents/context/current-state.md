@@ -1,6 +1,6 @@
 # Current Project State
 
-Last verified: 2026-08-22 on master after issue #20
+Last verified: 2026-08-22 on master after issue #21
 
 This document records the implementation that exists in the repository. It is
 an evidence-based snapshot, not a description of intended future architecture.
@@ -151,6 +151,9 @@ Implemented:
 - Depth target creation and resize handling.
 - Pull-triggered, single-in-flight timestamp-query sampling when supported;
   ordinary frames create no timestamp mapping promise or result wrapper.
+- Pull-sampled split CPU instrumentation for transport apply, systems,
+  extraction, visibility, upload, render preparation, encoding, and submission;
+  fixed latest/cumulative counters add no stage clocks to ordinary frames.
 - Indexed drawing and CPU-prepared instancing: consecutive compatible visible
   items are submitted with one `drawIndexed` call using `instanceCount`.
 - Device-loss reporting to the main thread without exposing the `GPUDevice`

@@ -103,7 +103,7 @@ export interface RendererStats {
   readonly bufferUploadBytes: number;
   /** `GPUQueue.writeBuffer` calls issued during the most recent frame. */
   readonly bufferWriteCount: number;
-  /** CPU duration of extraction-input preparation and encoding in milliseconds. */
+  /** Total CPU duration of renderer upload, preparation, encoding, and submission. */
   readonly framePreparationCpuTimeMs: number;
   /** Timestamp-query duration, or null when unsupported/unavailable. */
   readonly gpuTimeMs: number | null;
@@ -111,7 +111,21 @@ export interface RendererStats {
   readonly browserObjectsPerFrame: number;
 }
 
+/** Stable timings written only when a frame requests split CPU instrumentation. */
+export interface RendererFrameTimings {
+  readonly bufferUploadCpuTimeMs: number;
+  readonly renderPreparationCpuTimeMs: number;
+  readonly commandEncodingCpuTimeMs: number;
+  readonly queueSubmitCpuTimeMs: number;
+}
+
+type MutableRendererFrameTimings = {
+  -readonly [Stage in keyof RendererFrameTimings]: RendererFrameTimings[Stage];
+};
+
 export interface MeshRenderer {
+  /** Reused split timings for the most recent explicitly sampled frame. */
+  readonly frameTimings: RendererFrameTimings;
   /** Resolves when the owned GPU device is lost. */
   readonly lost: Promise<GPUDeviceLostInfo>;
   /** Registers a built-in geometry under a worker-owned generational key. */
@@ -123,7 +137,7 @@ export interface MeshRenderer {
   /** Removes a matching material generation from future submissions. */
   removeBasicMaterial(handle: number): void;
   /** Uploads and renders one extracted frame. */
-  execute(frame: RenderFrame): void;
+  execute(frame: RenderFrame, profileStages?: boolean): void;
   /** Reconfigures the surface and depth attachment if physical size changed. */
   resize(size: SurfaceSize): void;
   /** Returns current measurements and requests one timestamp sample from a following frame. */
@@ -144,6 +158,7 @@ interface RendererState {
   readonly visibleSlotBuffer: GPUBuffer;
   readonly bindGroup: GPUBindGroup;
   readonly profiler: GpuTimestampProfiler;
+  readonly frameTimings: MutableRendererFrameTimings;
   readonly clearColor: GPUColor;
   colorAttachment: GPURenderPassColorAttachment | undefined;
   readonly depthAttachment: GPURenderPassDepthStencilAttachment;
@@ -164,6 +179,7 @@ interface RendererFrameContext {
   readonly state: RendererState;
   frame: RenderFrame | undefined;
   preparationStart: number;
+  profileStages: boolean;
 }
 
 /**
@@ -254,6 +270,12 @@ export async function createMeshRenderer(
       visibleSlotBuffer,
       bindGroup,
       profiler,
+      frameTimings: {
+        bufferUploadCpuTimeMs: 0,
+        renderPreparationCpuTimeMs: 0,
+        commandEncodingCpuTimeMs: 0,
+        queueSubmitCpuTimeMs: 0,
+      },
       clearColor: options.clearColor ?? { r: 0.018, g: 0.024, b: 0.04, a: 1 },
       colorAttachment: undefined,
       depthAttachment,
@@ -274,10 +296,12 @@ export async function createMeshRenderer(
       state,
       frame: undefined,
       preparationStart: 0,
+      profileStages: false,
     };
 
     const renderer: MeshRenderer = {
       lost: device.lost,
+      frameTimings: state.frameTimings,
       registerGeometry(handle, builtin) {
         const source = builtinGeometrySource(builtin);
         state.meshes.register(handle, source);
@@ -289,10 +313,11 @@ export async function createMeshRenderer(
       removeBasicMaterial(handle) {
         if (!state.materials.remove(handle)) throw new Error(`Unknown material handle: ${handle}`);
       },
-      execute(frame) {
+      execute(frame, profileStages = false) {
         if (state.disposed) return;
         frameContext.frame = frame;
         frameContext.preparationStart = performance.now();
+        frameContext.profileStages = profileStages;
         executeFrameGraph(frameGraph, frameContext);
       },
       resize: (nextSize) => resize(state, nextSize),
@@ -388,6 +413,9 @@ function uploadFrame(context: RendererFrameContext): void {
     writes += 1;
   }
   state.bufferUploadCpuTimeMs = performance.now() - uploadStart;
+  if (context.profileStages) {
+    state.frameTimings.bufferUploadCpuTimeMs = state.bufferUploadCpuTimeMs;
+  }
   state.bufferUploadBytes = uploadedBytes;
   state.bufferWriteCount = writes;
 }
@@ -395,6 +423,7 @@ function uploadFrame(context: RendererFrameContext): void {
 function encodeMainPass(context: RendererFrameContext): void {
   const { state, frame } = context;
   if (frame === undefined) throw new Error("Renderer frame context is not initialized.");
+  const preparationStart = context.profileStages ? performance.now() : 0;
   const instanceCount = frame.instanceCount;
   const colorView = state.surface.context.getCurrentTexture().createView();
   const colorAttachment = state.colorAttachment ?? {
@@ -424,6 +453,10 @@ function encodeMainPass(context: RendererFrameContext): void {
   if (timestampSample && timestampWrites !== undefined) {
     state.timestampPassDescriptor = activePassDescriptor;
   }
+  if (context.profileStages) {
+    state.frameTimings.renderPreparationCpuTimeMs = performance.now() - preparationStart;
+  }
+  const encodingStart = context.profileStages ? performance.now() : 0;
   const encoder = state.device.createCommandEncoder({ label: "Lume frame commands" });
   const pass = encoder.beginRenderPass(activePassDescriptor);
   // WebGPU mandates these frame-scoped objects: surface texture/view, command
@@ -460,7 +493,14 @@ function encodeMainPass(context: RendererFrameContext): void {
   pass.end();
   const timestampReadback = encodeGpuTimestampResolve(state.profiler, encoder, timestampSample);
   state.submissions[0] = encoder.finish();
+  if (context.profileStages) {
+    state.frameTimings.commandEncodingCpuTimeMs = performance.now() - encodingStart;
+  }
+  const submissionStart = context.profileStages ? performance.now() : 0;
   state.device.queue.submit(state.submissions);
+  if (context.profileStages) {
+    state.frameTimings.queueSubmitCpuTimeMs = performance.now() - submissionStart;
+  }
   requestGpuTimestampRead(state.profiler, timestampReadback);
   state.drawCalls = drawCalls;
   state.submittedInstances = instanceCount;

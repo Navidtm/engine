@@ -9,6 +9,12 @@ export {
 export type { FramePass } from "./framegraph/pass.js";
 export { defineFramePass } from "./framegraph/pass.js";
 export type { FrameResource } from "./framegraph/resource.js";
-export type { MeshRenderer, RendererOptions, RendererStats, RenderFrame } from "./mesh-renderer.js";
+export type {
+  MeshRenderer,
+  RendererFrameTimings,
+  RendererOptions,
+  RendererStats,
+  RenderFrame,
+} from "./mesh-renderer.js";
 export { createMeshRenderer } from "./mesh-renderer.js";
 export type { SurfaceSize } from "./webgpu/surface.js";

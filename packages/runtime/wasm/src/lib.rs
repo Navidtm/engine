@@ -9,7 +9,7 @@ use lume_core::{
 };
 
 /// ABI revision required by the TypeScript runtime before it calls any export.
-pub const ABI_VERSION: u32 = 8;
+pub const ABI_VERSION: u32 = 9;
 
 const TRANSFORM_UPDATE_FLOATS: usize = 10;
 
@@ -326,21 +326,30 @@ pub extern "C" fn lume_engine_remove_component(
 #[unsafe(no_mangle)]
 pub extern "C" fn lume_engine_update(engine: *mut c_void) -> u32 {
     with_engine(engine, |core| {
-        core.world.update();
-        if core.render_world.extract(&core.world).is_err() {
-            core.visibility_valid = false;
-            return false;
-        }
-        if !core.visibility_valid
-            || core.render_world.snapshot_changed()
-            || core.render_world.cameras_dirty()
-        {
-            core.visibility_valid = core.visible.cull(&core.render_world).is_ok();
-        } else {
-            core.visible.retain_unchanged();
-        }
-        core.visibility_valid
+        update_systems(core);
+        extract_render_world(core) && update_visibility(core)
     }) as u32
+}
+
+/// Advances ECS systems only. Used by pull-sampled split instrumentation.
+#[unsafe(no_mangle)]
+pub extern "C" fn lume_engine_update_systems(engine: *mut c_void) -> u32 {
+    with_engine(engine, |core| {
+        update_systems(core);
+        true
+    }) as u32
+}
+
+/// Extracts the RenderWorld only. Used by pull-sampled split instrumentation.
+#[unsafe(no_mangle)]
+pub extern "C" fn lume_engine_extract(engine: *mut c_void) -> u32 {
+    with_engine(engine, extract_render_world) as u32
+}
+
+/// Updates visibility only. Used by pull-sampled split instrumentation.
+#[unsafe(no_mangle)]
+pub extern "C" fn lume_engine_update_visibility(engine: *mut c_void) -> u32 {
+    with_engine(engine, update_visibility) as u32
 }
 
 /// Updates all cameras to a positive viewport aspect ratio; returns `1` on success.
@@ -496,6 +505,30 @@ fn with_engine(engine: *mut c_void, operation: impl FnOnce(&mut EngineCore) -> b
     operation(core)
 }
 
+fn update_systems(core: &mut EngineCore) {
+    core.world.update();
+}
+
+fn extract_render_world(core: &mut EngineCore) -> bool {
+    if core.render_world.extract(&core.world).is_err() {
+        core.visibility_valid = false;
+        return false;
+    }
+    true
+}
+
+fn update_visibility(core: &mut EngineCore) -> bool {
+    if !core.visibility_valid
+        || core.render_world.snapshot_changed()
+        || core.render_world.cameras_dirty()
+    {
+        core.visibility_valid = core.visible.cull(&core.render_world).is_ok();
+    } else {
+        core.visible.retain_unchanged();
+    }
+    core.visibility_valid
+}
+
 fn with_engine_value<T>(
     engine: *mut c_void,
     operation: impl FnOnce(&EngineCore) -> T,
@@ -545,7 +578,9 @@ mod tests {
             0
         );
         assert_eq!(lume_engine_set_camera_aspect(engine, f32::NAN), 0);
-        assert_eq!(lume_engine_update(engine), 1);
+        assert_eq!(lume_engine_update_systems(engine), 1);
+        assert_eq!(lume_engine_extract(engine), 1);
+        assert_eq!(lume_engine_update_visibility(engine), 1);
         assert_eq!(lume_render_instance_count(engine), 1);
         assert_eq!(lume_visible_count(engine), 1);
         assert!(!lume_visible_geometries_ptr(engine).is_null());
