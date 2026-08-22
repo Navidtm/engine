@@ -225,6 +225,11 @@ export function createWorkerRuntime(host: WorkerHost): (message: MainToWorkerMes
         message.value.resourceCapacity,
         message.value.entityCapacity,
       );
+      const latestSize = state.size;
+      if (latestSize !== undefined && latestSize !== message.value.size) {
+        core.resize(latestSize.width / Math.max(latestSize.height, 1));
+        renderer.resize(latestSize);
+      }
       void renderer.lost.then((info) => {
         if (state.disposed || state.renderer !== renderer) return;
         stopScheduling();

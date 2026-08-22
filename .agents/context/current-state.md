@@ -1,6 +1,6 @@
 # Current Project State
 
-Last verified: 2026-08-22 on master after issue #23
+Last verified: 2026-08-22 on master after issue #24
 
 This document records the implementation that exists in the repository. It is
 an evidence-based snapshot, not a description of intended future architecture.
@@ -313,7 +313,11 @@ Implemented CI gates:
 Tests cover generational entities, sparse-set validation, world lifecycle,
 render extraction, visibility, frame-graph compilation, shared-memory masks and
 ranges, structural queues, protocol behavior, WASM update staging, geometry,
-and timestamp profiling. End-to-end browser tests for the complete
+and timestamp profiling. Deterministic seeded state machines additionally
+compose entity reuse, partial/repeated transforms, conceptual drains, structural
+overflow, ordered fallback, initialization races, resize, scheduler epochs,
+device loss, and disposal. A failing state-machine seed can be rerun with
+`LUME_TEST_SEED=<unsigned-u32>`. End-to-end browser tests for the complete
 main-thread/worker/WASM/WebGPU path are not yet part of CI.
 
 ## Roadmap Comparison

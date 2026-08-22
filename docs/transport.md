@@ -83,6 +83,24 @@ same hardware, browser versions, scene scale, percentile distribution,
 missed-frame rate, and peak heap. Raw Node results are in
 `benchmarks/results/transport-hardening-latest.json`.
 
+## Deterministic boundary validation
+
+Seeded state-machine suites compose the transport and lifecycle mechanisms over
+long transitions instead of replacing their focused unit tests. The transport
+model covers create/destroy and slot reuse, add/remove transform, partial and
+repeated field writes, conceptual drains, stale generations, ring overflow, and
+the ordered fallback barrier. The worker model covers initialization ordering,
+resize during initialization, late sibling success after failure, stop/restart,
+stale scheduler callbacks, device loss, and idempotent disposal.
+
+Every case includes its unsigned 32-bit seed in the test name and failure
+message. To rerun only that seed:
+
+```sh
+LUME_TEST_SEED=<seed> pnpm --filter @lume/api test
+LUME_TEST_SEED=<seed> pnpm --filter @lume/runtime test
+```
+
 ## Remaining bottlenecks
 
 1. Every published entity still pays Atomics and a seqlock read.
