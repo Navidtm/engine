@@ -155,6 +155,7 @@ describe("worker runtime resource ownership", () => {
       updateSharedCommands: vi.fn(() => order.push("shared-commands")),
       updateSharedTransforms: vi.fn(() => order.push("shared-transforms")),
       resize: vi.fn(),
+      invalidateRendererCache: vi.fn(),
       update: vi.fn(),
       stats: vi.fn(),
       dispose: vi.fn(),
@@ -223,6 +224,7 @@ describe("worker runtime resource ownership", () => {
       updateSharedCommands: vi.fn(),
       updateSharedTransforms: vi.fn(),
       resize: vi.fn(),
+      invalidateRendererCache: vi.fn(),
       update: vi.fn(),
       stats: vi.fn(),
       dispose: vi.fn(),
@@ -293,10 +295,26 @@ describe("worker runtime resource ownership", () => {
       stats: vi.fn(() => ({
         gpuBufferBytes: 0,
         drawCalls: 0,
+        computeDispatches: 0,
+        indirectDrawCalls: 0,
+        visibilityBackend: "cpu" as const,
+        gpuVisibleObjects: null,
+        cpuVisibleObjects: null,
+        gpuVisibilityHash: null,
+        cpuVisibilityHash: null,
         submittedInstances: 0,
         bufferUploadCpuTimeMs: 0,
         bufferUploadBytes: 0,
         bufferWriteCount: 0,
+        uploadBytesByDomain: {
+          instances: 0,
+          slotState: 0,
+          bounds: 0,
+          resources: 0,
+          visibility: 0,
+          cameras: 0,
+          indirect: 0,
+        },
         framePreparationCpuTimeMs: 0,
         gpuTimeMs: null,
         browserObjectsPerFrame: 0,
@@ -315,6 +333,7 @@ describe("worker runtime resource ownership", () => {
       updateSharedCommands: vi.fn(),
       updateSharedTransforms: vi.fn(),
       resize: vi.fn(),
+      invalidateRendererCache: vi.fn(),
       update: vi.fn(() => ({}) as never),
       stats: vi.fn(() => ({
         entities: 0,
@@ -384,5 +403,81 @@ describe("worker runtime resource ownership", () => {
         queueSubmit: 7,
       },
     });
+  });
+
+  it("rebuilds renderer resources and republishes derived buffers after device loss", async () => {
+    const lost = deferred<GPUDeviceLostInfo>();
+    const rendererShape = (lostPromise: Promise<GPUDeviceLostInfo>) =>
+      ({
+        lost: lostPromise,
+        frameTimings: {
+          bufferUploadCpuTimeMs: 0,
+          renderPreparationCpuTimeMs: 0,
+          commandEncodingCpuTimeMs: 0,
+          queueSubmitCpuTimeMs: 0,
+        },
+        registerGeometry: vi.fn(),
+        removeGeometry: vi.fn(),
+        registerBasicMaterial: vi.fn(),
+        removeBasicMaterial: vi.fn(),
+        execute: vi.fn(),
+        resize: vi.fn(),
+        stats: vi.fn(),
+        dispose: vi.fn(),
+      }) satisfies MeshRenderer;
+    const first = rendererShape(lost.promise);
+    const replacement = rendererShape(new Promise<GPUDeviceLostInfo>(() => undefined));
+    const replacementResult = deferred<MeshRenderer>();
+    const core = {
+      frameTimings: {
+        systemsCpuTimeMs: 0,
+        extractionCpuTimeMs: 0,
+        visibilityCpuTimeMs: 0,
+      },
+      createBasicMaterial: vi.fn(),
+      removeBasicMaterial: vi.fn(),
+      apply: vi.fn(),
+      updateSharedCommands: vi.fn(),
+      updateSharedTransforms: vi.fn(),
+      resize: vi.fn(),
+      invalidateRendererCache: vi.fn(),
+      update: vi.fn(() => ({}) as never),
+      stats: vi.fn(),
+      dispose: vi.fn(),
+    } satisfies WasmCore;
+    mocks.createMeshRenderer
+      .mockResolvedValueOnce(first)
+      .mockReturnValueOnce(replacementResult.promise);
+    mocks.createWasmCore.mockResolvedValueOnce(core);
+    const posted: WorkerToMainMessage[] = [];
+    const host: WorkerHost = {
+      postMessage: (message) => posted.push(message),
+      requestAnimationFrame: vi.fn(() => 1),
+      cancelAnimationFrame: vi.fn(),
+    };
+    const receive = createWorkerRuntime(host);
+    receive(initMessage());
+    await vi.waitFor(() => expect(posted[0]?.type).toBe("ready"));
+    receive({
+      type: "batch",
+      value: [
+        { type: "create-geometry", handle: 1, builtin: "cube" },
+        { type: "create-basic-material", handle: 1, color: [1, 1, 1, 1] },
+      ],
+    });
+    receive({ type: "start", lifecycleEpoch: 1 });
+
+    lost.resolve({ reason: "unknown", message: "test loss" } as GPUDeviceLostInfo);
+    await vi.waitFor(() => expect(first.dispose).toHaveBeenCalledTimes(1));
+    receive({ type: "stop", lifecycleEpoch: 2 });
+    replacementResult.resolve(replacement);
+
+    await vi.waitFor(() => expect(core.invalidateRendererCache).toHaveBeenCalledTimes(1));
+    expect(replacement.registerGeometry).toHaveBeenCalledWith(1, "cube");
+    expect(replacement.registerBasicMaterial).toHaveBeenCalledWith(1);
+    expect(replacement.execute).not.toHaveBeenCalled();
+    receive({ type: "start", lifecycleEpoch: 3 });
+    expect(replacement.execute).toHaveBeenCalled();
+    expect(posted.some((message) => message.type === "error")).toBe(false);
   });
 });

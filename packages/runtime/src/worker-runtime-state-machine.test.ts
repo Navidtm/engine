@@ -48,8 +48,10 @@ async function runLifecycleSeed(seed: number): Promise<void> {
   const coreResult = deferred<WasmCore>();
   const deviceLoss = deferred<GPUDeviceLostInfo>();
   const renderer = createRenderer(deviceLoss.promise);
+  const replacement = createRenderer(new Promise<GPUDeviceLostInfo>(() => undefined));
   const core = createCore();
   mocks.createMeshRenderer.mockReturnValueOnce(rendererResult.promise);
+  mocks.createMeshRenderer.mockResolvedValueOnce(replacement);
   mocks.createWasmCore.mockReturnValueOnce(coreResult.promise);
   const harness = createHostHarness();
   const receive = createWorkerRuntime(harness.host);
@@ -104,25 +106,27 @@ async function runLifecycleSeed(seed: number): Promise<void> {
     expect(renderer.resize).toHaveBeenLastCalledWith(runningSize);
 
     step = "device-loss";
-    const updatesBeforeLoss = vi.mocked(core.update).mock.calls.length;
+    const staleFrame = harness.latestFrame();
+    const updatesBeforeRecovery = vi.mocked(core.update).mock.calls.length;
     deviceLoss.resolve({
       reason: "unknown",
       message: `seeded loss ${seed}`,
     } as GPUDeviceLostInfo);
+    await vi.waitFor(() => expect(core.invalidateRendererCache).toHaveBeenCalledTimes(1));
+    expect(renderer.dispose).toHaveBeenCalledTimes(1);
     await vi.waitFor(() =>
-      expect(harness.posted).toContainEqual({
-        type: "device-lost",
-        reason: "unknown",
-        message: `seeded loss ${seed}`,
-      }),
+      expect(vi.mocked(core.update).mock.calls.length).toBeGreaterThan(updatesBeforeRecovery),
     );
-    for (const callback of harness.frames.values()) callback(48);
-    expect(core.update).toHaveBeenCalledTimes(updatesBeforeLoss);
+    expect(harness.posted.some((message) => message.type === "error")).toBe(false);
+    const updatesAfterRecovery = vi.mocked(core.update).mock.calls.length;
+    staleFrame?.(48);
+    expect(core.update).toHaveBeenCalledTimes(updatesAfterRecovery);
 
     step = "idempotent-disposal";
     receive({ type: "dispose" });
     receive({ type: "dispose" });
     expect(renderer.dispose).toHaveBeenCalledTimes(1);
+    expect(replacement.dispose).toHaveBeenCalledTimes(1);
     expect(core.dispose).toHaveBeenCalledTimes(1);
     expect(harness.posted.filter((message) => message.type === "disposed")).toHaveLength(1);
   } catch (cause) {
@@ -221,6 +225,7 @@ function createCore(): WasmCore {
     updateSharedCommands: vi.fn(),
     updateSharedTransforms: vi.fn(),
     resize: vi.fn(),
+    invalidateRendererCache: vi.fn(),
     update: vi.fn(),
     stats: vi.fn(),
     dispose: vi.fn(),

@@ -56,7 +56,7 @@ describe("WASM loading diagnostics", () => {
     } as never);
 
     await expect(createWasmCore("https://example.test/core.wasm", 1, 1)).rejects.toThrow(
-      "@lume/runtime expects 10, but the artifact reports 5",
+      "@lume/runtime expects 11, but the artifact reports 5",
     );
   });
 

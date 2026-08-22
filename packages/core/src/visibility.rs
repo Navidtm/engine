@@ -138,6 +138,10 @@ pub struct VisibleRenderBuffer {
     slots: Vec<u32>,
     previous_slots: Vec<u32>,
     slots_dirty: bool,
+    previous_geometries: Vec<u32>,
+    previous_pipelines: Vec<u32>,
+    previous_materials: Vec<u32>,
+    render_keys_dirty: bool,
     bucket_heads: Vec<usize>,
     bucket_tails: Vec<usize>,
     bucket_pipelines: Vec<u32>,
@@ -161,6 +165,10 @@ impl VisibleRenderBuffer {
             slots: Vec::with_capacity(capacity),
             previous_slots: Vec::with_capacity(capacity),
             slots_dirty: false,
+            previous_geometries: Vec::with_capacity(capacity),
+            previous_pipelines: Vec::with_capacity(capacity),
+            previous_materials: Vec::with_capacity(capacity),
+            render_keys_dirty: false,
             bucket_heads: vec![usize::MAX; capacity],
             bucket_tails: vec![usize::MAX; capacity],
             bucket_pipelines: vec![0; capacity],
@@ -176,14 +184,42 @@ impl VisibleRenderBuffer {
     /// The first camera supplies the frustum. With no camera, all instances are
     /// considered visible. Output is grouped by pipeline, material, and geometry.
     pub fn cull(&mut self, render_world: &RenderWorld) -> Result<VisibilityStats, VisibilityError> {
-        self.clear();
         let frustum = render_world.cameras().first().map(Frustum::from_camera);
-        for (index, bounds) in render_world.bounds().iter().enumerate() {
+        self.rebuild(render_world, frustum.as_ref())
+    }
+
+    /// Culls for one extracted camera without mutating persistent scene slots.
+    pub fn cull_for_camera(
+        &mut self,
+        render_world: &RenderWorld,
+        camera_index: usize,
+    ) -> Result<VisibilityStats, VisibilityError> {
+        let frustum = render_world
+            .cameras()
+            .get(camera_index)
+            .map(Frustum::from_camera);
+        self.rebuild(render_world, frustum.as_ref())
+    }
+
+    /// Groups every active render candidate without applying camera culling.
+    pub fn collect_all(
+        &mut self,
+        render_world: &RenderWorld,
+    ) -> Result<VisibilityStats, VisibilityError> {
+        self.rebuild(render_world, None)
+    }
+
+    fn rebuild(
+        &mut self,
+        render_world: &RenderWorld,
+        frustum: Option<&Frustum>,
+    ) -> Result<VisibilityStats, VisibilityError> {
+        self.clear();
+        for index in 0..render_world.instance_count() {
+            let slot = render_world.slots()[index] as usize;
+            let bounds = &render_world.slot_bounds()[slot];
             let [x, y, z, radius] = bounds.center_radius;
-            if frustum
-                .as_ref()
-                .is_none_or(|value| value.intersects_sphere([x, y, z], radius))
-            {
+            if frustum.is_none_or(|value| value.intersects_sphere([x, y, z], radius)) {
                 if self.source_indices.len() == self.capacity {
                     return Err(VisibilityError {
                         capacity: self.capacity,
@@ -212,8 +248,17 @@ impl VisibleRenderBuffer {
             }
         }
         self.slots_dirty = self.slots != self.previous_slots;
+        self.render_keys_dirty = self.geometries != self.previous_geometries
+            || self.pipelines != self.previous_pipelines
+            || self.materials != self.previous_materials;
         self.previous_slots.clear();
         self.previous_slots.extend_from_slice(&self.slots);
+        self.previous_geometries.clear();
+        self.previous_geometries.extend_from_slice(&self.geometries);
+        self.previous_pipelines.clear();
+        self.previous_pipelines.extend_from_slice(&self.pipelines);
+        self.previous_materials.clear();
+        self.previous_materials.extend_from_slice(&self.materials);
 
         Ok(VisibilityStats {
             tested: render_world.instance_count(),
@@ -325,9 +370,26 @@ impl VisibleRenderBuffer {
         self.slots_dirty
     }
 
+    /// Returns whether grouped pipeline/material/geometry keys changed.
+    #[must_use]
+    pub const fn render_keys_dirty(&self) -> bool {
+        self.render_keys_dirty
+    }
+
     /// Marks the retained visible-slot list unchanged for the current frame.
     pub fn retain_unchanged(&mut self) {
         self.slots_dirty = false;
+        self.render_keys_dirty = false;
+    }
+
+    /// Forces the next rebuild to republish compact slots and render keys.
+    pub fn invalidate_renderer_cache(&mut self) {
+        self.previous_slots.clear();
+        self.previous_geometries.clear();
+        self.previous_pipelines.clear();
+        self.previous_materials.clear();
+        self.slots_dirty = true;
+        self.render_keys_dirty = true;
     }
 
     /// Returns the stable allocation pointer for visible geometry IDs.
@@ -450,5 +512,89 @@ mod tests {
         let stats = visible.cull(&render_world).unwrap();
         assert_eq!(stats.visible, 3);
         assert!(visible.slots_dirty());
+    }
+
+    #[test]
+    fn camera_visibility_outputs_are_independent_over_shared_slots() {
+        let mut world = World::with_capacity(WorldCapacity {
+            entities: 6,
+            transforms: 6,
+            mesh_renderers: 1,
+            cameras: 4,
+            materials: 2,
+            bounds: 1,
+        });
+        let material = MaterialHandle::from_raw(1);
+        assert!(world.add_material(material, Material::default()));
+        let mesh = world.spawn().unwrap();
+        assert!(world.add_transform(
+            mesh,
+            Transform {
+                local_position: crate::math::Vec3::new([0.0, 0.0, -10.0]),
+                ..Transform::default()
+            },
+        ));
+        assert!(world.add_mesh_renderer(
+            mesh,
+            MeshRenderer {
+                geometry: crate::GeometryHandle::from_raw(1),
+                material,
+            },
+        ));
+        assert!(world.add_bounds(
+            mesh,
+            crate::Bounds {
+                center: crate::math::Vec3::default(),
+                radius: 1.0,
+            },
+        ));
+        for index in 0..4 {
+            let camera = world.spawn().unwrap();
+            assert!(world.add_transform(
+                camera,
+                Transform {
+                    local_position: crate::math::Vec3::new([
+                        if index % 2 == 0 { 0.0 } else { 100.0 },
+                        0.0,
+                        0.0,
+                    ]),
+                    ..Transform::default()
+                },
+            ));
+            assert!(world.add_camera(
+                camera,
+                crate::Camera {
+                    vertical_fov_radians: 60.0_f32.to_radians(),
+                    near: 0.1,
+                    far: 100.0,
+                    aspect: 1.0,
+                    ..crate::Camera::default()
+                },
+            ));
+        }
+        world.update();
+        let mut render_world = RenderWorld::with_capacity(6, 4);
+        render_world.extract(&world).unwrap();
+        let mut visible = VisibleRenderBuffer::with_capacity(1);
+        assert_eq!(
+            visible.cull_for_camera(&render_world, 0).unwrap().visible,
+            1
+        );
+        assert_eq!(
+            visible.cull_for_camera(&render_world, 1).unwrap().visible,
+            0
+        );
+        assert_eq!(
+            visible.cull_for_camera(&render_world, 2).unwrap().visible,
+            1
+        );
+        assert_eq!(
+            visible.cull_for_camera(&render_world, 3).unwrap().visible,
+            0
+        );
+        assert_eq!(
+            render_world.slot_states()[mesh.index()].flags,
+            crate::SLOT_ACTIVE
+        );
     }
 }

@@ -8,6 +8,7 @@ import { openSharedRuntimeViews } from "./shared-memory/views.js";
 import { LUME_WASM_ABI_VERSION } from "./wasm-abi.js";
 
 const INSTANCE_FLOATS = 20;
+const SLOT_RECORD_WORDS = 4;
 const CAMERA_FLOATS = 32;
 
 interface LumeWasmExports extends WebAssembly.Exports {
@@ -82,6 +83,7 @@ interface LumeWasmExports extends WebAssembly.Exports {
   lume_engine_extract(engine: number): number;
   lume_engine_update_visibility(engine: number): number;
   lume_engine_set_camera_aspect(engine: number, aspect: number): number;
+  lume_engine_invalidate_renderer_cache(engine: number): number;
   lume_engine_entity_count(engine: number): number;
   lume_render_instance_count(engine: number): number;
   lume_render_camera_count(engine: number): number;
@@ -91,9 +93,21 @@ interface LumeWasmExports extends WebAssembly.Exports {
   lume_render_entities_ptr(engine: number): number;
   lume_render_geometries_ptr(engine: number): number;
   lume_render_instances_ptr(engine: number): number;
+  lume_render_slot_states_ptr(engine: number): number;
+  lume_render_slot_bounds_ptr(engine: number): number;
+  lume_render_slot_resources_ptr(engine: number): number;
   lume_render_dirty_range_count(engine: number): number;
   lume_render_dirty_range_starts_ptr(engine: number): number;
   lume_render_dirty_range_counts_ptr(engine: number): number;
+  lume_render_state_dirty_range_count(engine: number): number;
+  lume_render_state_dirty_range_starts_ptr(engine: number): number;
+  lume_render_state_dirty_range_counts_ptr(engine: number): number;
+  lume_render_bounds_dirty_range_count(engine: number): number;
+  lume_render_bounds_dirty_range_starts_ptr(engine: number): number;
+  lume_render_bounds_dirty_range_counts_ptr(engine: number): number;
+  lume_render_resource_dirty_range_count(engine: number): number;
+  lume_render_resource_dirty_range_starts_ptr(engine: number): number;
+  lume_render_resource_dirty_range_counts_ptr(engine: number): number;
   lume_render_cameras_ptr(engine: number): number;
   lume_visible_count(engine: number): number;
   lume_visible_capacity(engine: number): number;
@@ -102,6 +116,12 @@ interface LumeWasmExports extends WebAssembly.Exports {
   lume_visible_pipelines_ptr(engine: number): number;
   lume_visible_materials_ptr(engine: number): number;
   lume_visible_slots_ptr(engine: number): number;
+  lume_candidate_count(engine: number): number;
+  lume_candidate_slots_dirty(engine: number): number;
+  lume_candidate_geometries_ptr(engine: number): number;
+  lume_candidate_pipelines_ptr(engine: number): number;
+  lume_candidate_materials_ptr(engine: number): number;
+  lume_candidate_slots_ptr(engine: number): number;
 }
 
 /** Low-level counters sampled from one worker-owned WASM core. */
@@ -145,6 +165,8 @@ export interface WasmCore {
   updateSharedTransforms(): void;
   /** Updates all camera aspects after a valid surface resize. */
   resize(aspect: number): void;
+  /** Republishes all renderer-derived buffers after device reconstruction. */
+  invalidateRendererCache(): void;
   /** Advances ECS/render stages and returns borrowed render views. */
   update(profileStages?: boolean): RenderFrame;
   /** Returns non-allocating runtime and transport counters. */
@@ -224,8 +246,23 @@ export async function createWasmCore(
   const materialsPointer = exports.lume_visible_materials_ptr(handle);
   const visibleSlotsPointer = exports.lume_visible_slots_ptr(handle);
   const instancesPointer = exports.lume_render_instances_ptr(handle);
+  const slotStatesPointer = exports.lume_render_slot_states_ptr(handle);
+  const slotBoundsPointer = exports.lume_render_slot_bounds_ptr(handle);
+  const slotResourcesPointer = exports.lume_render_slot_resources_ptr(handle);
   const dirtyRangeStartsPointer = exports.lume_render_dirty_range_starts_ptr(handle);
   const dirtyRangeCountsPointer = exports.lume_render_dirty_range_counts_ptr(handle);
+  const stateDirtyRangeStartsPointer = exports.lume_render_state_dirty_range_starts_ptr(handle);
+  const stateDirtyRangeCountsPointer = exports.lume_render_state_dirty_range_counts_ptr(handle);
+  const boundsDirtyRangeStartsPointer = exports.lume_render_bounds_dirty_range_starts_ptr(handle);
+  const boundsDirtyRangeCountsPointer = exports.lume_render_bounds_dirty_range_counts_ptr(handle);
+  const resourceDirtyRangeStartsPointer =
+    exports.lume_render_resource_dirty_range_starts_ptr(handle);
+  const resourceDirtyRangeCountsPointer =
+    exports.lume_render_resource_dirty_range_counts_ptr(handle);
+  const candidateGeometriesPointer = exports.lume_candidate_geometries_ptr(handle);
+  const candidatePipelinesPointer = exports.lume_candidate_pipelines_ptr(handle);
+  const candidateMaterialsPointer = exports.lume_candidate_materials_ptr(handle);
+  const candidateSlotsPointer = exports.lume_candidate_slots_ptr(handle);
   const camerasPointer = exports.lume_render_cameras_ptr(handle);
   const transformUpdateCapacity = exports.lume_transform_update_capacity(handle);
   const transformUpdateGenerationsPointer = exports.lume_transform_update_generations_ptr(handle);
@@ -249,8 +286,21 @@ export async function createWasmCore(
     materialsPointer,
     visibleSlotsPointer,
     instancesPointer,
+    slotStatesPointer,
+    slotBoundsPointer,
+    slotResourcesPointer,
     dirtyRangeStartsPointer,
     dirtyRangeCountsPointer,
+    stateDirtyRangeStartsPointer,
+    stateDirtyRangeCountsPointer,
+    boundsDirtyRangeStartsPointer,
+    boundsDirtyRangeCountsPointer,
+    resourceDirtyRangeStartsPointer,
+    resourceDirtyRangeCountsPointer,
+    candidateGeometriesPointer,
+    candidatePipelinesPointer,
+    candidateMaterialsPointer,
+    candidateSlotsPointer,
     camerasPointer,
   );
   let transformUpdateGenerations = new Uint32Array(
@@ -406,8 +456,21 @@ export async function createWasmCore(
           materialsPointer,
           visibleSlotsPointer,
           instancesPointer,
+          slotStatesPointer,
+          slotBoundsPointer,
+          slotResourcesPointer,
           dirtyRangeStartsPointer,
           dirtyRangeCountsPointer,
+          stateDirtyRangeStartsPointer,
+          stateDirtyRangeCountsPointer,
+          boundsDirtyRangeStartsPointer,
+          boundsDirtyRangeCountsPointer,
+          resourceDirtyRangeStartsPointer,
+          resourceDirtyRangeCountsPointer,
+          candidateGeometriesPointer,
+          candidatePipelinesPointer,
+          candidateMaterialsPointer,
+          candidateSlotsPointer,
           camerasPointer,
         );
         frame.geometries = refreshed.geometries;
@@ -415,8 +478,21 @@ export async function createWasmCore(
         frame.materials = refreshed.materials;
         frame.visibleSlots = refreshed.visibleSlots;
         frame.instanceData = refreshed.instanceData;
+        frame.slotStates = refreshed.slotStates;
+        frame.slotBounds = refreshed.slotBounds;
+        frame.slotResources = refreshed.slotResources;
         frame.dirtyRangeStarts = refreshed.dirtyRangeStarts;
         frame.dirtyRangeCounts = refreshed.dirtyRangeCounts;
+        frame.stateDirtyRangeStarts = refreshed.stateDirtyRangeStarts;
+        frame.stateDirtyRangeCounts = refreshed.stateDirtyRangeCounts;
+        frame.boundsDirtyRangeStarts = refreshed.boundsDirtyRangeStarts;
+        frame.boundsDirtyRangeCounts = refreshed.boundsDirtyRangeCounts;
+        frame.resourceDirtyRangeStarts = refreshed.resourceDirtyRangeStarts;
+        frame.resourceDirtyRangeCounts = refreshed.resourceDirtyRangeCounts;
+        frame.candidateGeometries = refreshed.candidateGeometries;
+        frame.candidatePipelines = refreshed.candidatePipelines;
+        frame.candidateMaterials = refreshed.candidateMaterials;
+        frame.candidateSlots = refreshed.candidateSlots;
         frame.cameraData = refreshed.cameraData;
         transformUpdateGenerations = new Uint32Array(
           observedMemory,
@@ -464,7 +540,12 @@ export async function createWasmCore(
       }
       frame.instanceCount = exports.lume_visible_count(handle);
       frame.dirtyRangeCount = exports.lume_render_dirty_range_count(handle);
+      frame.stateDirtyRangeCount = exports.lume_render_state_dirty_range_count(handle);
+      frame.boundsDirtyRangeCount = exports.lume_render_bounds_dirty_range_count(handle);
+      frame.resourceDirtyRangeCount = exports.lume_render_resource_dirty_range_count(handle);
       frame.visibleSlotsDirty = exports.lume_visible_slots_dirty(handle) !== 0;
+      frame.candidateCount = exports.lume_candidate_count(handle);
+      frame.candidateSlotsDirty = exports.lume_candidate_slots_dirty(handle) !== 0;
       frame.cameraCount = exports.lume_render_camera_count(handle);
       frame.camerasDirty = exports.lume_render_cameras_dirty(handle) !== 0;
       return frame;
@@ -472,6 +553,11 @@ export async function createWasmCore(
     resize(aspect: number) {
       if (!disposed && exports.lume_engine_set_camera_aspect(handle, aspect) === 0) {
         throw new Error("WASM camera resize failed.");
+      }
+    },
+    invalidateRendererCache() {
+      if (!disposed && exports.lume_engine_invalidate_renderer_cache(handle) === 0) {
+        throw new Error("WASM renderer-cache invalidation failed.");
       }
     },
     stats() {
@@ -517,27 +603,94 @@ function createFrameViews(
   materialsPointer: number,
   visibleSlotsPointer: number,
   instancesPointer: number,
+  slotStatesPointer: number,
+  slotBoundsPointer: number,
+  slotResourcesPointer: number,
   dirtyRangeStartsPointer: number,
   dirtyRangeCountsPointer: number,
+  stateDirtyRangeStartsPointer: number,
+  stateDirtyRangeCountsPointer: number,
+  boundsDirtyRangeStartsPointer: number,
+  boundsDirtyRangeCountsPointer: number,
+  resourceDirtyRangeStartsPointer: number,
+  resourceDirtyRangeCountsPointer: number,
+  candidateGeometriesPointer: number,
+  candidatePipelinesPointer: number,
+  candidateMaterialsPointer: number,
+  candidateSlotsPointer: number,
   camerasPointer: number,
 ): RenderFrame {
   return {
     instanceCount: 0,
     dirtyRangeCount: 0,
+    stateDirtyRangeCount: 0,
+    boundsDirtyRangeCount: 0,
+    resourceDirtyRangeCount: 0,
     visibleSlotsDirty: false,
+    candidateCount: 0,
+    candidateSlotsDirty: false,
     cameraCount: 0,
     camerasDirty: false,
     geometries: new Uint32Array(memory, geometriesPointer, visibleCapacity),
     pipelines: new Uint32Array(memory, pipelinesPointer, visibleCapacity),
     materials: new Uint32Array(memory, materialsPointer, visibleCapacity),
     visibleSlots: new Uint32Array(memory, visibleSlotsPointer, visibleCapacity),
+    candidateGeometries: new Uint32Array(memory, candidateGeometriesPointer, visibleCapacity),
+    candidatePipelines: new Uint32Array(memory, candidatePipelinesPointer, visibleCapacity),
+    candidateMaterials: new Uint32Array(memory, candidateMaterialsPointer, visibleCapacity),
+    candidateSlots: new Uint32Array(memory, candidateSlotsPointer, visibleCapacity),
     instanceData: new Float32Array(
       memory,
       instancesPointer,
       renderEntityCapacity * INSTANCE_FLOATS,
     ),
+    slotStates: new Uint32Array(
+      memory,
+      slotStatesPointer,
+      renderEntityCapacity * SLOT_RECORD_WORDS,
+    ),
+    slotBounds: new Float32Array(
+      memory,
+      slotBoundsPointer,
+      renderEntityCapacity * SLOT_RECORD_WORDS,
+    ),
+    slotResources: new Uint32Array(
+      memory,
+      slotResourcesPointer,
+      renderEntityCapacity * SLOT_RECORD_WORDS,
+    ),
     dirtyRangeStarts: new Uint32Array(memory, dirtyRangeStartsPointer, renderEntityCapacity),
     dirtyRangeCounts: new Uint32Array(memory, dirtyRangeCountsPointer, renderEntityCapacity),
+    stateDirtyRangeStarts: new Uint32Array(
+      memory,
+      stateDirtyRangeStartsPointer,
+      renderEntityCapacity,
+    ),
+    stateDirtyRangeCounts: new Uint32Array(
+      memory,
+      stateDirtyRangeCountsPointer,
+      renderEntityCapacity,
+    ),
+    boundsDirtyRangeStarts: new Uint32Array(
+      memory,
+      boundsDirtyRangeStartsPointer,
+      renderEntityCapacity,
+    ),
+    boundsDirtyRangeCounts: new Uint32Array(
+      memory,
+      boundsDirtyRangeCountsPointer,
+      renderEntityCapacity,
+    ),
+    resourceDirtyRangeStarts: new Uint32Array(
+      memory,
+      resourceDirtyRangeStartsPointer,
+      renderEntityCapacity,
+    ),
+    resourceDirtyRangeCounts: new Uint32Array(
+      memory,
+      resourceDirtyRangeCountsPointer,
+      renderEntityCapacity,
+    ),
     cameraData: new Float32Array(memory, camerasPointer, cameraCapacity * CAMERA_FLOATS),
   };
 }

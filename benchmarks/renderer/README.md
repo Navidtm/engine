@@ -30,3 +30,16 @@ on each sampled frame. Each result includes raw per-frame buffer-upload bytes
 and `GPUQueue.writeBuffer` call counts. From the repository root,
 `pnpm benchmark:renderer-uploads` captures the complete count/update matrix and
 writes `benchmarks/results/persistent-instance-upload-latest.json`.
+
+Milestone 6 adds `capacity`, `visibleRatio`, `boundsUpdateRatio`,
+`resourceUpdateRatio`, `churnRatio`, `cameraCount`, and `visibilityMode=cpu|gpu`.
+`pnpm benchmark:renderer-scalability` runs the controlled 29-scenario matrix in
+CPU/GPU/GPU/CPU/AUTO/AUTO order. It covers 1k through 100k objects, 1/10/50/100%
+occupancy, 0/10/50/100% visibility, independent dirty domains, 1/10/100% churn,
+one/two/four-camera extraction, plus empty and seeded-random scenes. The output is
+`benchmarks/results/renderer-scalability-latest.json`.
+
+GPU measurements use pull-only indirect/visible-buffer readback. The sampled
+CPU count/hash and GPU count/hash are published from the same frame and every
+GPU run fails the matrix if membership differs. Readback is benchmark and
+diagnostic work; ordinary engine frames do not copy visibility results to CPU.

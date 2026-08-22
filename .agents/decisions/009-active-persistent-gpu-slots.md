@@ -2,11 +2,11 @@
 
 ## Status
 
-Accepted
+Implemented
 
 ## Date
 
-2026-08-22
+2026-08-23
 
 ## Context
 
@@ -273,6 +273,32 @@ GPU adapter, OS, resolution, warmup, sample count, configured capacities, and
 tested commit must be recorded. Unsupported large cases are reported as skipped
 with the device limit, never replaced by estimates.
 
+## Implementation outcome
+
+The implementation uses a 16-byte `GpuSlotState` record containing packed
+entity identity, flags, payload identity, and reserved space. A separate
+16-byte resource-key record contains geometry, pipeline, material, and packed
+entity identity. Bounds remain 16-byte world-space spheres and instances retain
+the ADR 007 80-byte layout. All four domains have reusable coalesced dirty
+ranges; activation and generation replacement dirty every domain, while
+deactivation only clears slot state.
+
+GPU visibility partitions the compact candidate list by draw run. A reset
+compute pass clears indirect instance counts, a cull pass validates activity,
+payload/resource identities and frustum bounds, and atomic counters compact
+visible slots into per-run regions. Rendering issues one `drawIndexedIndirect`
+per valid run. The CPU path remains independently executable.
+
+`auto` intentionally resolves to CPU. The committed controlled browser matrix
+does not justify a portable CPU/GPU crossover threshold, so callers must opt in
+to GPU visibility. Pull-requested diagnostic copies prove CPU/GPU count and
+membership equivalence without adding readback to normal frames.
+
+Renderer reconstruction after device loss replays live resource descriptors,
+invalidates derived GPU cache state, and forces a full successful-scene
+publication. Disposal tests cover every persistent scene, compute, indirect,
+and readback buffer.
+
 ## Consequences
 
 ### Positive
@@ -294,19 +320,18 @@ with the device limit, never replaced by estimates.
 - Scanning fixed capacity may be inefficient for sparse scenes and requires
   benchmark evidence before becoming the default path.
 
-## Implementation sequence
+## Implementation sequence followed
 
-1. Add CPU slot activity/identity and lifecycle tests while retaining CPU
+1. Added CPU slot activity/identity and lifecycle tests while retaining CPU
    visibility.
-2. Add renderer-owned slot-state storage and dirty uploads; continue drawing
+2. Added renderer-owned slot-state storage and dirty uploads; continued drawing
    through the current visible-slot path.
-3. Add compute visibility in parallel with CPU visibility and validate output
+3. Added compute visibility in parallel with CPU visibility and validated output
    equivalence.
-4. Add indirect command generation only after lifecycle correctness and
+4. Added indirect command generation after lifecycle correctness and
    benchmark evidence are stable.
-5. Select or retain runtime policy from measured end-to-end results; do not
-   remove CPU visibility as part of the migration.
+5. Retained CPU as the automatic policy from measured end-to-end results and
+   kept GPU visibility as explicit opt-in.
 
-Compute shaders, indirect draw layouts, occlusion culling, public multi-camera
-APIs, and automatic CPU/GPU policy thresholds are intentionally outside this
-decision.
+Occlusion culling, public multi-camera presentation, and an automatic CPU/GPU
+crossover threshold are intentionally outside this decision.

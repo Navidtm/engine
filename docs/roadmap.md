@@ -52,7 +52,7 @@ handles, entity slot recycling, transport metrics, and scale benchmarks.
 Benchmark focus: 10k through 1M shared updates, 10k through 500k structural
 commands, lifecycle reuse, staging bytes, ranges, and overflow visibility.
 
-## Milestone 6 — rendering scalability (active; foundation implemented)
+## Milestone 6 — rendering scalability (implemented)
 
 The implemented starting point is the persistent entity-indexed GPU instance
 representation and dirty-range upload path from
@@ -61,20 +61,23 @@ epoch-gated RenderWorld/visibility reuse from
 [ADR 008](../.agents/decisions/008-epoch-gated-render-extraction.md). Their
 controlled measurements are committed; they are not future Milestone 6 work.
 
-The next implementation slice starts with explicit active and generational GPU
-slot metadata from [ADR 009](../.agents/decisions/009-active-persistent-gpu-slots.md).
-It then validates compute visibility against the existing CPU reference path
-before introducing indirect command storage and indirect drawing. Render-graph
-resource lifetime analysis remains pending. Textures, lighting, material
-variants, and asset streaming stay out of scope until this scalability path is
-measured and stable.
+Explicit active/generational GPU slot metadata, domain-specific dirty uploads,
+compute frustum visibility, per-run indirect command generation, and indexed
+indirect drawing are implemented under
+[ADR 009](../.agents/decisions/009-active-persistent-gpu-slots.md). CPU visibility
+remains the reference/fallback, and pull-sampled count/hash diagnostics prove
+same-frame membership equivalence. Automatic device-loss reconstruction replays
+live resource descriptors and republishes derived scene state.
 
-The completed entry gates, pending implementation, and measurement requirements
-are separated in [milestone-6.md](milestone-6.md).
+The completed entry gates, implementation, measurement evidence, and remaining
+non-goals are separated in [milestone-6.md](milestone-6.md).
 
-Benchmark focus: active/tested/visible slots, occupancy and dirtiness ratios,
-CPU/GPU visibility equivalence, dirty-domain upload bytes, draw/dispatch counts,
-CPU/GPU stage time, missed frames, and owned CPU/WASM/GPU memory.
+The controlled matrix is committed at
+`benchmarks/results/renderer-scalability-latest.json`. It covers scale,
+occupancy, visibility, transform/bounds/resource dirtiness, churn, and camera
+counts with CPU/GPU/CPU/GPU ordering and correctness hashes. Render-graph
+resource lifetime analysis, occlusion culling, public multi-camera presentation,
+textures, lighting, material variants, and asset streaming remain pending.
 
 ## Known future bottlenecks
 
@@ -86,8 +89,9 @@ CPU/GPU stage time, missed frames, and owned CPU/WASM/GPU memory.
    hide first use. Material manifests will support asynchronous prewarming.
 4. **Uniform alignment and fragmentation:** one buffer per material will not
    scale. Phase 2 uses aligned arenas and dynamic offsets.
-5. **Device loss:** recovery currently terminates the runtime with a clear error.
-   Asset descriptors must become replayable before transparent recovery.
+5. **Device loss beyond built-ins:** built-in geometry/material descriptors are
+   replayed automatically; future streamed/external assets need equivalent
+   replay descriptors before they can share transparent recovery.
 6. **Generation exhaustion:** ADR 010 preserves compact 20/12 identities and
    retires a slot after 4,096 allocations. Stale handles cannot alias, but
    extreme lifetime churn can reduce reusable capacity.

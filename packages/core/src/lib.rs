@@ -22,7 +22,8 @@ pub use material::{BASIC_PIPELINE_ID, BasicMaterial, MaterialRegistry, PipelineI
 pub use resource::{GeometryHandle, MaterialHandle};
 pub type Material = BasicMaterial;
 pub use render_world::{
-    ExtractionError, ExtractionStats, GpuBounds, GpuCamera, GpuInstance, RenderWorld,
+    ExtractionError, ExtractionStats, GpuBounds, GpuCamera, GpuInstance, GpuResourceKeys,
+    GpuSlotState, RenderWorld, SLOT_ACTIVE,
 };
 pub use visibility::{Frustum, VisibilityError, VisibilityStats, VisibleRenderBuffer};
 pub use world::{World, WorldCapacity};

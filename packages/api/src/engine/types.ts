@@ -93,6 +93,8 @@ export interface EngineConfig {
   readonly transport?: EngineTransportOptions;
   /** Prefers a high-performance (`"high"`) or power-efficient (`"low"`) adapter. */
   readonly powerPreference?: PowerPreference;
+  /** Visibility backend; `auto` uses the measured CPU reference policy. */
+  readonly visibilityMode?: "auto" | "cpu" | "gpu";
   /** Canvas compositing mode; opaque by default. */
   readonly alphaMode?: GPUCanvasAlphaMode;
   /** Main render-pass clear color. */

@@ -213,20 +213,23 @@ measurement remains an acceptance activity, not unfinished transport design.
 
 ## Status
 
-Active; persistent representation foundation implemented
+Completed
 
 ## Objective
 
 Move from basic rendering to large-scale GPU rendering.
 
-Implemented foundation:
+Implemented:
 
 - persistent entity-indexed RenderWorld and renderer instance storage (ADR 007)
 - coalesced changed-slot uploads and stable visible-slot indirection (ADR 007)
 - epoch-gated RenderWorld snapshot and visibility reuse (ADR 008)
 - controlled browser evidence for static and dirty workloads
-
-Next implementation sequence:
+- explicit active/generational slot state and domain-specific dirty publication
+- compute frustum visibility validated against the CPU oracle
+- per-run indirect commands and indexed indirect drawing
+- automatic renderer/resource reconstruction after device loss
+- controlled scalability/equivalence matrix
 
 ## Instancing
 
@@ -237,7 +240,7 @@ Preserve:
 
 ## GPU Buffers
 
-Add:
+Implemented:
 
 - explicit active/generational slot-state storage from ADR 009
 - indirect buffers
@@ -267,10 +270,10 @@ Indirect Draw
 GPU
 ```
 
-ADR 009 is accepted design, not implemented state. CPU visibility remains the
-reference path until compute membership equivalence and the required benchmark
-matrix pass. Indirect command generation follows lifecycle correctness rather
-than being developed in parallel with it.
+ADR 009 is implemented. CPU visibility remains the reference and automatic
+fallback; `auto` selects CPU because no portable crossover threshold was proven.
+GPU visibility is explicit opt-in and is accompanied by pull-sampled
+same-frame count/hash equivalence diagnostics in benchmarks.
 
 ---
 

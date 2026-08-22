@@ -38,6 +38,9 @@ export function initialize(state: EngineState): Promise<void> {
       : { powerPreference: webGpuPowerPreference(state.config.powerPreference) }),
     ...(state.config.alphaMode === undefined ? {} : { alphaMode: state.config.alphaMode }),
     ...(state.config.clearColor === undefined ? {} : { clearColor: state.config.clearColor }),
+    ...(state.config.visibilityMode === undefined
+      ? {}
+      : { visibilityMode: state.config.visibilityMode }),
   };
   const message: MainToWorkerMessage = {
     type: "init",

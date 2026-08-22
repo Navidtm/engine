@@ -53,29 +53,35 @@ represented by code, tests, ADRs, or committed measurements:
 This table defines renderer-entry readiness. It does not mark Milestone 6
 complete and does not convert accepted ADR 009 semantics into implemented facts.
 
-## Accepted design, pending implementation
+## Completed implementation
 
-[ADR 009](../.agents/decisions/009-active-persistent-gpu-slots.md) requires every
-persistent slot that can be scanned by compute to carry explicit activity and
-the complete packed generational identity. The following remain unimplemented:
+[ADR 009](../.agents/decisions/009-active-persistent-gpu-slots.md) is implemented.
+Every persistent render slot now has explicit activity and packed generational
+identity, plus independently dirty instance, bounds, and resource-key domains.
+Extraction preflights capacity and publishes a complete replacement or leaves
+the previous successful snapshot unchanged.
 
-1. reusable CPU slot activity/identity state and lifecycle dirty domains;
-2. renderer-owned slot-state storage and bounded dirty uploads;
-3. transactional publication ordering between payload, activity, visibility,
-   and frame-graph consumers;
-4. compute visibility with output equivalence to CPU visibility;
-5. indirect command generation and indirect drawing; and
-6. runtime policy selection, including retention of CPU fallback.
+The renderer owns persistent slot-state, bounds, resource-key, candidate,
+visible-output, indirect-command, parameter, and diagnostic readback buffers.
+Its frame graph orders dirty publication before compute visibility, and compute
+before indexed indirect drawing. CPU visibility remains the reference and
+fallback. `EngineConfig.visibilityMode` exposes `cpu`, `gpu`, and `auto`; `auto`
+currently selects CPU because the controlled matrix did not establish a
+portable crossover threshold.
 
-The implementation sequence is intentionally ordered. Active/generational state
-and its correctness matrix come first. Compute visibility runs beside the CPU
-oracle next. Indirect commands follow only after lifecycle and visibility
-equivalence are stable.
+GPU result readback is pull-only diagnostic work. Count and order-independent
+membership hashes for CPU and GPU are published transactionally from the same
+sample, so benchmark validation cannot compare different frames. Ordinary
+frames perform no readback.
+
+Device loss reconstructs the renderer and every live built-in geometry and
+material from worker-owned descriptors, invalidates the derived renderer cache,
+and republishes the current successful RenderWorld snapshot before scheduling
+resumes. Commands received during recovery are replayed afterward.
 
 ## Completion and measurement gates
 
-Milestone 6 is not complete until the correctness tests and benchmark matrix in
-ADR 009 pass. In particular:
+The correctness tests and benchmark matrix in ADR 009 pass. Coverage includes:
 
 - removal, dependency loss, and generation replacement must never leave a slot
   visibility-eligible;
@@ -83,11 +89,15 @@ ADR 009 pass. In particular:
 - CPU and GPU visibility membership must match for empty, sparse, fully visible,
   fully culled, randomized, and multi-camera scenes;
 - device-loss reconstruction and disposal must cover every derived GPU buffer;
-- controlled measurements must report occupancy, visibility ratio, dirtiness,
-  churn, camera count, upload bytes, dispatch/draw counts, CPU/GPU time,
-  missed-frame distribution, and owned memory; and
-- correctness hashes or readback counts must accompany performance samples.
+- controlled CPU/GPU/GPU/CPU/AUTO/AUTO measurements across 1k, 10k, 50k, and
+  100k browser scenes, occupancy and visibility ratios, each dirty domain,
+  lifecycle churn, and one/two/four-camera extraction; and
+- upload bytes by domain, dispatch/indirect counts, timings, owned memory, and
+  same-sample correctness counts/hashes in
+  `benchmarks/results/renderer-scalability-latest.json`.
 
-Facts remain sourced from current code and committed results. ADR 009 defines
-the accepted target. The list above is pending work and its acceptance boundary,
-not a prediction of performance.
+The current public renderer still presents the first camera. The two- and
+four-camera tests prove independent visibility results over shared persistent
+scene state; a public multi-camera render API remains deliberately out of scope.
+Occlusion culling, hierarchical active masks, render-graph transient allocation,
+textures, lighting, and asset streaming remain future work.

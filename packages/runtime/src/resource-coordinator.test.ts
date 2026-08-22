@@ -196,4 +196,29 @@ describe("worker resource coordinator", () => {
     );
     expect(renderer.registerBasicMaterial).toHaveBeenCalledTimes(2);
   });
+
+  it("rebuilds every live renderer resource after device loss", () => {
+    const coordinator = createResourceCoordinator(8);
+    const { core, renderer } = dependencies();
+    coordinator.apply(
+      { type: "create-geometry", handle: 1, builtin: "triangle" },
+      core,
+      renderer,
+      1,
+    );
+    coordinator.apply({ type: "create-geometry", handle: 2, builtin: "cube" }, core, renderer, 1);
+    coordinator.apply(
+      { type: "create-basic-material", handle: 3, color: [1, 1, 1, 1] },
+      core,
+      renderer,
+      1,
+    );
+    const replacement = dependencies().renderer;
+
+    coordinator.rebuildRenderer(replacement);
+
+    expect(replacement.registerGeometry).toHaveBeenCalledWith(1, "triangle");
+    expect(replacement.registerGeometry).toHaveBeenCalledWith(2, "cube");
+    expect(replacement.registerBasicMaterial).toHaveBeenCalledWith(3);
+  });
 });

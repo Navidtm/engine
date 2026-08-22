@@ -1,18 +1,16 @@
 # Current Project State
 
-Last verified: 2026-08-22 on master after issue #25
+Last verified: 2026-08-23 on master after Milestone 6
 
 This document records the implementation that exists in the repository. It is
 an evidence-based snapshot, not a description of intended future architecture.
 
 ## Executive Status
 
-The engine has completed its runtime-foundation and transport-hardening work.
-The explicit renderer-entry gates are complete, so implementation can proceed
-within Milestone 6, Renderer Scalability. This readiness statement does not mean
-the milestone itself is complete: ADR 007 persistent storage and ADR 008
-epoch-gated reuse are implemented, while ADR 009 active/generational slot state,
-compute visibility, and indirect drawing remain pending.
+The engine has completed its runtime-foundation, transport-hardening, and
+renderer-scalability work. ADR 007 persistent storage, ADR 008 epoch-gated
+reuse, and ADR 009 active/generational slot state, compute visibility, and
+indirect drawing are implemented and measured.
 
 Transport Hardening is complete. All Phase 4 mechanisms are implemented,
 tested, documented, and covered by a committed Node benchmark result. Controlled
@@ -28,9 +26,9 @@ Application
   -> shared-memory or message transport
   -> Rust/WASM ECS
   -> extraction into RenderWorld
-  -> CPU visibility and ordering
+  -> CPU reference visibility and GPU compute visibility
   -> compiled FrameGraph
-  -> WebGPU renderer
+  -> direct or indexed-indirect WebGPU submission
   -> GPU
 ```
 
@@ -129,6 +127,14 @@ Implemented:
 - CPU ordering by pipeline, material, and geometry for consecutive draw runs.
 - Capacity limits with explicit failure when extracted data exceeds the
   configured entity capacity.
+- Persistent 16-byte active/generational slot state, bounds, and resource-key
+  domains with independent coalesced dirty ranges.
+- Transactional extraction: dependency/capacity failure preserves the last
+  successful snapshot and publishes no partial domains.
+- Generation replacement performs a full-domain publication; deactivation
+  clears eligibility without interpreting stale payload bytes.
+- Independent CPU visibility output for one, two, and four cameras over shared
+  persistent scene state.
 
 The visibility system currently uses the first extracted camera. Storage can
 hold multiple cameras, but true multi-camera rendering is not implemented.
@@ -140,7 +146,8 @@ Implemented:
 - Functional pass/resource declarations.
 - Dependency validation and topological compilation.
 - Reusable compiled execution order.
-- Current renderer graph with an upload pass followed by a main render pass.
+- Current renderer graph with ordered upload, compute-visibility, and main
+  render passes.
 
 This is a frame-graph foundation, not yet a production transient-resource
 allocator or multi-pass scheduling system.
@@ -167,17 +174,26 @@ Implemented:
   fixed latest/cumulative counters add no stage clocks to ordinary frames.
 - Indexed drawing and CPU-prepared instancing: consecutive compatible visible
   items are submitted with one `drawIndexed` call using `instanceCount`.
-- Device-loss reporting to the main thread without exposing the `GPUDevice`
-  outside the renderer package.
+- Persistent state, bounds, resource, candidate, visible-output, indirect, and
+  compute-parameter buffers sized at renderer initialization.
+- GPU compute frustum visibility with active, payload-generation, and resource
+  identity validation, followed by per-run `drawIndexedIndirect` submission.
+- Public `cpu`, `gpu`, and `auto` visibility policy; `auto` intentionally uses
+  CPU until measurements establish a portable crossover threshold.
+- Pull-only GPU visibility diagnostics with transactionally paired CPU/GPU
+  counts and order-independent membership hashes; normal frames do no readback.
+- Automatic device-loss reconstruction of renderer buffers/pipelines and live
+  built-in resource descriptors, followed by a full derived-scene republish.
 - Transactional renderer/WASM initialization with cleanup of partial and late
   successful resources.
 
 Current limitations:
 
 - One basic pipeline and color-only material path.
-- No indirect command buffers or indirect drawing.
-- No GPU-driven culling, compute visibility, or GPU scene database.
-- Device loss is reported but the renderer is not automatically rebuilt.
+- `auto` has no GPU crossover heuristic and therefore retains CPU visibility.
+- Public presentation still renders the first camera, although core visibility
+  supports independent multi-camera results.
+- No occlusion culling, hierarchical active masks, or GPU-authoritative scene.
 
 ## Transport Hardening Status
 
@@ -322,7 +338,7 @@ device loss, and disposal. A failing state-machine seed can be rerun with
 `LUME_TEST_SEED=<unsigned-u32>`. End-to-end browser tests for the complete
 main-thread/worker/WASM/WebGPU path are not yet part of CI.
 
-## Renderer Scalability Entry Gate
+## Renderer Scalability Completion
 
 The transition from transport hardening into renderer scalability is based on
 explicit completed issues rather than a general readiness claim:
@@ -340,24 +356,24 @@ explicit completed issues rather than a general readiness claim:
 | Generation exhaustion without stale aliasing   | [#23](https://github.com/Navidtm/engine/issues/23)                                                     |
 | Deterministic composed boundary coverage       | [#24](https://github.com/Navidtm/engine/issues/24)                                                     |
 
-Issue #19 completed the ADR 009 design gate only. Production slot activity,
-generation metadata, compute visibility, and indirect commands remain subject
-to ADR 009's correctness and benchmark acceptance criteria. The complete
-implemented/accepted/pending split is in
-[`docs/milestone-6.md`](../../docs/milestone-6.md).
+The gates above enabled the now-completed ADR 009 implementation. Lifecycle,
+transactionality, multi-camera, reconstruction, and disposal tests pass; the
+controlled CPU/GPU/AUTO matrix and correctness hashes are committed in
+`benchmarks/results/renderer-scalability-latest.json`. The complete delivered
+scope and non-goals are in [`docs/milestone-6.md`](../../docs/milestone-6.md).
 
 ## Roadmap Comparison
 
-| Roadmap phase                 | Roadmap label | Actual repository state                                                                                     |
-| ----------------------------- | ------------- | ----------------------------------------------------------------------------------------------------------- |
-| 1. Runtime Foundation         | Completed     | Implemented                                                                                                 |
-| 2. Render Architecture        | Completed     | Implemented                                                                                                 |
-| 3. Performance Infrastructure | Completed     | Implemented                                                                                                 |
-| 4. Transport Hardening        | Completed     | Implemented; browser validation remains an acceptance activity                                              |
-| 6. Renderer Scalability       | Active        | ADR 007/008 foundation implemented; ADR 009 slot state, compute visibility, and indirect submission pending |
-| 6. Asset Pipeline             | Planned       | Not implemented                                                                                             |
-| 7. Advanced Graphics          | Planned       | Not implemented                                                                                             |
-| 8. Developer Ecosystem        | Planned       | Not implemented                                                                                             |
+| Roadmap phase                 | Roadmap label | Actual repository state                           |
+| ----------------------------- | ------------- | ------------------------------------------------- |
+| 1. Runtime Foundation         | Completed     | Implemented                                       |
+| 2. Render Architecture        | Completed     | Implemented                                       |
+| 3. Performance Infrastructure | Completed     | Implemented                                       |
+| 4. Transport Hardening        | Completed     | Implemented                                       |
+| 6. Renderer Scalability       | Completed     | ADR 007/008/009 implemented, tested, and measured |
+| 6. Asset Pipeline             | Planned       | Not implemented                                   |
+| 7. Advanced Graphics          | Planned       | Not implemented                                   |
+| 8. Developer Ecosystem        | Planned       | Not implemented                                   |
 
 ## Intentionally Not Implemented
 
@@ -366,49 +382,32 @@ implemented/accepted/pending split is in
 - glTF or other asset loaders and a production asset pipeline.
 - Animation, skinning, morph targets, and skeletal systems.
 - Physics, networking, gameplay systems, editor, or scene authoring.
-- GPU compute culling, indirect rendering, and GPU-driven submission.
+- Occlusion culling, hierarchical active masks, and GPU-authoritative scenes.
+- Public multi-camera presentation; only the first camera is rendered.
 
 These omissions match the roadmap and the scope constraints of the completed
-transport milestone. ADR 009 defines the required active and generational
-persistent-slot lifecycle before compute visibility is implemented; it does not
-claim that GPU slot-state storage or compute submission exists today.
+renderer-scalability milestone.
 
 ## Remaining Runtime and Rendering Bottlenecks
 
 1. The required SAB-to-WASM staging copy still scales linearly with the number
    and size of dirty fields.
-2. Changed scenes still use CPU extraction, frustum culling, and render-key
-   sorting. Visibility ordering performs an `O(V log V)` unstable sort whenever
-   the render snapshot or camera changes.
+2. Changed scenes still use CPU extraction and render-key grouping. GPU
+   visibility consumes a compact candidate list rather than scanning a
+   hierarchical active mask.
 3. Static frames reuse extraction and visibility, but any render mutation still
    rebuilds the complete compact snapshot.
-4. Draw-call reduction depends on consecutive CPU ordering; there are no
-   indirect batches or GPU-generated commands.
-5. Large-scale measurements are transport microbenchmarks. Real worker
-   scheduling, browser atomics, WASM copying, WebGPU upload, and GPU execution
-   still require controlled browser measurement.
+4. Indirect commands are partitioned by CPU-prepared resource runs; fully
+   GPU-generated resource grouping is not implemented.
+5. The committed browser matrix is device-specific evidence, not a portable
+   crossover threshold. `auto` therefore remains on CPU visibility.
 6. The current frame graph and resource model are sufficient for one basic
    render pass but not yet proven for a larger renderer.
 
 ## Current Priority
 
-Transport semantics should now be treated as stable unless browser evidence
-finds a correctness or material performance problem. The next implementation
-sequence starts from the persistent representation already delivered by ADR 007
-and the reuse policy delivered by ADR 008:
-
-1. Implement ADR 009 CPU slot activity/identity and lifecycle tests.
-2. Add renderer-owned slot-state storage and dirty uploads while retaining CPU
-   visibility.
-3. Implement compute visibility beside the CPU reference and prove equivalent
-   membership.
-4. Introduce indirect command storage and drawing only after lifecycle and
-   visibility correctness are stable.
-5. Run ADR 009's controlled correctness and benchmark matrix before selecting
-   any runtime policy.
-
-This sequence preserves ECS/RenderWorld/renderer ownership and separates
-pending implementation from measured claims.
-
-Textures, lighting, animation, physics, and asset loading remain out of scope
-until the renderer scalability foundation is measured and stable.
+Runtime transport and renderer-scalability semantics should now be treated as
+stable unless browser evidence finds a correctness or material performance
+problem. The next roadmap phase is the asset pipeline. Texture/mesh ingestion,
+compression, streaming, caching, and replayable device-loss descriptors must
+preserve the existing ECS -> RenderWorld -> renderer ownership boundary.

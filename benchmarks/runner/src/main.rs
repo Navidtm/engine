@@ -129,7 +129,7 @@ fn capacity(count: usize) -> WorldCapacity {
         transforms: count,
         mesh_renderers: count,
         cameras: 1,
-        materials: 1,
+        materials: 2,
         bounds: count,
     }
 }

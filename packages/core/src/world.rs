@@ -388,10 +388,6 @@ impl World {
     fn mark_render_dirty(&mut self) {
         bump_revision(&mut self.render_epoch);
     }
-
-    pub(crate) fn render_revision_unchecked(&self, entity: Entity) -> u32 {
-        self.render_revisions[entity.index()]
-    }
 }
 
 fn validate_and_normalize_transform(transform: &mut Transform) -> bool {

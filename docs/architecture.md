@@ -106,20 +106,21 @@ so dynamic scenes keep contiguous deterministic extraction without a second
 incremental data structure. See
 [ADR 008](../.agents/decisions/008-epoch-gated-render-extraction.md).
 
-Accepted design, pending implementation (ADR 009): before persistent slots
-become direct compute-visibility input, every slot will gain explicit active and
-packed generational identity metadata. Removal makes a
-slot ineligible without requiring payload zeroing, generation replacement
-publishes a complete new record, and GPU buffers remain rebuildable derived
-cache state. CPU visibility remains the reference and fallback path. The
-lifecycle, multi-camera constraints, correctness tests, and benchmark matrix are
-defined in
+Implemented renderer scalability (ADR 009): persistent slots carry explicit
+active and packed generational identity metadata. Removal makes a slot
+ineligible without payload zeroing, generation replacement publishes every
+payload domain, and GPU buffers remain rebuildable derived cache state. The
+renderer publishes state, instance, bounds, and resource dirty domains before a
+compute pass validates and compacts candidates into per-run visible regions and
+indirect commands. Indexed indirect drawing consumes those commands. CPU
+visibility remains the reference and fallback path. The lifecycle,
+multi-camera constraints, correctness tests, and benchmark matrix are defined in
 [ADR 009](../.agents/decisions/009-active-persistent-gpu-slots.md).
 
-The renderer-scalability entry gates and implementation order are recorded in
-[milestone-6.md](milestone-6.md). Gate completion means the transport and
-identity foundations are stable enough to proceed; it does not mean active-slot
-storage, compute visibility, or indirect drawing already exists.
+The completed renderer-scalability scope and remaining non-goals are recorded in
+[milestone-6.md](milestone-6.md). `auto` retains CPU visibility because current
+measurements do not justify a portable crossover threshold; GPU visibility is
+available by explicit policy.
 
 Detailed byte layout and browser-thread responsibilities are documented in
 [memory-model.md](memory-model.md) and [threading-model.md](threading-model.md).

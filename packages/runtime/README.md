@@ -24,3 +24,9 @@ The worker Resource Coordinator is the canonical owner of logical geometry and
 basic-material lifetime. It validates generational keys, tracks ECS mesh usage
 edges, and publishes ordered changes to Rust render mirrors and private renderer
 registries. Resource lifecycle state is not exposed as transport state.
+
+On WebGPU device loss, the worker pauses scheduling, recreates the renderer,
+replays every live built-in geometry/material descriptor, invalidates the WASM
+renderer cache, and resumes only after a full derived-scene publication.
+Commands received during reconstruction remain ordered and are replayed after
+the replacement renderer is ready.

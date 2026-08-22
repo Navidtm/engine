@@ -32,6 +32,11 @@ interface WorkerRuntimeState {
   schedulerEpoch: number;
   disposed: boolean;
   initializing: boolean;
+  recovering: boolean;
+  recoveryRunningIntent: boolean;
+  readonly deferredRecoveryMessages: Array<
+    Extract<MainToWorkerMessage, { type: "command" | "batch" }>
+  >;
   lastFrameTimeMs: number;
   lastCpuTimeMs: number;
   previousFrameStart: number;
@@ -63,6 +68,9 @@ export function createWorkerRuntime(host: WorkerHost): (message: MainToWorkerMes
     schedulerEpoch: 0,
     disposed: false,
     initializing: false,
+    recovering: false,
+    recoveryRunningIntent: false,
+    deferredRecoveryMessages: [],
     lastFrameTimeMs: 0,
     lastCpuTimeMs: 0,
     previousFrameStart: 0,
@@ -230,15 +238,7 @@ export function createWorkerRuntime(host: WorkerHost): (message: MainToWorkerMes
         core.resize(latestSize.width / Math.max(latestSize.height, 1));
         renderer.resize(latestSize);
       }
-      void renderer.lost.then((info) => {
-        if (state.disposed || state.renderer !== renderer) return;
-        stopScheduling();
-        host.postMessage({
-          type: "device-lost",
-          reason: info.reason,
-          message: info.message,
-        });
-      });
+      watchDeviceLoss(message, renderer);
       host.postMessage({ type: "ready" });
     } catch (error) {
       renderer?.dispose();
@@ -247,9 +247,89 @@ export function createWorkerRuntime(host: WorkerHost): (message: MainToWorkerMes
     }
   };
 
+  const watchDeviceLoss = (
+    message: Extract<MainToWorkerMessage, { type: "init" }>,
+    renderer: MeshRenderer,
+  ): void => {
+    void renderer.lost.then((info) => {
+      if (state.disposed || state.renderer !== renderer || state.recovering) return;
+      void recoverRenderer(message, renderer).catch((error: unknown) => {
+        report(
+          new Error(`WebGPU device recovery failed (${info.reason}): ${info.message}`, {
+            cause: error,
+          }),
+        );
+      });
+    });
+  };
+
+  const recoverRenderer = async (
+    message: Extract<MainToWorkerMessage, { type: "init" }>,
+    lostRenderer: MeshRenderer,
+  ): Promise<void> => {
+    state.recoveryRunningIntent = state.running;
+    state.recovering = true;
+    stopScheduling();
+    state.renderer = undefined;
+    lostRenderer.dispose();
+    let replacement: MeshRenderer | undefined;
+    try {
+      replacement = await createMeshRenderer(
+        message.value.canvas,
+        state.size ?? message.value.size,
+        message.value.entityCapacity,
+        message.value.renderer,
+        message.value.resourceCapacity,
+      );
+      if (state.disposed) {
+        replacement.dispose();
+        return;
+      }
+      const coordinator = state.coordinator;
+      const core = state.core;
+      if (coordinator === undefined || core === undefined) {
+        throw new Error("Runtime state disappeared during device recovery.");
+      }
+      coordinator.rebuildRenderer(replacement);
+      core.invalidateRendererCache();
+      state.renderer = replacement;
+      watchDeviceLoss(message, replacement);
+      for (const deferred of state.deferredRecoveryMessages) {
+        if (deferred.type === "command") {
+          updateSharedCommands();
+          core.updateSharedTransforms();
+          apply(deferred.value);
+        } else {
+          if (deferred.ordered === true) {
+            updateSharedCommands();
+            core.updateSharedTransforms();
+          }
+          for (const command of deferred.value) apply(command);
+        }
+      }
+      state.deferredRecoveryMessages.length = 0;
+      if (state.recoveryRunningIntent) {
+        const schedulerEpoch = invalidateScheduler();
+        const scheduleNext: FrameRequestCallback = () => frame(schedulerEpoch, scheduleNext);
+        state.running = true;
+        frame(schedulerEpoch, scheduleNext);
+      }
+    } catch (error) {
+      replacement?.dispose();
+      throw error;
+    } finally {
+      state.recovering = false;
+      state.recoveryRunningIntent = false;
+    }
+  };
+
   return (message): void => {
     if (state.disposed) return;
     state.messages += 1;
+    if (state.recovering && (message.type === "command" || message.type === "batch")) {
+      state.deferredRecoveryMessages.push(message);
+      return;
+    }
     try {
       switch (message.type) {
         case "init": {
@@ -285,6 +365,10 @@ export function createWorkerRuntime(host: WorkerHost): (message: MainToWorkerMes
         case "start": {
           if (message.lifecycleEpoch <= state.lifecycleEpoch) break;
           state.lifecycleEpoch = message.lifecycleEpoch;
+          if (state.recovering) {
+            state.recoveryRunningIntent = true;
+            break;
+          }
           const schedulerEpoch = invalidateScheduler();
           const scheduleNext: FrameRequestCallback = () => frame(schedulerEpoch, scheduleNext);
           state.running = true;
@@ -294,6 +378,7 @@ export function createWorkerRuntime(host: WorkerHost): (message: MainToWorkerMes
         case "stop":
           if (message.lifecycleEpoch <= state.lifecycleEpoch) break;
           state.lifecycleEpoch = message.lifecycleEpoch;
+          if (state.recovering) state.recoveryRunningIntent = false;
           stopScheduling();
           host.postMessage({ type: "stopped", lifecycleEpoch: message.lifecycleEpoch });
           break;
@@ -316,7 +401,13 @@ export function createWorkerRuntime(host: WorkerHost): (message: MainToWorkerMes
               allocationsPerFrame: rendererStats?.browserObjectsPerFrame ?? 0,
               render: {
                 drawCalls: rendererStats?.drawCalls ?? 0,
-                visibleObjects: coreStats?.visibleObjects ?? 0,
+                computeDispatches: rendererStats?.computeDispatches ?? 0,
+                indirectDrawCalls: rendererStats?.indirectDrawCalls ?? 0,
+                visibilityBackend: rendererStats?.visibilityBackend ?? "cpu",
+                gpuVisibleObjects: rendererStats?.gpuVisibleObjects ?? null,
+                gpuVisibilityHash: rendererStats?.gpuVisibilityHash ?? null,
+                cpuVisibilityHash: rendererStats?.cpuVisibilityHash ?? null,
+                visibleObjects: rendererStats?.cpuVisibleObjects ?? coreStats?.visibleObjects ?? 0,
                 extractedObjects: coreStats?.renderInstances ?? 0,
               },
               memory: {
@@ -328,6 +419,15 @@ export function createWorkerRuntime(host: WorkerHost): (message: MainToWorkerMes
                 bufferUploadCpuTime: rendererStats?.bufferUploadCpuTimeMs ?? 0,
                 bufferUploadBytes: rendererStats?.bufferUploadBytes ?? 0,
                 bufferWriteCount: rendererStats?.bufferWriteCount ?? 0,
+                uploadBytesByDomain: rendererStats?.uploadBytesByDomain ?? {
+                  instances: 0,
+                  slotState: 0,
+                  bounds: 0,
+                  resources: 0,
+                  visibility: 0,
+                  cameras: 0,
+                  indirect: 0,
+                },
                 framePreparationCpuTime: rendererStats?.framePreparationCpuTimeMs ?? 0,
                 cpuStages: {
                   sampleCount: state.instrumentation.sampleCount,

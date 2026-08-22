@@ -21,6 +21,8 @@ interface RegistryState {
 /** Canonical worker owner for logical resources and ECS usage edges. */
 export interface ResourceCoordinator {
   apply(command: RuntimeCommand, core: WasmCore, renderer: MeshRenderer, aspect: number): void;
+  /** Recreates all live renderer-owned resources after device loss. */
+  rebuildRenderer(renderer: MeshRenderer): void;
   dispose(core: WasmCore, renderer: MeshRenderer): void;
 }
 
@@ -35,6 +37,7 @@ export function createResourceCoordinator(
   const entityAlive = new Uint8Array(entityCapacity);
   const meshGeometry = new Uint32Array(entityCapacity);
   const meshMaterial = new Uint32Array(entityCapacity);
+  const geometryBuiltin = new Uint8Array(resourceCapacity);
   let disposed = false;
 
   const releaseMesh = (entityIndex: number, core: WasmCore, renderer: MeshRenderer): void => {
@@ -57,6 +60,7 @@ export function createResourceCoordinator(
           preflightCreate(geometry, command.handle);
           renderer.registerGeometry(command.handle, command.builtin);
           commitCreate(geometry, command.handle);
+          geometryBuiltin[resourceIndex(command.handle)] = command.builtin === "triangle" ? 1 : 2;
           return;
         }
         case "create-basic-material": {
@@ -136,6 +140,18 @@ export function createResourceCoordinator(
           return;
       }
     },
+    rebuildRenderer(renderer) {
+      if (disposed) throw new Error("Resource coordinator is disposed.");
+      for (let index = 1; index < resourceCapacity; index += 1) {
+        if (geometry.status[index] !== ResourceStatus.Empty) {
+          const builtin = geometryBuiltin[index] === 1 ? "triangle" : "cube";
+          renderer.registerGeometry(pack(index, geometry.generation[index] ?? 0), builtin);
+        }
+        if (materials.status[index] !== ResourceStatus.Empty) {
+          renderer.registerBasicMaterial(pack(index, materials.generation[index] ?? 0));
+        }
+      }
+    },
     dispose(core, renderer) {
       if (disposed) return;
       disposed = true;
@@ -154,6 +170,7 @@ export function createResourceCoordinator(
       entityAlive.fill(0);
       meshGeometry.fill(0);
       meshMaterial.fill(0);
+      geometryBuiltin.fill(0);
     },
   };
 }

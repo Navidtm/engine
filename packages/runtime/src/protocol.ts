@@ -1,7 +1,7 @@
 import type { RendererOptions, SurfaceSize } from "@lume/renderer";
 
 /** Version checked before a main thread and worker exchange runtime messages. */
-export const RUNTIME_PROTOCOL_VERSION = 10;
+export const RUNTIME_PROTOCOL_VERSION = 11;
 
 /** CPU milliseconds attributed to one pull-sampled worker frame. */
 export interface FrameCpuStageTimings {
@@ -28,6 +28,18 @@ export interface EngineStats {
   readonly render: {
     /** Number of indexed draw calls encoded in the most recent frame. */
     readonly drawCalls: number;
+    /** Compute dispatches encoded by GPU visibility. */
+    readonly computeDispatches: number;
+    /** Indexed indirect draw calls encoded in the most recent frame. */
+    readonly indirectDrawCalls: number;
+    /** Active visibility backend. */
+    readonly visibilityBackend: "cpu" | "gpu";
+    /** Latest diagnostic GPU membership count. */
+    readonly gpuVisibleObjects: number | null;
+    /** Latest diagnostic GPU membership hash. */
+    readonly gpuVisibilityHash: number | null;
+    /** CPU-oracle hash captured for the same diagnostic frame. */
+    readonly cpuVisibilityHash: number | null;
     /** Number of frustum-visible instances submitted to the renderer. */
     readonly visibleObjects: number;
     /** Number of instances extracted from the ECS before culling. */
@@ -48,6 +60,16 @@ export interface EngineStats {
     readonly bufferUploadBytes: number;
     /** GPU queue buffer writes issued during the latest frame. */
     readonly bufferWriteCount: number;
+    /** CPU-to-GPU bytes split by persistent scene domain. */
+    readonly uploadBytesByDomain: {
+      readonly instances: number;
+      readonly slotState: number;
+      readonly bounds: number;
+      readonly resources: number;
+      readonly visibility: number;
+      readonly cameras: number;
+      readonly indirect: number;
+    };
     /** Total CPU milliseconds spent in the renderer's latest frame execution. */
     readonly framePreparationCpuTime: number;
     /** Pull-sampled split CPU stages; ordinary frames do not run these timers. */

@@ -3,13 +3,13 @@
 use core::ffi::c_void;
 use lume_core::math::{Color, Quat, Vec3};
 use lume_core::{
-    Bounds, Camera, Entity, GeometryHandle, GpuCamera, GpuInstance, MAX_ENTITY_CAPACITY, Material,
-    MaterialHandle, MeshRenderer, RenderWorld, Transform, VisibleRenderBuffer, World,
-    WorldCapacity,
+    Bounds, Camera, Entity, GeometryHandle, GpuBounds, GpuCamera, GpuInstance, GpuResourceKeys,
+    GpuSlotState, MAX_ENTITY_CAPACITY, Material, MaterialHandle, MeshRenderer, RenderWorld,
+    Transform, VisibleRenderBuffer, World, WorldCapacity,
 };
 
 /// ABI revision required by the TypeScript runtime before it calls any export.
-pub const ABI_VERSION: u32 = 10;
+pub const ABI_VERSION: u32 = 11;
 
 const TRANSFORM_UPDATE_FLOATS: usize = 10;
 
@@ -17,7 +17,9 @@ struct EngineCore {
     world: World,
     render_world: RenderWorld,
     visible: VisibleRenderBuffer,
+    candidates: VisibleRenderBuffer,
     visibility_valid: bool,
+    candidates_valid: bool,
     transform_update_generations: Box<[u32]>,
     transform_update_values: Box<[[f32; TRANSFORM_UPDATE_FLOATS]]>,
     transform_update_masks: Box<[u32]>,
@@ -75,7 +77,9 @@ pub extern "C" fn lume_engine_create(
         world: World::with_capacity(capacity),
         render_world: RenderWorld::with_capacity(entities, cameras),
         visible: VisibleRenderBuffer::with_capacity(entities),
+        candidates: VisibleRenderBuffer::with_capacity(entities),
         visibility_valid: false,
+        candidates_valid: false,
         transform_update_generations: vec![0; transforms].into_boxed_slice(),
         transform_update_values: vec![[0.0; TRANSFORM_UPDATE_FLOATS]; transforms]
             .into_boxed_slice(),
@@ -372,6 +376,19 @@ pub extern "C" fn lume_engine_set_camera_aspect(engine: *mut c_void, aspect: f32
     with_engine(engine, |core| core.world.set_camera_aspect(aspect)) as u32
 }
 
+/// Invalidates renderer-derived caches after device reconstruction.
+#[unsafe(no_mangle)]
+pub extern "C" fn lume_engine_invalidate_renderer_cache(engine: *mut c_void) -> u32 {
+    with_engine(engine, |core| {
+        core.render_world.invalidate_renderer_cache();
+        core.visible.invalidate_renderer_cache();
+        core.candidates.invalidate_renderer_cache();
+        core.visibility_valid = false;
+        core.candidates_valid = false;
+        true
+    }) as u32
+}
+
 /// Returns the number of live ECS entities, or zero for a null engine pointer.
 #[unsafe(no_mangle)]
 pub extern "C" fn lume_engine_entity_count(engine: *mut c_void) -> u32 {
@@ -432,6 +449,29 @@ pub extern "C" fn lume_render_instances_ptr(engine: *mut c_void) -> *const GpuIn
         .unwrap_or(core::ptr::null())
 }
 
+/// Returns the stable pointer to persistent slot lifecycle records.
+#[unsafe(no_mangle)]
+pub extern "C" fn lume_render_slot_states_ptr(engine: *mut c_void) -> *const GpuSlotState {
+    with_engine_value(engine, |core| core.render_world.slot_states_capacity_ptr())
+        .unwrap_or(core::ptr::null())
+}
+
+/// Returns the stable pointer to persistent world-space bounds records.
+#[unsafe(no_mangle)]
+pub extern "C" fn lume_render_slot_bounds_ptr(engine: *mut c_void) -> *const GpuBounds {
+    with_engine_value(engine, |core| core.render_world.slot_bounds_capacity_ptr())
+        .unwrap_or(core::ptr::null())
+}
+
+/// Returns the stable pointer to persistent resource-key records.
+#[unsafe(no_mangle)]
+pub extern "C" fn lume_render_slot_resources_ptr(engine: *mut c_void) -> *const GpuResourceKeys {
+    with_engine_value(engine, |core| {
+        core.render_world.slot_resources_capacity_ptr()
+    })
+    .unwrap_or(core::ptr::null())
+}
+
 /// Returns the number of coalesced persistent-instance ranges changed this frame.
 #[unsafe(no_mangle)]
 pub extern "C" fn lume_render_dirty_range_count(engine: *mut c_void) -> u32 {
@@ -455,6 +495,87 @@ pub extern "C" fn lume_render_dirty_range_starts_ptr(engine: *mut c_void) -> *co
 pub extern "C" fn lume_render_dirty_range_counts_ptr(engine: *mut c_void) -> *const u32 {
     with_engine_value(engine, |core| {
         core.render_world.dirty_range_counts_capacity_ptr()
+    })
+    .unwrap_or(core::ptr::null())
+}
+
+/// Returns the number of coalesced slot-state ranges changed this frame.
+#[unsafe(no_mangle)]
+pub extern "C" fn lume_render_state_dirty_range_count(engine: *mut c_void) -> u32 {
+    with_engine_value(engine, |core| {
+        core.render_world.state_dirty_ranges().0.len() as u32
+    })
+    .unwrap_or(0)
+}
+
+/// Returns the stable pointer to slot-state dirty range starts.
+#[unsafe(no_mangle)]
+pub extern "C" fn lume_render_state_dirty_range_starts_ptr(engine: *mut c_void) -> *const u32 {
+    with_engine_value(engine, |core| {
+        core.render_world.state_dirty_range_starts_capacity_ptr()
+    })
+    .unwrap_or(core::ptr::null())
+}
+
+/// Returns the stable pointer to slot-state dirty range counts.
+#[unsafe(no_mangle)]
+pub extern "C" fn lume_render_state_dirty_range_counts_ptr(engine: *mut c_void) -> *const u32 {
+    with_engine_value(engine, |core| {
+        core.render_world.state_dirty_range_counts_capacity_ptr()
+    })
+    .unwrap_or(core::ptr::null())
+}
+
+/// Returns the number of coalesced bounds ranges changed this frame.
+#[unsafe(no_mangle)]
+pub extern "C" fn lume_render_bounds_dirty_range_count(engine: *mut c_void) -> u32 {
+    with_engine_value(engine, |core| {
+        core.render_world.bounds_dirty_ranges().0.len() as u32
+    })
+    .unwrap_or(0)
+}
+
+/// Returns the stable pointer to bounds dirty range starts.
+#[unsafe(no_mangle)]
+pub extern "C" fn lume_render_bounds_dirty_range_starts_ptr(engine: *mut c_void) -> *const u32 {
+    with_engine_value(engine, |core| {
+        core.render_world.bounds_dirty_range_starts_capacity_ptr()
+    })
+    .unwrap_or(core::ptr::null())
+}
+
+/// Returns the stable pointer to bounds dirty range counts.
+#[unsafe(no_mangle)]
+pub extern "C" fn lume_render_bounds_dirty_range_counts_ptr(engine: *mut c_void) -> *const u32 {
+    with_engine_value(engine, |core| {
+        core.render_world.bounds_dirty_range_counts_capacity_ptr()
+    })
+    .unwrap_or(core::ptr::null())
+}
+
+/// Returns the number of coalesced resource-key ranges changed this frame.
+#[unsafe(no_mangle)]
+pub extern "C" fn lume_render_resource_dirty_range_count(engine: *mut c_void) -> u32 {
+    with_engine_value(engine, |core| {
+        core.render_world.resource_dirty_ranges().0.len() as u32
+    })
+    .unwrap_or(0)
+}
+
+/// Returns the stable pointer to resource-key dirty range starts.
+#[unsafe(no_mangle)]
+pub extern "C" fn lume_render_resource_dirty_range_starts_ptr(engine: *mut c_void) -> *const u32 {
+    with_engine_value(engine, |core| {
+        core.render_world.resource_dirty_range_starts_capacity_ptr()
+    })
+    .unwrap_or(core::ptr::null())
+}
+
+/// Returns the stable pointer to resource-key dirty range counts.
+#[unsafe(no_mangle)]
+pub extern "C" fn lume_render_resource_dirty_range_counts_ptr(engine: *mut c_void) -> *const u32 {
+    with_engine_value(engine, |core| {
+        core.render_world.resource_dirty_range_counts_capacity_ptr()
     })
     .unwrap_or(core::ptr::null())
 }
@@ -511,6 +632,49 @@ pub extern "C" fn lume_visible_slots_ptr(engine: *mut c_void) -> *const u32 {
     with_engine_value(engine, |core| core.visible.slots_capacity_ptr()).unwrap_or(core::ptr::null())
 }
 
+/// Returns the number of grouped, uncullled GPU visibility candidates.
+#[unsafe(no_mangle)]
+pub extern "C" fn lume_candidate_count(engine: *mut c_void) -> u32 {
+    with_engine_value(engine, |core| core.candidates.len() as u32).unwrap_or(0)
+}
+
+/// Returns `1` when GPU candidate membership or order changed this frame.
+#[unsafe(no_mangle)]
+pub extern "C" fn lume_candidate_slots_dirty(engine: *mut c_void) -> u32 {
+    with_engine_value(engine, |core| {
+        (core.candidates.slots_dirty() || core.candidates.render_keys_dirty()) as u32
+    })
+    .unwrap_or(0)
+}
+
+/// Returns grouped candidate geometry handles.
+#[unsafe(no_mangle)]
+pub extern "C" fn lume_candidate_geometries_ptr(engine: *mut c_void) -> *const u32 {
+    with_engine_value(engine, |core| core.candidates.geometries_capacity_ptr())
+        .unwrap_or(core::ptr::null())
+}
+
+/// Returns grouped candidate pipeline identifiers.
+#[unsafe(no_mangle)]
+pub extern "C" fn lume_candidate_pipelines_ptr(engine: *mut c_void) -> *const u32 {
+    with_engine_value(engine, |core| core.candidates.pipelines_capacity_ptr())
+        .unwrap_or(core::ptr::null())
+}
+
+/// Returns grouped candidate material handles.
+#[unsafe(no_mangle)]
+pub extern "C" fn lume_candidate_materials_ptr(engine: *mut c_void) -> *const u32 {
+    with_engine_value(engine, |core| core.candidates.materials_capacity_ptr())
+        .unwrap_or(core::ptr::null())
+}
+
+/// Returns grouped candidate persistent-slot indices.
+#[unsafe(no_mangle)]
+pub extern "C" fn lume_candidate_slots_ptr(engine: *mut c_void) -> *const u32 {
+    with_engine_value(engine, |core| core.candidates.slots_capacity_ptr())
+        .unwrap_or(core::ptr::null())
+}
+
 fn with_engine(engine: *mut c_void, operation: impl FnOnce(&mut EngineCore) -> bool) -> bool {
     // SAFETY: JS only receives pointers created by this module. Null is rejected.
     let Some(core) = (unsafe { engine.cast::<EngineCore>().as_mut() }) else {
@@ -526,12 +690,18 @@ fn update_systems(core: &mut EngineCore) {
 fn extract_render_world(core: &mut EngineCore) -> bool {
     if core.render_world.extract(&core.world).is_err() {
         core.visibility_valid = false;
+        core.candidates_valid = false;
         return false;
     }
     true
 }
 
 fn update_visibility(core: &mut EngineCore) -> bool {
+    if !core.candidates_valid || core.render_world.snapshot_changed() {
+        core.candidates_valid = core.candidates.collect_all(&core.render_world).is_ok();
+    } else {
+        core.candidates.retain_unchanged();
+    }
     if !core.visibility_valid
         || core.render_world.snapshot_changed()
         || core.render_world.cameras_dirty()
@@ -540,7 +710,7 @@ fn update_visibility(core: &mut EngineCore) -> bool {
     } else {
         core.visible.retain_unchanged();
     }
-    core.visibility_valid
+    core.visibility_valid && core.candidates_valid
 }
 
 fn with_engine_value<T>(

@@ -14,6 +14,7 @@
     "benchmark": "cargo run --release -p lume-benchmarks -- --output benchmarks/results/internal-latest.json",
     "benchmark:wasm-profiles": "node benchmarks/wasm-profiles/run.mjs",
     "benchmark:renderer-uploads": "node benchmarks/renderer/run-upload-matrix.mjs",
+    "benchmark:renderer-scalability": "node benchmarks/renderer/run-scalability-matrix.mjs",
     "benchmark:render-world": "node benchmarks/renderer/run-extraction-comparison.mjs",
     "benchmark:transport": "pnpm --filter @lume/runtime build && node --expose-gc benchmarks/transport/run.mjs",
     "benchmark:entity-generation": "node benchmarks/entity-generation/run.mjs",

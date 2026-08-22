@@ -68,7 +68,11 @@ export async function runBrowserBenchmarks({ repositoryRoot, artifacts, commit, 
     await waitForUrl(`http://${host}:${debuggingPort}/json/version`);
     const profiles = Object.fromEntries(artifacts.map((artifact) => [artifact.name, []]));
     const runOrder =
-      artifacts.length === 2 ? [artifacts[0], artifacts[1], artifacts[1], artifacts[0]] : artifacts;
+      artifacts.length === 2
+        ? [artifacts[0], artifacts[1], artifacts[1], artifacts[0]]
+        : artifacts.length === 3
+          ? [artifacts[0], artifacts[1], artifacts[1], artifacts[0], artifacts[2], artifacts[2]]
+          : artifacts;
     for (const artifact of runOrder) {
       const query = new URLSearchParams({
         count: String(entities),
@@ -78,6 +82,9 @@ export async function runBrowserBenchmarks({ repositoryRoot, artifacts, commit, 
       });
       if (artifact.updateRatio !== undefined) {
         query.set("updateRatio", String(artifact.updateRatio));
+      }
+      for (const [name, value] of Object.entries(artifact.parameters ?? {})) {
+        query.set(name, String(value));
       }
       profiles[artifact.name].push(
         await runPage(`http://${host}:${serverPort}/?${query.toString()}`),
