@@ -41,10 +41,13 @@ real dependency seam without a general-purpose render-graph framework.
 ## GPU profiling
 
 Timestamp queries are requested only when the adapter reports
-`timestamp-query`. The profiler owns its query set, resolve buffer, readback
-ring, and nanosecond-to-millisecond conversion. Results are delayed and
-asynchronous; the latest completed value is returned. Unsupported or not-yet-
-resolved GPU time is `null` and is never inferred from CPU timings.
+`timestamp-query`. Readback is pull-triggered: reading renderer statistics
+returns the latest completed value and requests one sample from the next frame.
+The profiler owns its query set, resolve buffer, single readback buffer, and
+nanosecond-to-millisecond conversion. At most one sample can be pending, and
+ordinary frames do not create a mapping promise or timestamp-result view.
+Unsupported, unsampled, failed, or not-yet-resolved GPU time is `null` and is
+never inferred from CPU timings.
 
 ## Public API review
 

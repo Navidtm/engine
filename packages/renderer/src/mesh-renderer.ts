@@ -22,11 +22,13 @@ import {
   type SurfaceState,
 } from "./webgpu/surface.js";
 import {
+  beginGpuTimestampSample,
   createGpuTimestampProfiler,
   destroyGpuTimestampProfiler,
   encodeGpuTimestampResolve,
   type GpuTimestampProfiler,
   requestGpuTimestampRead,
+  requestGpuTimestampSample,
 } from "./webgpu/timestamp-profiler.js";
 
 const INSTANCE_FLOATS = 20;
@@ -124,7 +126,7 @@ export interface MeshRenderer {
   execute(frame: RenderFrame): void;
   /** Reconfigures the surface and depth attachment if physical size changed. */
   resize(size: SurfaceSize): void;
-  /** Returns the latest renderer measurements. */
+  /** Returns current measurements and requests one timestamp sample from a following frame. */
   stats(): RendererStats;
   /** Releases every renderer-owned GPU resource; safe to call repeatedly. */
   dispose(): void;
@@ -146,6 +148,7 @@ interface RendererState {
   colorAttachment: GPURenderPassColorAttachment | undefined;
   readonly depthAttachment: GPURenderPassDepthStencilAttachment;
   passDescriptor: GPURenderPassDescriptor | undefined;
+  timestampPassDescriptor: GPURenderPassDescriptor | undefined;
   readonly submissions: GPUCommandBuffer[];
   drawCalls: number;
   submittedInstances: number;
@@ -255,6 +258,7 @@ export async function createMeshRenderer(
       colorAttachment: undefined,
       depthAttachment,
       passDescriptor: undefined,
+      timestampPassDescriptor: undefined,
       submissions: new Array<GPUCommandBuffer>(1),
       drawCalls: 0,
       submittedInstances: 0,
@@ -292,22 +296,7 @@ export async function createMeshRenderer(
         executeFrameGraph(frameGraph, frameContext);
       },
       resize: (nextSize) => resize(state, nextSize),
-      stats: () => ({
-        gpuBufferBytes:
-          state.meshes.gpuBytes +
-          state.cameraBuffer.size +
-          state.instanceBuffer.size +
-          state.visibleSlotBuffer.size +
-          state.profiler.gpuBytes,
-        drawCalls: state.drawCalls,
-        submittedInstances: state.submittedInstances,
-        bufferUploadCpuTimeMs: state.bufferUploadCpuTimeMs,
-        bufferUploadBytes: state.bufferUploadBytes,
-        bufferWriteCount: state.bufferWriteCount,
-        framePreparationCpuTimeMs: state.framePreparationCpuTimeMs,
-        gpuTimeMs: state.profiler.gpuTimeMs,
-        browserObjectsPerFrame: state.browserObjectsPerFrame,
-      }),
+      stats: () => readStats(state),
       dispose: () => dispose(state),
     };
     return renderer;
@@ -417,17 +406,26 @@ function encodeMainPass(context: RendererFrameContext): void {
   state.colorAttachment = colorAttachment;
   colorAttachment.view = colorView;
   state.depthAttachment.view = state.surface.depthView;
+  const timestampSample = beginGpuTimestampSample(state.profiler);
   const passDescriptor = state.passDescriptor ?? {
     label: "Lume main render pass",
     colorAttachments: [colorAttachment],
     depthStencilAttachment: state.depthAttachment,
-    ...(state.profiler.timestampWrites === undefined
-      ? {}
-      : { timestampWrites: state.profiler.timestampWrites }),
   };
   state.passDescriptor = passDescriptor;
+  const timestampWrites = state.profiler.timestampWrites;
+  const activePassDescriptor =
+    timestampSample && timestampWrites !== undefined
+      ? (state.timestampPassDescriptor ?? {
+          ...passDescriptor,
+          timestampWrites,
+        })
+      : passDescriptor;
+  if (timestampSample && timestampWrites !== undefined) {
+    state.timestampPassDescriptor = activePassDescriptor;
+  }
   const encoder = state.device.createCommandEncoder({ label: "Lume frame commands" });
-  const pass = encoder.beginRenderPass(passDescriptor);
+  const pass = encoder.beginRenderPass(activePassDescriptor);
   // WebGPU mandates these frame-scoped objects: surface texture/view, command
   // encoder, render pass encoder, and command buffer. Engine-owned arrays and
   // descriptors remain reusable and are deliberately not included.
@@ -460,13 +458,34 @@ function encodeMainPass(context: RendererFrameContext): void {
     instance = runEnd;
   }
   pass.end();
-  const timestampReadback = encodeGpuTimestampResolve(state.profiler, encoder);
+  const timestampReadback = encodeGpuTimestampResolve(state.profiler, encoder, timestampSample);
   state.submissions[0] = encoder.finish();
   state.device.queue.submit(state.submissions);
   requestGpuTimestampRead(state.profiler, timestampReadback);
   state.drawCalls = drawCalls;
   state.submittedInstances = instanceCount;
   state.framePreparationCpuTimeMs = performance.now() - context.preparationStart;
+}
+
+function readStats(state: RendererState): RendererStats {
+  const stats: RendererStats = {
+    gpuBufferBytes:
+      state.meshes.gpuBytes +
+      state.cameraBuffer.size +
+      state.instanceBuffer.size +
+      state.visibleSlotBuffer.size +
+      state.profiler.gpuBytes,
+    drawCalls: state.drawCalls,
+    submittedInstances: state.submittedInstances,
+    bufferUploadCpuTimeMs: state.bufferUploadCpuTimeMs,
+    bufferUploadBytes: state.bufferUploadBytes,
+    bufferWriteCount: state.bufferWriteCount,
+    framePreparationCpuTimeMs: state.framePreparationCpuTimeMs,
+    gpuTimeMs: state.profiler.gpuTimeMs,
+    browserObjectsPerFrame: state.browserObjectsPerFrame,
+  };
+  requestGpuTimestampSample(state.profiler);
+  return stats;
 }
 
 function resize(state: RendererState, size: SurfaceSize): void {

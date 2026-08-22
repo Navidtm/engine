@@ -1,47 +1,37 @@
 const QUERY_COUNT = 2;
 const QUERY_BYTES = QUERY_COUNT * BigUint64Array.BYTES_PER_ELEMENT;
-const READBACK_BUFFER_COUNT = 3;
 
-/** Optional timestamp-query resources and state for one renderer. */
+/** Optional, pull-triggered timestamp-query resources for one renderer. */
 export interface GpuTimestampProfiler {
-  /** Timestamp query set, absent when the feature is unavailable. */
   readonly querySet: GPUQuerySet | undefined;
-  /** GPU-only resolve buffer, absent when profiling is unavailable. */
   readonly resolveBuffer: GPUBuffer | undefined;
-  /** Rotating CPU-readable result buffers. */
-  readonly readbackBuffers: readonly GPUBuffer[];
-  /** Per-readback in-flight flags (`1` while mapping is pending). */
-  readonly pending: Uint8Array;
-  /** Pass timestamp attachment, absent when profiling is unavailable. */
+  readonly readbackBuffer: GPUBuffer | undefined;
   readonly timestampWrites: GPURenderPassTimestampWrites | undefined;
-  /** Total bytes owned by timestamp query buffers. */
   readonly gpuBytes: number;
-  /** Index considered first for the next non-blocking readback. */
-  nextReadback: number;
-  /** Latest resolved GPU duration in milliseconds, or `null` before a result. */
+  sampleRequested: boolean;
+  samplePending: boolean;
   gpuTimeMs: number | null;
-  /** Prevents async callbacks from touching destroyed resources. */
   disposed: boolean;
 }
 
-/** Creates a triple-buffered profiler when `timestamp-query` is available. */
+/** Creates a profiler with at most one readback in flight. */
 export function createGpuTimestampProfiler(device: GPUDevice): GpuTimestampProfiler {
   if (!device.features.has("timestamp-query")) {
     return {
       querySet: undefined,
       resolveBuffer: undefined,
-      readbackBuffers: [],
-      pending: new Uint8Array(0),
+      readbackBuffer: undefined,
       timestampWrites: undefined,
       gpuBytes: 0,
-      nextReadback: 0,
+      sampleRequested: false,
+      samplePending: false,
       gpuTimeMs: null,
       disposed: false,
     };
   }
   let querySet: GPUQuerySet | undefined;
   let resolveBuffer: GPUBuffer | undefined;
-  const readbackBuffers: GPUBuffer[] = [];
+  let readbackBuffer: GPUBuffer | undefined;
   try {
     querySet = device.createQuerySet({
       label: "Lume frame timestamps",
@@ -53,17 +43,13 @@ export function createGpuTimestampProfiler(device: GPUDevice): GpuTimestampProfi
       size: QUERY_BYTES,
       usage: GPUBufferUsage.QUERY_RESOLVE | GPUBufferUsage.COPY_SRC,
     });
-    for (let index = 0; index < READBACK_BUFFER_COUNT; index += 1) {
-      readbackBuffers.push(
-        device.createBuffer({
-          label: `Lume timestamp readback ${index}`,
-          size: QUERY_BYTES,
-          usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
-        }),
-      );
-    }
+    readbackBuffer = device.createBuffer({
+      label: "Lume timestamp readback",
+      size: QUERY_BYTES,
+      usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
+    });
   } catch (error) {
-    for (const buffer of readbackBuffers) buffer.destroy();
+    readbackBuffer?.destroy();
     resolveBuffer?.destroy();
     querySet?.destroy();
     throw error;
@@ -71,71 +57,90 @@ export function createGpuTimestampProfiler(device: GPUDevice): GpuTimestampProfi
   return {
     querySet,
     resolveBuffer,
-    readbackBuffers,
-    pending: new Uint8Array(READBACK_BUFFER_COUNT),
+    readbackBuffer,
     timestampWrites: {
       querySet,
       beginningOfPassWriteIndex: 0,
       endOfPassWriteIndex: 1,
     },
-    gpuBytes: QUERY_BYTES * (READBACK_BUFFER_COUNT + 1),
-    nextReadback: 0,
+    gpuBytes: QUERY_BYTES * 2,
+    sampleRequested: false,
+    samplePending: false,
     gpuTimeMs: null,
     disposed: false,
   };
 }
 
-/** Encodes query resolve/copy commands and returns the claimed readback index. */
-/** Returns `-1` when profiling is unavailable, disposed, or all buffers are busy. */
+/** Requests one future sample; repeated requests are coalesced while busy. */
+export function requestGpuTimestampSample(profiler: GpuTimestampProfiler): boolean {
+  if (
+    profiler.disposed ||
+    profiler.timestampWrites === undefined ||
+    profiler.sampleRequested ||
+    profiler.samplePending
+  ) {
+    return false;
+  }
+  profiler.sampleRequested = true;
+  profiler.gpuTimeMs = null;
+  return true;
+}
+
+/** Claims a requested sample for this frame without allocating frame-time state. */
+export function beginGpuTimestampSample(profiler: GpuTimestampProfiler): boolean {
+  if (profiler.disposed || !profiler.sampleRequested || profiler.samplePending) return false;
+  profiler.sampleRequested = false;
+  profiler.samplePending = true;
+  return true;
+}
+
+/** Encodes resolve/copy commands for an explicitly sampled frame. */
 export function encodeGpuTimestampResolve(
   profiler: GpuTimestampProfiler,
   encoder: GPUCommandEncoder,
-): number {
+  sampled: boolean,
+): boolean {
   if (
+    !sampled ||
     profiler.disposed ||
     profiler.querySet === undefined ||
-    profiler.resolveBuffer === undefined
+    profiler.resolveBuffer === undefined ||
+    profiler.readbackBuffer === undefined
   ) {
-    return -1;
+    return false;
   }
-  for (let offset = 0; offset < profiler.readbackBuffers.length; offset += 1) {
-    const index = (profiler.nextReadback + offset) % profiler.readbackBuffers.length;
-    if (profiler.pending[index] !== 0) continue;
-    const readback = profiler.readbackBuffers[index];
-    if (readback === undefined) continue;
-    profiler.pending[index] = 1;
-    profiler.nextReadback = (index + 1) % profiler.readbackBuffers.length;
-    encoder.resolveQuerySet(profiler.querySet, 0, QUERY_COUNT, profiler.resolveBuffer, 0);
-    encoder.copyBufferToBuffer(profiler.resolveBuffer, 0, readback, 0, QUERY_BYTES);
-    return index;
-  }
-  return -1;
+  encoder.resolveQuerySet(profiler.querySet, 0, QUERY_COUNT, profiler.resolveBuffer, 0);
+  encoder.copyBufferToBuffer(profiler.resolveBuffer, 0, profiler.readbackBuffer, 0, QUERY_BYTES);
+  return true;
 }
 
-/** Asynchronously maps one resolved timestamp pair and updates `gpuTimeMs`. */
-/** Calls with a negative or unavailable index are harmless no-ops. */
-export function requestGpuTimestampRead(
-  profiler: GpuTimestampProfiler,
-  readbackIndex: number,
-): void {
-  if (readbackIndex < 0) return;
-  const buffer = profiler.readbackBuffers[readbackIndex];
-  if (buffer === undefined) return;
+/** Maps one explicitly sampled timestamp pair and updates `gpuTimeMs`. */
+export function requestGpuTimestampRead(profiler: GpuTimestampProfiler, sampled: boolean): void {
+  const buffer = profiler.readbackBuffer;
+  if (!sampled || buffer === undefined || profiler.disposed) return;
   void buffer.mapAsync(GPUMapMode.READ).then(
     () => {
-      if (!profiler.disposed) {
+      if (profiler.disposed) return;
+      try {
         const values = new BigUint64Array(buffer.getMappedRange(0, QUERY_BYTES));
         const start = values[0];
         const end = values[1];
         if (start !== undefined && end !== undefined && end >= start) {
           profiler.gpuTimeMs = Number(end - start) / 1_000_000;
         }
-        buffer.unmap();
-        profiler.pending[readbackIndex] = 0;
+      } catch {
+        profiler.gpuTimeMs = null;
+      } finally {
+        profiler.samplePending = false;
+        try {
+          buffer.unmap();
+        } catch {
+          profiler.gpuTimeMs = null;
+        }
       }
     },
     () => {
-      if (!profiler.disposed) profiler.pending[readbackIndex] = 0;
+      if (!profiler.disposed) profiler.samplePending = false;
     },
   );
 }
@@ -144,7 +149,8 @@ export function requestGpuTimestampRead(
 export function destroyGpuTimestampProfiler(profiler: GpuTimestampProfiler): void {
   if (profiler.disposed) return;
   profiler.disposed = true;
+  profiler.sampleRequested = false;
   profiler.querySet?.destroy();
   profiler.resolveBuffer?.destroy();
-  for (const buffer of profiler.readbackBuffers) buffer.destroy();
+  profiler.readbackBuffer?.destroy();
 }

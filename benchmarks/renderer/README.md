@@ -11,6 +11,14 @@ WebGPU does not expose portable memory totals. The harness reports owned GPU
 buffer bytes and returns `null` for GPU time when timestamp queries are
 unavailable rather than inventing estimates.
 
+GPU timestamp readback is diagnostic work triggered by `getStats()`: each call
+returns the latest completed value and requests at most one following-frame
+sample. Because this harness polls statistics for every measured frame, it
+intentionally enables repeated query resolve/copy and asynchronous mapping
+overhead. Normal frames that are not followed by diagnostic polling do not pay
+that readback or JavaScript-allocation cost. `allocationsPerFrame` reports only
+mandatory WebGPU frame objects and does not include this opt-in diagnostic work.
+
 Add `updateRatio=0`, `0.01`, `0.1`, or `1` to mutate that fraction of instances
 on each sampled frame. Each result includes raw per-frame buffer-upload bytes
 and `GPUQueue.writeBuffer` call counts. From the repository root,

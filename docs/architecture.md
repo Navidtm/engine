@@ -140,6 +140,12 @@ remain accepted design rather than an available public API.
   view, encoder, pass, and command buffer) are the remaining JS objects and
   are reported as `getStats().allocationsPerFrame`; this is not a heap-allocation
   counter.
+- GPU timestamp readback is pull-triggered by `getStats()`. A statistics read
+  requests at most one sample from a following frame; ordinary unsampled frames
+  create no mapping promise or timestamp-result wrapper. A sampled frame adds a
+  query resolve, a buffer copy, one `mapAsync` promise, and one short-lived
+  `BigUint64Array` view. This diagnostic overhead is intentionally excluded from
+  `allocationsPerFrame`, which only counts mandatory WebGPU frame objects.
 - Pipeline and shader creation is confined to initialization/cache misses.
 - Persistent instance, visible-slot, dirty-range, camera, and visibility arrays
   are capacity-sized or reserved during initialization and reused per frame.
