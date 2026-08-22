@@ -104,6 +104,15 @@ so dynamic scenes keep contiguous deterministic extraction without a second
 incremental data structure. See
 [ADR 008](../.agents/decisions/008-epoch-gated-render-extraction.md).
 
+Before persistent slots become direct compute-visibility input, every slot will
+gain explicit active and packed generational identity metadata. Removal makes a
+slot ineligible without requiring payload zeroing, generation replacement
+publishes a complete new record, and GPU buffers remain rebuildable derived
+cache state. CPU visibility remains the reference and fallback path. The
+lifecycle, multi-camera constraints, correctness tests, and benchmark matrix are
+defined in
+[ADR 009](../.agents/decisions/009-active-persistent-gpu-slots.md).
+
 Detailed byte layout and browser-thread responsibilities are documented in
 [memory-model.md](memory-model.md) and [threading-model.md](threading-model.md).
 

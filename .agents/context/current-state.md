@@ -319,7 +319,9 @@ main-thread/worker/WASM/WebGPU path are not yet part of CI.
 - GPU compute culling, indirect rendering, and GPU-driven submission.
 
 These omissions match the roadmap and the scope constraints of the completed
-transport milestone.
+transport milestone. ADR 009 defines the required active and generational
+persistent-slot lifecycle before compute visibility is implemented; it does not
+claim that GPU slot-state storage or compute submission exists today.
 
 ## Remaining Runtime and Rendering Bottlenecks
 
@@ -350,6 +352,10 @@ milestone should focus on renderer scalability:
 4. Move visibility/culling to GPU compute when measurements justify it.
 5. Preserve the existing ECS/RenderWorld/renderer ownership boundaries while
    doing so.
+
+ADR 009 makes explicit slot activity, generation replacement, derived GPU cache
+ownership, CPU fallback, and the required correctness/benchmark matrix
+prerequisites for steps 3 and 4.
 
 Textures, lighting, animation, physics, and asset loading remain out of scope
 until the renderer scalability foundation is measured and stable.
