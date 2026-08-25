@@ -1,3 +1,5 @@
+import { Worker } from "node:worker_threads";
+
 import { describe, expect, it, vi } from "vitest";
 
 import { allocateSharedRuntimeMemory } from "./allocator.js";
@@ -144,6 +146,122 @@ describe("shared runtime memory", () => {
 
     expect(injected).toBe(true);
     expect(positions).toEqual([[4, 5, 6]]);
+  });
+
+  it("reclaims a late two-thread publication without giving the consumer queue ownership", async () => {
+    const views = allocateSharedRuntimeMemory(2);
+    expect(
+      writeSharedTransform(views, 0, { ...identity, position: [1, 2, 3] }, TransformField.Position),
+    ).toBe(true);
+
+    const control = new Int32Array(new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT));
+    const worker = new Worker(
+      `
+        const { workerData } = require("node:worker_threads");
+        const control = new Int32Array(workerData.control);
+        const sequences = new Int32Array(
+          workerData.buffer,
+          workerData.sequenceOffset,
+          workerData.capacity,
+        );
+        const dirty = new Int32Array(
+          workerData.buffer,
+          workerData.dirtyOffset,
+          workerData.capacity,
+        );
+        const publications = new Int32Array(
+          workerData.buffer,
+          workerData.publicationOffset,
+          workerData.capacity,
+        );
+        const transforms = new Float32Array(
+          workerData.buffer,
+          workerData.transformOffset,
+          workerData.capacity * workerData.transformFloats,
+        );
+
+        while (Atomics.load(control, 0) !== 1) Atomics.wait(control, 0, 0);
+        Atomics.add(sequences, 0, 1);
+        transforms[0] = 4;
+        transforms[1] = 5;
+        transforms[2] = 6;
+        Atomics.or(publications, 0, 1);
+        Atomics.add(sequences, 0, 1);
+        if (Atomics.compareExchange(dirty, 0, 0, 1) !== 1) {
+          throw new Error("Consumer released the dirty claim before the late publication.");
+        }
+        Atomics.store(control, 0, 2);
+        Atomics.notify(control, 0);
+      `,
+      {
+        eval: true,
+        workerData: {
+          buffer: views.buffer,
+          control: control.buffer,
+          capacity: views.layout.capacity,
+          transformFloats: SHARED_TRANSFORM_FLOATS,
+          sequenceOffset: views.sequences.byteOffset,
+          dirtyOffset: views.dirty.byteOffset,
+          publicationOffset: views.publications.byteOffset,
+          transformOffset: views.transforms.byteOffset,
+        },
+      },
+    );
+    const workerFinished = new Promise<void>((resolve, reject) => {
+      worker.once("error", reject);
+      worker.once("exit", (code) => {
+        if (code === 0) resolve();
+        else reject(new Error(`Transform producer worker exited with code ${code}.`));
+      });
+    });
+
+    const store = Atomics.store.bind(Atomics);
+    const load = Atomics.load.bind(Atomics);
+    let injected = false;
+    vi.spyOn(Atomics, "store").mockImplementation(((
+      array: Int32Array,
+      index: number,
+      value: number,
+    ): number => {
+      if (!injected && array === views.dirty && index === 0 && value === 0) {
+        injected = true;
+        store(control, 0, 1);
+        Atomics.notify(control, 0);
+        while (load(control, 0) !== 2) {
+          if (Atomics.wait(control, 0, 1, 5_000) === "timed-out") {
+            throw new Error("Timed out waiting for the late transform publication.");
+          }
+        }
+      }
+      return store(array, index, value);
+    }) as typeof Atomics.store);
+
+    try {
+      const scratch = new Float32Array(SHARED_TRANSFORM_FLOATS);
+      const positions: number[][] = [];
+      expect(
+        drainSharedTransforms(views, scratch, (_entity, fieldMask, values) => {
+          expect(fieldMask).toBe(TransformField.Position);
+          positions.push([...values.slice(0, 3)]);
+        }),
+      ).toBe(2);
+      await workerFinished;
+
+      expect(injected).toBe(true);
+      expect(positions).toEqual([
+        [1, 2, 3],
+        [4, 5, 6],
+      ]);
+      expect(Atomics.load(views.header, SharedHeader.QueueTail)).toBe(1);
+      expect(Atomics.load(views.header, SharedHeader.PendingCount)).toBe(0);
+      expect(Atomics.load(views.header, SharedHeader.OverflowCount)).toBe(0);
+      expect([...views.dirty]).toEqual([0, 0]);
+      expect([...views.publications]).toEqual([0, 0]);
+    } finally {
+      vi.restoreAllMocks();
+      await worker.terminate();
+      await workerFinished.catch(() => undefined);
+    }
   });
 
   it("uses the full ring capacity without overflow", () => {

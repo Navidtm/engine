@@ -94,23 +94,25 @@ export function drainSharedTransforms(
     const index = Atomics.load(views.queue, head);
     Atomics.store(views.header, SharedHeader.QueueHead, (head + 1) % views.layout.capacity);
     Atomics.sub(views.header, SharedHeader.PendingCount, 1);
-    const publication = claimStableTransform(views, index, scratch);
-    Atomics.store(views.dirty, index, 0);
-    if (publication.fieldMask !== 0) {
-      consume((publication.generation << 20) | index, publication.fieldMask, scratch);
+    while (true) {
+      const publication = claimStableTransform(views, index, scratch);
+      Atomics.store(views.dirty, index, 0);
+      if (publication.fieldMask !== 0) {
+        consume((publication.generation << 20) | index, publication.fieldMask, scratch);
+      }
+      drained += 1;
+
+      // A producer may have published while this slot was still owned by the
+      // consumer and therefore could not enqueue it. Reclaim that publication
+      // inline so QueueTail remains exclusively producer-owned. If the producer
+      // wins this CAS, it also owns the corresponding queue publication.
+      if (
+        publicationFieldMask(Atomics.load(views.publications, index)) === 0 ||
+        Atomics.compareExchange(views.dirty, index, 0, 1) !== 0
+      ) {
+        break;
+      }
     }
-    // A producer may have merged a write while this slot was still marked dirty.
-    // Requeue it after releasing the slot so its newly published mask is not lost.
-    if (
-      publicationFieldMask(Atomics.load(views.publications, index)) !== 0 &&
-      Atomics.compareExchange(views.dirty, index, 0, 1) === 0
-    ) {
-      const tail = Atomics.load(views.header, SharedHeader.QueueTail);
-      Atomics.store(views.queue, tail, index);
-      Atomics.store(views.header, SharedHeader.QueueTail, (tail + 1) % views.layout.capacity);
-      Atomics.add(views.header, SharedHeader.PendingCount, 1);
-    }
-    drained += 1;
   }
   Atomics.store(views.header, SharedHeader.ReadEpoch, publishedEpoch);
   return drained;

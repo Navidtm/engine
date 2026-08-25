@@ -231,7 +231,8 @@ Implemented:
 - Atomic dirty-bit deduplication.
 - Fixed-capacity SPSC dirty-index queue.
 - Adjacent-index merging into reusable dirty ranges.
-- Race-safe requeue when a producer updates a slot during consumption.
+- Race-safe inline reclaim when a producer updates a slot during consumption,
+  preserving exclusive producer ownership of the SPSC queue tail.
 - One ranged WASM apply call after staging.
 
 The matrix mask is a protocol marker; matrices are currently derived by Rust

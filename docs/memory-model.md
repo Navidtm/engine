@@ -146,6 +146,12 @@ one reusable `{start, count}` descriptor in WASM memory. A fixed epoch array
 deduplicates repeated indices without clearing or allocating. Non-adjacent queue
 order intentionally remains separate ranges; sorting would add work and storage.
 
+The dirty-index ring remains strictly SPSC: only the main-thread producer writes
+its tail, and only the worker consumer writes its head. If a transform is
+published while the consumer still owns that slot, the consumer releases and
+conditionally reclaims the slot with CAS, then applies the late publication
+inline. It never requeues the slot from the worker, avoiding a second tail writer.
+
 Rust receives the range count in one ABI call, reconstructs packed handles from
 index plus generation, validates liveness, applies masked fields, and clears the
 staging masks for reuse.
