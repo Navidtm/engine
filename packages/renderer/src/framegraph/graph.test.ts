@@ -32,6 +32,7 @@ describe("frame graph", () => {
     );
 
     const compiled = compileFrameGraph(graph);
+    expect(graph.compiled).toBe(true);
     const order: string[] = [];
     executeFrameGraph(compiled, order);
     executeFrameGraph(compiled, order);
@@ -51,6 +52,7 @@ describe("frame graph", () => {
       }),
     );
     expect(() => compileFrameGraph(invalid)).toThrow("unregistered resource");
+    expect(invalid.compiled).toBe(false);
 
     const cyclic = createFrameGraph<undefined>();
     addFramePass(
@@ -70,5 +72,7 @@ describe("frame graph", () => {
       }),
     );
     expect(() => compileFrameGraph(cyclic)).toThrow("dependency cycle");
+    expect(cyclic.compiled).toBe(false);
+    expect(() => addFrameResource(cyclic, "retry-marker")).not.toThrow();
   });
 });

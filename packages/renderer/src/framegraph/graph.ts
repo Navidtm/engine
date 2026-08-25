@@ -9,6 +9,10 @@ export interface FrameGraph<Context> {
   /** Registered declarative passes in insertion order. */
   readonly passes: FramePass<Context>[];
   /** Internal lifecycle flag; `true` prevents further graph mutation. */
+  readonly compiled: boolean;
+}
+
+interface MutableFrameGraph<Context> extends FrameGraph<Context> {
   compiled: boolean;
 }
 
@@ -42,7 +46,6 @@ export function compileFrameGraph<Context>(
   graph: FrameGraph<Context>,
 ): CompiledFrameGraph<Context> {
   assertMutable(graph);
-  graph.compiled = true;
   const dependencies = buildPassDependencies(graph.resources, graph.passes);
   const remaining = dependencies.incoming.map((incoming) => incoming.length);
   const ready: number[] = [];
@@ -66,6 +69,7 @@ export function compileFrameGraph<Context>(
   if (ordered.length !== graph.passes.length) {
     throw new Error("Frame graph contains a dependency cycle.");
   }
+  (graph as MutableFrameGraph<Context>).compiled = true;
   return { orderedPasses: ordered } satisfies CompiledFrameGraph<Context>;
 }
 
