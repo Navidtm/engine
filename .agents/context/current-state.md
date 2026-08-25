@@ -1,6 +1,6 @@
 # Current Project State
 
-Last verified: 2026-08-25 on master after Milestone 6 and Milestone 7 design acceptance
+Last verified: 2026-08-25 on master after Milestone 6 and Milestone 7 Phase 1
 
 This document records the implementation that exists in the repository. It is
 an evidence-based snapshot, not a description of intended future architecture.
@@ -89,6 +89,28 @@ Current content support is deliberately small: worker-coordinated built-in
 triangle and box resources plus color-only basic-material resources. Mesh
 replacement/removal updates tracked usage edges transactionally, and retirement
 waits for existing mesh users before logical destruction.
+
+### Asset Decoding Foundation
+
+Implemented for Milestone 7 Phase 1:
+
+- A standalone `@lume/assets` package with no API, runtime, ECS, renderer, DOM
+  canvas, or WebGPU dependency.
+- Required immutable per-request limits for encoded bytes, decoded bytes,
+  vertices, and indices; no unmeasured production defaults.
+- Stable typed asset error codes/stages for the future cross-worker contract.
+- Strict GLB 2.0 header/chunk, UTF-8/JSON, accepted-profile, accessor,
+  alignment, bounds, overflow, finite-value, position-bound, index-range, and
+  budget validation.
+- Decoding to replayable six-float interleaved position/normal vertices and
+  widened `uint32` triangle-list indices with exact owned-array byte accounting.
+- Deterministic generated fixtures and regression tests covering valid
+  16/32-bit inputs and malformed/unsupported/budget boundaries.
+
+Not yet implemented: worker fetch/abort orchestration, Resource Coordinator
+loading states, external renderer geometry residency/replay, the public
+`engine.load.geometry()` facade, browser integration, and controlled benchmark
+results.
 
 ### Rust/WASM Core and ECS
 
@@ -365,22 +387,22 @@ scope and non-goals are in [`docs/milestone-6.md`](../../docs/milestone-6.md).
 
 ## Roadmap Comparison
 
-| Roadmap phase                 | Roadmap label   | Actual repository state                           |
-| ----------------------------- | --------------- | ------------------------------------------------- |
-| 1. Runtime Foundation         | Completed       | Implemented                                       |
-| 2. Render Architecture        | Completed       | Implemented                                       |
-| 3. Performance Infrastructure | Completed       | Implemented                                       |
-| 4. Transport Hardening        | Completed       | Implemented                                       |
-| 6. Renderer Scalability       | Completed       | ADR 007/008/009 implemented, tested, and measured |
-| 6. Asset Pipeline             | Design accepted | ADR 011/012 accepted; implementation pending      |
-| 7. Advanced Graphics          | Planned         | Not implemented                                   |
-| 8. Developer Ecosystem        | Planned         | Not implemented                                   |
+| Roadmap phase                 | Roadmap label | Actual repository state                           |
+| ----------------------------- | ------------- | ------------------------------------------------- |
+| 1. Runtime Foundation         | Completed     | Implemented                                       |
+| 2. Render Architecture        | Completed     | Implemented                                       |
+| 3. Performance Infrastructure | Completed     | Implemented                                       |
+| 4. Transport Hardening        | Completed     | Implemented                                       |
+| 6. Renderer Scalability       | Completed     | ADR 007/008/009 implemented, tested, and measured |
+| 6. Asset Pipeline             | In progress   | Phase 1 decoder implemented; Phases 2-5 pending   |
+| 7. Advanced Graphics          | Planned       | Not implemented                                   |
+| 8. Developer Ecosystem        | Planned       | Not implemented                                   |
 
 ## Intentionally Not Implemented
 
 - Textures, samplers, texture streaming, and texture compression.
 - PBR materials, lighting, shadows, reflections, and post-processing.
-- glTF or other asset loaders and a production asset pipeline.
+- Worker-integrated glTF loading and a production asset pipeline.
 - Animation, skinning, morph targets, and skeletal systems.
 - Physics, networking, gameplay systems, editor, or scene authoring.
 - Occlusion culling, hierarchical active masks, and GPU-authoritative scenes.
@@ -409,10 +431,13 @@ renderer-scalability milestone.
 
 Runtime transport and renderer-scalability semantics should now be treated as
 stable unless browser evidence finds a correctness or material performance
-problem. Milestone 7 is the accepted, pending first asset-pipeline increment:
-one validated indexed static geometry from GLB 2.0, loaded and decoded in the
-worker through `engine.load.geometry()`, with atomic publication and replayable
-device-loss descriptors. ADR 011, ADR 012, and `docs/milestone-7.md` define the
-scope and gates. Textures/KTX2, materials, hierarchy, compression, streaming,
-caching, and an offline optimizer remain future work. All asset work must
-preserve the existing ECS -> RenderWorld -> renderer ownership boundary.
+problem. Milestone 7 implementation is in progress. Phase 1 now provides the
+pure constrained-GLB decoder, typed errors, immutable decode limits,
+deterministic fixtures, accounting, and validation coverage. The next step is
+Phase 2 renderer registration of external decoded descriptors with
+transactional creation, destruction, generation validation, and device-loss
+replay. Worker loading and `engine.load.geometry()` remain later phases. ADR
+011, ADR 012, and `docs/milestone-7.md` define the scope and gates.
+Textures/KTX2, materials, hierarchy, compression, streaming, caching, and an
+offline optimizer remain future work. All asset work must preserve the existing
+ECS -> RenderWorld -> renderer ownership boundary.

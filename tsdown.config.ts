@@ -3,6 +3,9 @@ import { basename, resolve } from "node:path";
 import { defineConfig } from "tsdown";
 
 const packageEntries = {
+  assets: {
+    index: "src/index.ts",
+  },
   api: {
     index: "src/index.ts",
     advanced: "src/advanced.ts",

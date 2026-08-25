@@ -1,4 +1,5 @@
 packages:
+  - "packages/assets"
   - "packages/renderer"
   - "packages/scene"
   - "packages/runtime"

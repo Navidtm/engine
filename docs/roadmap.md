@@ -79,7 +79,7 @@ counts with CPU/GPU/CPU/GPU ordering and correctness hashes. Render-graph
 resource lifetime analysis, occlusion culling, public multi-camera presentation,
 textures, lighting, material variants, and asset streaming remain pending.
 
-## Milestone 7 — asset pipeline foundation (accepted design)
+## Milestone 7 — asset pipeline foundation (implementation in progress)
 
 Milestone 7 introduces worker-owned loading of one validated static geometry
 from a constrained GLB 2.0 profile. The public target is
@@ -93,7 +93,11 @@ fixes request correlation, abort, worker ownership, and atomic ready-handle
 publication. [milestone-7.md](milestone-7.md) defines implementation phases,
 correctness coverage, benchmarks, and completion gates.
 
-The design is accepted but not implemented. Textures/KTX2, materials,
+Phase 1 is implemented as the dependency-free `@lume/assets` package: immutable
+decode-limit contracts, typed asset errors, deterministic GLB fixtures, strict
+container/accessor validation, `uint32` index widening, exact owned-array byte
+accounting, and regression tests. Worker loading, renderer residency, public API,
+and controlled measurements remain pending. Textures/KTX2, materials,
 multi-primitive assets, hierarchy, streaming, caching, compression, and an
 offline optimizer remain outside Milestone 7.
 

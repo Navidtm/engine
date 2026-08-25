@@ -10,7 +10,20 @@ This milestone distinguishes:
 - **Measured evidence:** committed results describe one controlled workload and
   environment, not a general performance claim.
 
-Milestone 7 currently has accepted design and pending implementation.
+Milestone 7 currently has accepted design and implementation in progress.
+
+## Implementation progress
+
+| Phase | Status      | Evidence                                                          |
+| ----- | ----------- | ----------------------------------------------------------------- |
+| 1     | Implemented | `@lume/assets` contracts, decoder, fixtures, and regression suite |
+| 2     | Pending     | Renderer external geometry registration and replay                |
+| 3     | Pending     | Worker loading transaction and Resource Coordinator integration   |
+| 4     | Pending     | Public `engine.load.geometry()` API and browser integration       |
+| 5     | Pending     | Controlled measurements, final documentation, and completion gate |
+
+Phase 1 implementation does not make external geometry loadable through the
+engine yet.
 
 ## Objective
 
@@ -84,18 +97,22 @@ The promise resolves only when geometry is ready and renderer-resident. Existing
 `engine.create.mesh({ geometry })` performs instantiation. The loader does not
 create entities automatically.
 
-### Asset decoder
+### Asset decoder — Phase 1 implemented
 
-Add a pure decoder module or package whose core operation is conceptually:
+The pure `@lume/assets` package now provides:
 
 ```text
 GLB ArrayBuffer + immutable limits
   -> validated DecodedGeometry
 ```
 
-The decoder must not depend on DOM canvas APIs, ECS, RenderWorld, or WebGPU. It
-may be reused by a future offline CLI. Its accepted profile and rejection rules
-are fixed by ADR 011.
+It requires explicit positive safe-integer limits because production defaults
+remain measurement-gated. It validates container/chunk structure, UTF-8/JSON,
+the accepted profile, accessor layout/alignment/bounds, safe byte arithmetic,
+finite attributes, position bounds, index ranges, and output budgets before
+returning renderer-independent arrays. It has no dependency on DOM canvas APIs,
+ECS, RenderWorld, runtime, or WebGPU and may be reused by a future offline CLI.
+Its accepted profile and rejection rules are fixed by ADR 011.
 
 ### Runtime orchestration
 

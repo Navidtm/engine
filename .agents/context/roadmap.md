@@ -281,7 +281,7 @@ same-frame count/hash equivalence diagnostics in benchmarks.
 
 ## Status
 
-Milestone 7 design accepted; implementation pending
+Milestone 7 implementation in progress; Phase 1 complete
 
 ## Objective
 
@@ -302,6 +302,13 @@ to one indexed static geometry in GLB 2.0 and defines the decoded descriptor.
 ADR 012 places fetch/decode in the worker and publishes an opaque
 `GeometryHandle` only after atomic readiness. Textures, compression, streaming,
 caching, scene hierarchy, and the offline optimizer remain later increments.
+
+Implemented Phase 1: the standalone `@lume/assets` package defines immutable
+per-request decode limits and typed asset errors, validates/decodes the accepted
+GLB profile into interleaved position/normal values plus widened `uint32`
+indices, accounts owned bytes, and covers deterministic malformed boundaries.
+Worker orchestration, renderer residency, public loading, and measurements are
+still pending.
 
 Implementation and completion gates are in
 [`docs/milestone-7.md`](../../docs/milestone-7.md).
