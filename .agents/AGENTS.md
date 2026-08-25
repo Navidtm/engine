@@ -258,6 +258,11 @@ Every new issue should include:
 When GitHub access is unavailable, provide a ready-to-file issue draft and
 clearly report that the external issue was not created.
 
+When implementing work tracked by an existing GitHub issue, include the issue
+reference in every resulting commit message using `#<issue-number>` (preferably
+in the subject) so GitHub links the commit to the issue. Do not use an unprefixed
+issue number as a substitute.
+
 # Implementation Rules
 
 Always prefer:
