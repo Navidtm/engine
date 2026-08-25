@@ -32,11 +32,21 @@ export function createEngineCamera(
   );
   world.add(entity, camera(perspective));
   return {
-    position: createVector3Control(transformValue.position, () =>
-      publishTransform(state, entity, transformValue, TransformField.Position),
+    position: createVector3Control(transformValue.position, (next) =>
+      publishTransform(
+        state,
+        entity,
+        { ...transformValue, position: next },
+        TransformField.Position,
+      ),
     ),
-    rotation: createQuaternionControl(transformValue.rotation, () =>
-      publishTransform(state, entity, transformValue, TransformField.Rotation),
+    rotation: createQuaternionControl(transformValue.rotation, (next) =>
+      publishTransform(
+        state,
+        entity,
+        { ...transformValue, rotation: next },
+        TransformField.Rotation,
+      ),
     ),
     setPerspective(next) {
       if (state.status === "disposed" || state.status === "failed") {

@@ -288,6 +288,11 @@ describe("high-level engine API", () => {
     expect([handle.position.x, handle.position.y, handle.position.z]).toEqual([1, 2, 3]);
     expect([handle.scale.x, handle.scale.y, handle.scale.z]).toEqual([1, 1, 1]);
     expect(worker.postMessage).not.toHaveBeenCalled();
+
+    engine.dispose();
+    expect(() => engine.set.transform(handle, { position: [7, 8, 9] })).toThrow("disposed");
+    expect(() => handle.position.set(7, 8, 9)).toThrow("disposed");
+    expect([handle.position.x, handle.position.y, handle.position.z]).toEqual([1, 2, 3]);
   });
 
   it("rejects wrong-kind, foreign, retired, and destroyed resource handles", () => {

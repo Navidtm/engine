@@ -36,14 +36,14 @@ export function createMeshHandle(
   entity: Entity,
   value: MutableTransformValue,
 ): MeshHandle {
-  const position = createVector3Control(value.position, () =>
-    publishTransform(state, entity, value, TransformField.Position),
+  const position = createVector3Control(value.position, (next) =>
+    publishTransform(state, entity, { ...value, position: next }, TransformField.Position),
   );
-  const rotation = createQuaternionControl(value.rotation, () =>
-    publishTransform(state, entity, value, TransformField.Rotation),
+  const rotation = createQuaternionControl(value.rotation, (next) =>
+    publishTransform(state, entity, { ...value, rotation: next }, TransformField.Rotation),
   );
-  const scale = createVector3Control(value.scale, () =>
-    publishTransform(state, entity, value, TransformField.Scale),
+  const scale = createVector3Control(value.scale, (next) =>
+    publishTransform(state, entity, { ...value, scale: next }, TransformField.Scale),
   );
   return {
     kind: "mesh",
@@ -56,7 +56,7 @@ export function createMeshHandle(
 
 export function createVector3Control(
   value: [number, number, number],
-  publish: () => void,
+  publish: (next: [number, number, number]) => void,
 ): Vector3Control {
   return {
     get x() {
@@ -69,18 +69,17 @@ export function createVector3Control(
       return value[2];
     },
     set(x: number, y: number, z: number) {
-      validateFiniteTuple("vector", [x, y, z], 3);
-      value[0] = x;
-      value[1] = y;
-      value[2] = z;
-      publish();
+      const next: [number, number, number] = [x, y, z];
+      validateFiniteTuple("vector", next, 3);
+      publish(next);
+      copyVec3(value, next);
     },
   };
 }
 
 export function createQuaternionControl(
   value: [number, number, number, number],
-  publish: () => void,
+  publish: (next: [number, number, number, number]) => void,
 ): QuaternionControl {
   return {
     get x() {
@@ -96,12 +95,10 @@ export function createQuaternionControl(
       return value[3];
     },
     set(x: number, y: number, z: number, w: number) {
-      validateQuaternion([x, y, z, w], "quaternion");
-      value[0] = x;
-      value[1] = y;
-      value[2] = z;
-      value[3] = w;
-      publish();
+      const next: [number, number, number, number] = [x, y, z, w];
+      validateQuaternion(next, "quaternion");
+      publish(next);
+      copyQuat(value, next);
     },
   };
 }

@@ -141,14 +141,24 @@ export function createHighLevelApi(
       if (options.position !== undefined) validateFiniteTuple("position", options.position, 3);
       if (options.rotation !== undefined) validateQuaternion(options.rotation);
       if (options.scale !== undefined) validateFiniteTuple("scale", options.scale, 3);
-      if (options.position !== undefined) copyVec3(value.position, options.position);
-      if (options.rotation !== undefined) copyQuat(value.rotation, options.rotation);
-      if (options.scale !== undefined) copyVec3(value.scale, options.scale);
       let fieldMask = 0;
       if (options.position !== undefined) fieldMask |= TransformField.Position;
       if (options.rotation !== undefined) fieldMask |= TransformField.Rotation;
       if (options.scale !== undefined) fieldMask |= TransformField.Scale;
-      if (fieldMask !== 0) publishTransform(state, handle.id, value, fieldMask);
+      if (fieldMask === 0) return;
+      publishTransform(
+        state,
+        handle.id,
+        {
+          position: options.position ?? value.position,
+          rotation: options.rotation ?? value.rotation,
+          scale: options.scale ?? value.scale,
+        },
+        fieldMask,
+      );
+      if (options.position !== undefined) copyVec3(value.position, options.position);
+      if (options.rotation !== undefined) copyQuat(value.rotation, options.rotation);
+      if (options.scale !== undefined) copyVec3(value.scale, options.scale);
     },
   };
   return {
