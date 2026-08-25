@@ -14,7 +14,11 @@ import { createVisibilityPipelines, type VisibilityPipelines } from "./pipeline/
 import { requestAdapter } from "./webgpu/adapter.js";
 import { requestDevice } from "./webgpu/device.js";
 import { createMaterialRegistry, type MaterialRegistry } from "./webgpu/material-registry.js";
-import { createMeshRegistry, type MeshRegistry } from "./webgpu/mesh-registry.js";
+import {
+  createMeshRegistry,
+  type GpuMesh,
+  type MeshRegistry,
+} from "./webgpu/mesh-registry.js";
 import {
   createSurface,
   destroySurface,
@@ -241,6 +245,11 @@ interface RendererState {
   readonly candidateRunIds: Uint32Array<ArrayBuffer>;
   readonly indirectWords: Uint32Array<ArrayBuffer>;
   readonly visibilityParameters: Uint32Array<ArrayBuffer>;
+  readonly runStarts: Uint32Array<ArrayBuffer>;
+  readonly runCounts: Uint32Array<ArrayBuffer>;
+  readonly runPipelines: Uint32Array<ArrayBuffer>;
+  readonly runMaterials: Uint32Array<ArrayBuffer>;
+  readonly runMeshes: Array<GpuMesh | undefined>;
   readonly visibilityMode: "cpu" | "gpu";
   readonly uploadBytesByDomain: {
     instances: number;
@@ -470,6 +479,11 @@ export async function createMeshRenderer(
       candidateRunIds: new Uint32Array(instanceCapacity),
       indirectWords: new Uint32Array(instanceCapacity * INDIRECT_WORDS),
       visibilityParameters: new Uint32Array(4),
+      runStarts: new Uint32Array(instanceCapacity),
+      runCounts: new Uint32Array(instanceCapacity),
+      runPipelines: new Uint32Array(instanceCapacity),
+      runMaterials: new Uint32Array(instanceCapacity),
+      runMeshes: new Array<GpuMesh | undefined>(instanceCapacity),
       visibilityMode: options.visibilityMode === "gpu" ? "gpu" : "cpu",
       uploadBytesByDomain: {
         instances: 0,
@@ -671,16 +685,22 @@ function uploadFrame(context: RendererFrameContext): void {
     frame.resourceDirtyRangeCounts,
     "resources",
   );
-  if (state.visibilityMode === "cpu" && frame.instanceCount > 0 && frame.visibleSlotsDirty) {
-    const byteLength = frame.instanceCount * VISIBLE_SLOT_BYTES;
-    state.device.queue.writeBuffer(
-      state.visibleSlotBuffer,
-      0,
-      frame.visibleSlots.buffer,
-      frame.visibleSlots.byteOffset,
-      byteLength,
-    );
-    recordUpload(state, "visibility", byteLength);
+  if (
+    state.visibilityMode === "cpu" &&
+    (frame.visibleSlotsDirty || frame.resourceDirtyRangeCount > 0)
+  ) {
+    prepareCpuRuns(state, frame);
+    if (frame.instanceCount > 0) {
+      const byteLength = frame.instanceCount * VISIBLE_SLOT_BYTES;
+      state.device.queue.writeBuffer(
+        state.visibleSlotBuffer,
+        0,
+        frame.visibleSlots.buffer,
+        frame.visibleSlots.byteOffset,
+        byteLength,
+      );
+      recordUpload(state, "visibility", byteLength);
+    }
   }
   if (state.visibilityMode === "gpu" && frame.candidateSlotsDirty) {
     prepareGpuRuns(state, frame);
@@ -792,29 +812,65 @@ function recordUpload(
 }
 
 function prepareGpuRuns(state: RendererState, frame: RenderFrame): void {
+  prepareRuns(
+    state,
+    frame.candidateCount,
+    frame.candidateGeometries,
+    frame.candidatePipelines,
+    frame.candidateMaterials,
+    true,
+  );
+}
+
+function prepareCpuRuns(state: RendererState, frame: RenderFrame): void {
+  prepareRuns(
+    state,
+    frame.instanceCount,
+    frame.geometries,
+    frame.pipelines,
+    frame.materials,
+    false,
+  );
+}
+
+function prepareRuns(
+  state: RendererState,
+  itemCount: number,
+  geometries: Uint32Array<ArrayBuffer>,
+  pipelines: Uint32Array<ArrayBuffer>,
+  materials: Uint32Array<ArrayBuffer>,
+  prepareIndirect: boolean,
+): void {
   let candidate = 0;
   let run = 0;
-  while (candidate < frame.candidateCount) {
-    const geometry = frame.candidateGeometries[candidate] ?? 0;
-    const pipeline = frame.candidatePipelines[candidate] ?? 0;
-    const material = frame.candidateMaterials[candidate] ?? 0;
+  while (candidate < itemCount) {
+    const geometry = geometries[candidate] ?? 0;
+    const pipeline = pipelines[candidate] ?? 0;
+    const material = materials[candidate] ?? 0;
     let runEnd = candidate + 1;
     while (
-      runEnd < frame.candidateCount &&
-      frame.candidateGeometries[runEnd] === geometry &&
-      frame.candidatePipelines[runEnd] === pipeline &&
-      frame.candidateMaterials[runEnd] === material
+      runEnd < itemCount &&
+      geometries[runEnd] === geometry &&
+      pipelines[runEnd] === pipeline &&
+      materials[runEnd] === material
     ) {
       runEnd += 1;
     }
-    state.candidateRunIds.fill(run, candidate, runEnd);
-    const indirectOffset = run * INDIRECT_WORDS;
     const mesh = state.meshes.get(geometry);
-    state.indirectWords[indirectOffset] = mesh?.indexCount ?? 0;
-    state.indirectWords[indirectOffset + 1] = 0;
-    state.indirectWords[indirectOffset + 2] = 0;
-    state.indirectWords[indirectOffset + 3] = 0;
-    state.indirectWords[indirectOffset + 4] = candidate;
+    state.runStarts[run] = candidate;
+    state.runCounts[run] = runEnd - candidate;
+    state.runPipelines[run] = pipeline;
+    state.runMaterials[run] = material;
+    state.runMeshes[run] = mesh;
+    if (prepareIndirect) {
+      state.candidateRunIds.fill(run, candidate, runEnd);
+      const indirectOffset = run * INDIRECT_WORDS;
+      state.indirectWords[indirectOffset] = mesh?.indexCount ?? 0;
+      state.indirectWords[indirectOffset + 1] = 0;
+      state.indirectWords[indirectOffset + 2] = 0;
+      state.indirectWords[indirectOffset + 3] = 0;
+      state.indirectWords[indirectOffset + 4] = candidate;
+    }
     run += 1;
     candidate = runEnd;
   }
@@ -871,55 +927,35 @@ function encodeMainPass(context: RendererFrameContext): void {
 
   let drawCalls = 0;
   if (state.visibilityMode === "gpu") {
-    let candidate = 0;
-    let run = 0;
-    while (candidate < frame.candidateCount) {
-      const geometry = frame.candidateGeometries[candidate] ?? 0;
-      const pipeline = frame.candidatePipelines[candidate] ?? 0;
-      const material = frame.candidateMaterials[candidate] ?? 0;
-      const mesh = state.meshes.get(geometry);
-      let runEnd = candidate + 1;
-      while (
-        runEnd < frame.candidateCount &&
-        frame.candidatePipelines[runEnd] === pipeline &&
-        frame.candidateMaterials[runEnd] === material &&
-        frame.candidateGeometries[runEnd] === geometry
-      ) {
-        runEnd += 1;
-      }
+    for (let run = 0; run < state.runCount; run += 1) {
+      const pipeline = state.runPipelines[run] ?? 0;
+      const material = state.runMaterials[run] ?? 0;
+      const mesh = state.runMeshes[run];
       if (pipeline === BASIC_PIPELINE_ID && mesh !== undefined && state.materials.has(material)) {
         pass.setVertexBuffer(0, mesh.vertexBuffer);
         pass.setIndexBuffer(mesh.indexBuffer, "uint32");
         pass.drawIndexedIndirect(state.indirectBuffer, run * INDIRECT_BYTES);
         drawCalls += 1;
       }
-      candidate = runEnd;
-      run += 1;
     }
     state.indirectDrawCalls = drawCalls;
   } else {
-    let instance = 0;
-    while (instance < instanceCount) {
-      const geometry = frame.geometries[instance] ?? 0;
-      const pipeline = frame.pipelines[instance] ?? 0;
-      const material = frame.materials[instance] ?? 0;
-      const mesh = state.meshes.get(geometry);
-      let runEnd = instance + 1;
-      while (
-        runEnd < instanceCount &&
-        frame.pipelines[runEnd] === pipeline &&
-        frame.materials[runEnd] === material &&
-        frame.geometries[runEnd] === geometry
-      ) {
-        runEnd += 1;
-      }
+    for (let run = 0; run < state.runCount; run += 1) {
+      const pipeline = state.runPipelines[run] ?? 0;
+      const material = state.runMaterials[run] ?? 0;
+      const mesh = state.runMeshes[run];
       if (pipeline === BASIC_PIPELINE_ID && mesh !== undefined && state.materials.has(material)) {
         pass.setVertexBuffer(0, mesh.vertexBuffer);
         pass.setIndexBuffer(mesh.indexBuffer, "uint32");
-        pass.drawIndexed(mesh.indexCount, runEnd - instance, 0, 0, instance);
+        pass.drawIndexed(
+          mesh.indexCount,
+          state.runCounts[run] ?? 0,
+          0,
+          0,
+          state.runStarts[run] ?? 0,
+        );
         drawCalls += 1;
       }
-      instance = runEnd;
     }
     state.indirectDrawCalls = 0;
   }

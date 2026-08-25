@@ -23,7 +23,9 @@ vi.mock("./webgpu/surface.js", async (loadOriginal) => {
     ...original,
     createSurface: vi.fn(() => ({
       canvas: {},
-      context: {},
+      context: {
+        getCurrentTexture: vi.fn(() => ({ createView: vi.fn(() => ({})) })),
+      },
       format: "rgba8unorm",
       depthTexture: {},
       depthView: {},
@@ -131,4 +133,198 @@ describe("mesh renderer initialization ownership", () => {
     for (const buffer of buffers) expect(buffer.destroy).toHaveBeenCalledTimes(1);
     expect(device.destroy).toHaveBeenCalledTimes(1);
   });
+
+  it("reuses prepared CPU draw runs while visible membership is unchanged", async () => {
+    vi.stubGlobal("GPUBufferUsage", {
+      MAP_READ: 1,
+      COPY_SRC: 2,
+      COPY_DST: 4,
+      UNIFORM: 8,
+      STORAGE: 16,
+      INDIRECT: 32,
+      VERTEX: 64,
+      INDEX: 128,
+    });
+    const renderPass = {
+      setPipeline: vi.fn(),
+      setBindGroup: vi.fn(),
+      setVertexBuffer: vi.fn(),
+      setIndexBuffer: vi.fn(),
+      drawIndexed: vi.fn(),
+      end: vi.fn(),
+    };
+    const device = {
+      features: new Set<GPUFeatureName>(),
+      limits: {
+        maxStorageBufferBindingSize: 1_000_000,
+        maxBufferSize: 1_000_000,
+      },
+      queue: { writeBuffer: vi.fn(), submit: vi.fn() },
+      createBuffer: vi.fn((descriptor: GPUBufferDescriptor) => {
+        const size = Number(descriptor.size);
+        return {
+          size,
+          getMappedRange: vi.fn(() => new ArrayBuffer(size)),
+          unmap: vi.fn(),
+          destroy: vi.fn(),
+        };
+      }),
+      createBindGroup: vi.fn(() => ({})),
+      createCommandEncoder: vi.fn(() => ({
+        beginRenderPass: vi.fn(() => renderPass),
+        finish: vi.fn(() => ({})),
+      })),
+      destroy: vi.fn(),
+      lost: new Promise<GPUDeviceLostInfo>(() => undefined),
+    } as unknown as GPUDevice;
+    const pipeline = { getBindGroupLayout: vi.fn(() => ({})) } as unknown as GPURenderPipeline;
+    mocks.requestAdapter.mockResolvedValueOnce({ features: new Set() });
+    mocks.requestDevice.mockResolvedValueOnce(device);
+    mocks.getMeshPipeline.mockResolvedValueOnce(pipeline);
+    mocks.createVisibilityPipelines.mockResolvedValueOnce({
+      bindGroupLayout: {},
+      reset: {},
+      cull: {},
+    });
+
+    const renderer = await createMeshRenderer(
+      {} as OffscreenCanvas,
+      { width: 1, height: 1, devicePixelRatio: 1 },
+      4,
+      { visibilityMode: "cpu" },
+    );
+    renderer.registerGeometry(1, "triangle");
+    renderer.registerBasicMaterial(1);
+    const frame = createRenderFrame(4);
+    frame.instanceCount = 2;
+    frame.visibleSlotsDirty = true;
+    frame.geometries.set([1, 1]);
+    frame.pipelines.set([1, 1]);
+    frame.materials.set([1, 1]);
+    renderer.execute(frame);
+
+    frame.visibleSlotsDirty = false;
+    frame.geometries = new Uint32Array(0);
+    frame.pipelines = new Uint32Array(0);
+    frame.materials = new Uint32Array(0);
+    renderer.execute(frame);
+
+    expect(renderPass.drawIndexed).toHaveBeenCalledTimes(2);
+    expect(renderer.stats().drawCalls).toBe(1);
+  });
+
+  it("rebuilds prepared CPU draw runs when resource keys change", async () => {
+    vi.stubGlobal("GPUBufferUsage", {
+      MAP_READ: 1,
+      COPY_SRC: 2,
+      COPY_DST: 4,
+      UNIFORM: 8,
+      STORAGE: 16,
+      INDIRECT: 32,
+      VERTEX: 64,
+      INDEX: 128,
+    });
+    const renderPass = {
+      setPipeline: vi.fn(),
+      setBindGroup: vi.fn(),
+      setVertexBuffer: vi.fn(),
+      setIndexBuffer: vi.fn(),
+      drawIndexed: vi.fn(),
+      end: vi.fn(),
+    };
+    const device = {
+      features: new Set<GPUFeatureName>(),
+      limits: {
+        maxStorageBufferBindingSize: 1_000_000,
+        maxBufferSize: 1_000_000,
+      },
+      queue: { writeBuffer: vi.fn(), submit: vi.fn() },
+      createBuffer: vi.fn((descriptor: GPUBufferDescriptor) => {
+        const size = Number(descriptor.size);
+        return {
+          size,
+          getMappedRange: vi.fn(() => new ArrayBuffer(size)),
+          unmap: vi.fn(),
+          destroy: vi.fn(),
+        };
+      }),
+      createBindGroup: vi.fn(() => ({})),
+      createCommandEncoder: vi.fn(() => ({
+        beginRenderPass: vi.fn(() => renderPass),
+        finish: vi.fn(() => ({})),
+      })),
+      destroy: vi.fn(),
+      lost: new Promise<GPUDeviceLostInfo>(() => undefined),
+    } as unknown as GPUDevice;
+    const pipeline = { getBindGroupLayout: vi.fn(() => ({})) } as unknown as GPURenderPipeline;
+    mocks.requestAdapter.mockResolvedValueOnce({ features: new Set() });
+    mocks.requestDevice.mockResolvedValueOnce(device);
+    mocks.getMeshPipeline.mockResolvedValueOnce(pipeline);
+    mocks.createVisibilityPipelines.mockResolvedValueOnce({
+      bindGroupLayout: {},
+      reset: {},
+      cull: {},
+    });
+
+    const renderer = await createMeshRenderer(
+      {} as OffscreenCanvas,
+      { width: 1, height: 1, devicePixelRatio: 1 },
+      4,
+      { visibilityMode: "cpu" },
+    );
+    renderer.registerGeometry(1, "triangle");
+    renderer.registerGeometry(2, "cube");
+    renderer.registerBasicMaterial(1);
+    const frame = createRenderFrame(4);
+    frame.instanceCount = 2;
+    frame.visibleSlotsDirty = true;
+    frame.geometries.set([1, 1]);
+    frame.pipelines.set([1, 1]);
+    frame.materials.set([1, 1]);
+    renderer.execute(frame);
+
+    frame.visibleSlotsDirty = false;
+    frame.resourceDirtyRangeCount = 1;
+    frame.resourceDirtyRangeCounts[0] = 1;
+    frame.geometries[1] = 2;
+    renderer.execute(frame);
+
+    expect(renderer.stats().drawCalls).toBe(2);
+  });
 });
+
+function createRenderFrame(capacity: number): RenderFrame {
+  return {
+    instanceCount: 0,
+    dirtyRangeCount: 0,
+    stateDirtyRangeCount: 0,
+    boundsDirtyRangeCount: 0,
+    resourceDirtyRangeCount: 0,
+    visibleSlotsDirty: false,
+    candidateCount: 0,
+    candidateSlotsDirty: false,
+    cameraCount: 0,
+    camerasDirty: false,
+    geometries: new Uint32Array(capacity),
+    pipelines: new Uint32Array(capacity),
+    materials: new Uint32Array(capacity),
+    visibleSlots: new Uint32Array(capacity),
+    candidateGeometries: new Uint32Array(capacity),
+    candidatePipelines: new Uint32Array(capacity),
+    candidateMaterials: new Uint32Array(capacity),
+    candidateSlots: new Uint32Array(capacity),
+    instanceData: new Float32Array(capacity * 20),
+    slotStates: new Uint32Array(capacity * 4),
+    slotBounds: new Float32Array(capacity * 4),
+    slotResources: new Uint32Array(capacity * 4),
+    dirtyRangeStarts: new Uint32Array(capacity),
+    dirtyRangeCounts: new Uint32Array(capacity),
+    stateDirtyRangeStarts: new Uint32Array(capacity),
+    stateDirtyRangeCounts: new Uint32Array(capacity),
+    boundsDirtyRangeStarts: new Uint32Array(capacity),
+    boundsDirtyRangeCounts: new Uint32Array(capacity),
+    resourceDirtyRangeStarts: new Uint32Array(capacity),
+    resourceDirtyRangeCounts: new Uint32Array(capacity),
+    cameraData: new Float32Array(32),
+  };
+}
