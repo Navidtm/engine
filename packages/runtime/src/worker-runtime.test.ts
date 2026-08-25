@@ -365,7 +365,12 @@ describe("worker runtime resource ownership", () => {
     receive({ type: "start", lifecycleEpoch: 1 });
     expect(core.update).toHaveBeenLastCalledWith(false);
 
+    const drainsBeforeInitialStats = core.updateSharedCommands.mock.calls.length;
     receive({ type: "get-stats", requestId: 1 });
+    expect(core.updateSharedCommands).toHaveBeenCalledTimes(drainsBeforeInitialStats + 1);
+    expect(core.updateSharedCommands.mock.invocationCallOrder.at(-1)).toBeLessThan(
+      core.stats.mock.invocationCallOrder.at(-1) ?? 0,
+    );
     const initial = posted.find(
       (message): message is Extract<WorkerToMainMessage, { type: "stats" }> =>
         message.type === "stats" && message.requestId === 1,
@@ -377,7 +382,9 @@ describe("worker runtime resource ownership", () => {
     expect(renderer.execute).toHaveBeenLastCalledWith({}, true);
     expect(posted.filter((message) => message.type === "stats")).toHaveLength(1);
 
+    const drainsBeforeSampledStats = core.updateSharedCommands.mock.calls.length;
     receive({ type: "get-stats", requestId: 2 });
+    expect(core.updateSharedCommands).toHaveBeenCalledTimes(drainsBeforeSampledStats + 1);
     const sampled = posted.find(
       (message): message is Extract<WorkerToMainMessage, { type: "stats" }> =>
         message.type === "stats" && message.requestId === 2,
