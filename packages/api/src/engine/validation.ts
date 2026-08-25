@@ -205,10 +205,10 @@ export function validateFiniteTuple(label: string, value: readonly number[], len
   }
 }
 
-export function validateQuaternion(value: Quat): void {
-  validateFiniteTuple("rotation", value, 4);
+export function validateQuaternion(value: Quat, label = "rotation"): void {
+  validateFiniteTuple(label, value, 4);
   if (value.every((component) => component === 0)) {
-    throw new RangeError("rotation must be non-zero.");
+    throw new RangeError(`${label} must be non-zero.`);
   }
 }
 

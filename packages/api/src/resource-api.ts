@@ -23,7 +23,9 @@ import type {
 import {
   ensureTransformSlotAvailable,
   validateColor,
+  validateFiniteTuple,
   validateMeshOptions,
+  validateQuaternion,
 } from "./engine/validation.js";
 import { ensureEntitySlotAvailable, peekEntityIndex, releaseEntity } from "./entity-lifecycle.js";
 import {
@@ -136,6 +138,9 @@ export function createHighLevelApi(
     ) {
       const value = transforms.get(handle);
       if (value === undefined) throw new Error("Scene handle does not belong to this engine.");
+      if (options.position !== undefined) validateFiniteTuple("position", options.position, 3);
+      if (options.rotation !== undefined) validateQuaternion(options.rotation);
+      if (options.scale !== undefined) validateFiniteTuple("scale", options.scale, 3);
       if (options.position !== undefined) copyVec3(value.position, options.position);
       if (options.rotation !== undefined) copyQuat(value.rotation, options.rotation);
       if (options.scale !== undefined) copyVec3(value.scale, options.scale);

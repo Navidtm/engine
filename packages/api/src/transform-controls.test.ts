@@ -34,6 +34,7 @@ describe("transform controls", () => {
     const control = createQuaternionControl(value, publish);
 
     expect(() => control.set(0, Number.NaN, 0, 1)).toThrow("quaternion");
+    expect(() => control.set(0, 0, 0, 0)).toThrow("non-zero");
     expect(value).toEqual([0, 0, 0, 1]);
     expect(publish).not.toHaveBeenCalled();
   });

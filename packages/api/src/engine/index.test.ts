@@ -234,6 +234,32 @@ describe("high-level engine API", () => {
     expect(second.world.createEntity()).toMatchObject({ index: 1, generation: 0 });
   });
 
+  it("rejects invalid high-level transform updates before mutating or publishing", () => {
+    const worker = {
+      addEventListener: vi.fn(),
+      postMessage: vi.fn(),
+      terminate: vi.fn(),
+    } as unknown as Worker;
+    const engine = createEngine({} as HTMLCanvasElement, {
+      autoResize: false,
+      workerFactory: () => worker,
+    });
+    const handle = engine.create.mesh({ geometry: "cube", position: [1, 2, 3] });
+
+    expect(() =>
+      engine.set.transform(handle, {
+        position: [9, 9, 9],
+        rotation: [0, 0, 0, 0],
+      }),
+    ).toThrow("rotation must be non-zero");
+    expect(() => engine.set.transform(handle, { scale: [1, Number.POSITIVE_INFINITY, 1] })).toThrow(
+      "scale",
+    );
+    expect([handle.position.x, handle.position.y, handle.position.z]).toEqual([1, 2, 3]);
+    expect([handle.scale.x, handle.scale.y, handle.scale.z]).toEqual([1, 1, 1]);
+    expect(worker.postMessage).not.toHaveBeenCalled();
+  });
+
   it("rejects wrong-kind, foreign, retired, and destroyed resource handles", () => {
     const workerFactory = () =>
       ({

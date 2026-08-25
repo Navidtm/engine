@@ -96,7 +96,7 @@ export function createQuaternionControl(
       return value[3];
     },
     set(x: number, y: number, z: number, w: number) {
-      validateFiniteTuple("quaternion", [x, y, z, w], 4);
+      validateQuaternion([x, y, z, w], "quaternion");
       value[0] = x;
       value[1] = y;
       value[2] = z;
