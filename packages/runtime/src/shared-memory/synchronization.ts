@@ -24,9 +24,9 @@ export type SharedTransformConsumer = (
 /**
  * Publishes selected transform fields into a seqlock slot.
  * Returns true when the publication is newly enqueued or coalesced into an
- * existing dirty slot. Returns false only when a producer/consumer race finds
- * the bounded queue full after the slot write; that newest value remains in the
- * SAB slot but is not queued, and `OverflowCount` is incremented.
+ * existing dirty slot. Returns false when a newly dirty slot finds the bounded
+ * queue full after its value is written; that newest value remains in the SAB
+ * slot but is not queued, and `OverflowCount` is incremented.
  */
 export function writeSharedTransform(
   views: SharedRuntimeViews,

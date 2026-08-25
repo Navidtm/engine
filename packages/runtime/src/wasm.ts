@@ -552,6 +552,7 @@ export async function createWasmCore(
           throw new Error("WASM world update failed.");
         }
       }
+      refreshMemoryViews();
       frame.instanceCount = exports.lume_visible_count(handle);
       frame.dirtyRangeCount = exports.lume_render_dirty_range_count(handle);
       frame.stateDirtyRangeCount = exports.lume_render_state_dirty_range_count(handle);

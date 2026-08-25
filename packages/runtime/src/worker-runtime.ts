@@ -506,6 +506,7 @@ function transportStats(
       bytesUploaded: 0,
       queueDepth: 0,
       droppedCommands: 0,
+      droppedTransforms: 0,
     };
   }
   return {
@@ -518,6 +519,7 @@ function transportStats(
       Atomics.load(sharedMemory.header, SharedHeader.PendingCount) +
       Atomics.load(sharedMemory.header, SharedHeader.CommandPending),
     droppedCommands: Atomics.load(sharedMemory.header, SharedHeader.DroppedCommands),
+    droppedTransforms: Atomics.load(sharedMemory.header, SharedHeader.OverflowCount),
   };
 }
 

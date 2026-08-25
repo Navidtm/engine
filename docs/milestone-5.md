@@ -109,7 +109,8 @@ queue depth:
 - `dirtyRanges`: transform ranges applied by the worker;
 - `bytesUploaded`: bytes copied into WebAssembly staging;
 - `queueDepth`: pending transform plus structural records;
-- `droppedCommands`: structural-ring overflow attempts.
+- `droppedCommands`: structural-ring overflow attempts;
+- `droppedTransforms`: transform dirty-ring overflow attempts.
 
 These values make transport regressions observable without a profiler and are
 also emitted by the benchmark harness.

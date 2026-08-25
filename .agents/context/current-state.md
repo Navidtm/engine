@@ -284,7 +284,8 @@ messages.
 - `dirtyRanges`;
 - `bytesUploaded`;
 - `queueDepth`;
-- `droppedCommands`.
+- `droppedCommands`;
+- `droppedTransforms`.
 
 Metrics combine worker message counts, atomic shared-memory counters, and WASM
 staging counters. They are diagnostic counters, not browser-independent timing

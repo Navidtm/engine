@@ -6,6 +6,8 @@ import {
   RUNTIME_PROTOCOL_VERSION,
   type WorkerToMainMessage,
 } from "./protocol.js";
+import { allocateSharedRuntimeMemory } from "./shared-memory/allocator.js";
+import { SharedHeader } from "./shared-memory/layout.js";
 import type { WasmCore } from "./wasm.js";
 import { createWorkerRuntime, type WorkerHost } from "./worker-runtime.js";
 
@@ -37,7 +39,7 @@ function deferred<T>(): Deferred<T> {
   };
 }
 
-function initMessage(): MainToWorkerMessage {
+function initMessage(): Extract<MainToWorkerMessage, { type: "init" }> {
   return {
     type: "init",
     value: {
@@ -369,6 +371,7 @@ describe("worker runtime resource ownership", () => {
   });
 
   it("samples split timings only after a stats pull and accumulates completed samples", async () => {
+    const sharedMemory = allocateSharedRuntimeMemory(16);
     const renderer = {
       lost: new Promise<GPUDeviceLostInfo>(() => undefined),
       frameTimings: {
@@ -451,8 +454,13 @@ describe("worker runtime resource ownership", () => {
     };
     const receive = createWorkerRuntime(host);
 
-    receive(initMessage());
+    const message = initMessage();
+    receive({
+      ...message,
+      value: { ...message.value, sharedMemory: sharedMemory.buffer },
+    });
     await vi.waitFor(() => expect(posted[0]?.type).toBe("ready"));
+    Atomics.store(sharedMemory.header, SharedHeader.OverflowCount, 3);
     receive({ type: "start", lifecycleEpoch: 1 });
     expect(core.update).toHaveBeenLastCalledWith(false);
 
@@ -467,6 +475,7 @@ describe("worker runtime resource ownership", () => {
         message.type === "stats" && message.requestId === 1,
     );
     expect(initial?.value.timings.cpuStages.sampleCount).toBe(0);
+    expect(initial?.value.transport.droppedTransforms).toBe(3);
 
     callbacks[0]?.(16);
     expect(core.update).toHaveBeenLastCalledWith(true);

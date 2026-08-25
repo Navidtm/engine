@@ -1,7 +1,7 @@
 import type { RendererOptions, SurfaceSize } from "@lume/renderer";
 
 /** Version checked before a main thread and worker exchange runtime messages. */
-export const RUNTIME_PROTOCOL_VERSION = 11;
+export const RUNTIME_PROTOCOL_VERSION = 12;
 
 /** CPU milliseconds attributed to one pull-sampled worker frame. */
 export interface FrameCpuStageTimings {
@@ -97,6 +97,8 @@ export interface EngineStats {
     readonly queueDepth: number;
     /** Structural commands rejected because the bounded ring was full. */
     readonly droppedCommands: number;
+    /** Transform publications routed to fallback because the dirty ring was full. */
+    readonly droppedTransforms: number;
   };
 }
 

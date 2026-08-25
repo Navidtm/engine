@@ -184,6 +184,7 @@ async function benchmarkStructuralRing(commands: number) {
     commands,
     updateMs: performance.now() - started,
     droppedCommands: 0,
+    droppedTransforms: 0,
     estimatedAllocations: 0,
   };
 }

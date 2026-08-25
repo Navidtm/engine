@@ -194,6 +194,8 @@ command from `postMessage`, the worker drains older shared structural commands
 and transform publications. The attempted command and all later structural and
 transform authoring then use that FIFO message stream, so operations cannot
 overtake either side of the transport boundary and are not semantically dropped.
+Transform dirty-ring overflow is independently observable as
+`droppedTransforms` and selects the same one-way ordered fallback.
 
 Capacity is a contract, not a request to grow storage:
 

@@ -82,8 +82,8 @@ describe("WASM loading diagnostics", () => {
 });
 
 describe("WASM memory views", () => {
-  it("refreshes transform staging after an export grows linear memory", async () => {
-    const memory = new WebAssembly.Memory({ initial: 1, maximum: 2 });
+  it("refreshes staging and returned frame views after exports grow linear memory", async () => {
+    const memory = new WebAssembly.Memory({ initial: 1, maximum: 3 });
     const applied: Array<{
       readonly rangeCount: number;
       readonly generation: number;
@@ -107,6 +107,10 @@ describe("WASM memory views", () => {
         lume_transform_range_starts_ptr: () => 112,
         lume_transform_range_counts_ptr: () => 120,
         lume_engine_spawn: () => {
+          memory.grow(1);
+          return 1;
+        },
+        lume_engine_update: () => {
           memory.grow(1);
           return 1;
         },
@@ -168,5 +172,6 @@ describe("WASM memory views", () => {
         rangeLength: 1,
       },
     ]);
+    expect(core.update().instanceData.buffer).toBe(memory.buffer);
   });
 });
