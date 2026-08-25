@@ -1,5 +1,12 @@
 import { TransformField } from "@lume/runtime";
-import { bounds, material, mesh, type Quat, transform, type Vec3 } from "@lume/scene";
+import {
+  basicMaterialDescriptor,
+  bounds,
+  mesh,
+  type Quat,
+  transform,
+  type Vec3,
+} from "@lume/scene";
 
 import { ensureComponentSlotAvailable, releaseEntityComponents } from "./capacity.js";
 import type { EngineState } from "./engine/state.js";
@@ -60,7 +67,7 @@ export function createHighLevelApi(
   const transforms = new WeakMap<SceneHandle, MutableTransformValue>();
   const createBasicMaterial = (options: BasicMaterialOptions = {}): BasicMaterialHandle => {
     if (options.color !== undefined) validateColor(options.color);
-    const descriptor = material(options);
+    const descriptor = basicMaterialDescriptor(options);
     return createBasicMaterialResource(state, descriptor.color);
   };
   const create: CreateApi = {

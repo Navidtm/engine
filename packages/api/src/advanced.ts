@@ -9,4 +9,4 @@ export type {
   MeshComponent,
   TransformComponent,
 } from "@lume/scene";
-export { bounds, camera, material, mesh, transform } from "@lume/scene";
+export { basicMaterialDescriptor, bounds, camera, mesh, transform } from "@lume/scene";

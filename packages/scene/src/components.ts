@@ -48,9 +48,14 @@ export function transform(options: TransformOptions = {}): TransformComponent {
 }
 
 /** Options for the current color-only basic material. */
-export interface MaterialOptions {
+export interface BasicMaterialDescriptorOptions {
   /** Linear RGBA color in the inclusive `[0, 1]` range; defaults to white. */
   readonly color?: Color;
+}
+
+/** Resource data consumed by the API when creating a basic-material handle. */
+export interface BasicMaterialDescriptor {
+  readonly color: Color;
 }
 
 /**
@@ -58,7 +63,9 @@ export interface MaterialOptions {
  *
  * @throws {RangeError} When a channel is non-finite or outside `[0, 1]`.
  */
-export function material(options: MaterialOptions = {}): Readonly<{ color: Color }> {
+export function basicMaterialDescriptor(
+  options: BasicMaterialDescriptorOptions = {},
+): BasicMaterialDescriptor {
   const color = options.color ?? ([...WHITE] as Color);
   validateFiniteTuple("material color", color, 4);
   if (color.some((channel) => channel < 0 || channel > 1)) {

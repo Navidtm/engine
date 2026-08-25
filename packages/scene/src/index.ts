@@ -1,7 +1,8 @@
+export type { BasicMaterialDescriptor, BasicMaterialDescriptorOptions } from "./components.js";
 export {
+  basicMaterialDescriptor,
   bounds,
   camera,
-  material,
   mesh,
   transform,
   validateCameraPerspective,
