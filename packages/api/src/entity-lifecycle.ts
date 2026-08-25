@@ -70,9 +70,8 @@ export function packEntity(entity: Entity): number {
 
 /** Returns the next reusable or fresh index without mutating lifecycle state. */
 export function peekEntityIndex(state: EntityLifecycleState): number {
-  return state.freeEntityCount > 0
-    ? (state.freeEntities[state.freeEntityCount - 1] ?? state.entityCapacity)
-    : state.nextEntityIndex;
+  if (state.freeEntityCount === 0) return state.nextEntityIndex;
+  return readFreeEntity(state, state.freeEntityCount - 1);
 }
 
 /** Rejects exhaustion without mutating the allocator. */
@@ -83,7 +82,18 @@ export function ensureEntitySlotAvailable(state: EntityLifecycleState): void {
 }
 
 function reuseIndex(state: EntityLifecycleState): number {
-  return state.freeEntities[--state.freeEntityCount] ?? 0;
+  const freeIndex = state.freeEntityCount - 1;
+  const index = readFreeEntity(state, freeIndex);
+  state.freeEntityCount = freeIndex;
+  return index;
+}
+
+function readFreeEntity(state: EntityLifecycleState, freeIndex: number): number {
+  const index = state.freeEntities[freeIndex];
+  if (index === undefined || index >= state.entityCapacity) {
+    throw new Error("Entity free-list invariant violated.");
+  }
+  return index;
 }
 
 function nextIndex(state: EntityLifecycleState): number {

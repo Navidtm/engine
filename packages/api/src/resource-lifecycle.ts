@@ -213,7 +213,7 @@ function allocateHandle(state: EngineState, kind: ResourceKind): ResourceHandle 
   ensureResourceSlotAvailable(state, kind);
   const index =
     registry.freeSlotCount > 0
-      ? (registry.freeSlots[--registry.freeSlotCount] ?? 0)
+      ? reuseResourceSlot(registry, state.resources.capacity)
       : registry.nextSlot++;
   registry.states[index] = ResourceStatus.Ready;
   const generation = registry.generations[index] ?? 0;
@@ -224,6 +224,16 @@ function allocateHandle(state: EngineState, kind: ResourceKind): ResourceHandle 
     ownerReleased: false,
   });
   return handle;
+}
+
+function reuseResourceSlot(registry: ResourceRegistryMirror, capacity: number): number {
+  const freeIndex = registry.freeSlotCount - 1;
+  const index = registry.freeSlots[freeIndex];
+  if (index === undefined || index >= capacity) {
+    throw new Error("Resource free-list invariant violated.");
+  }
+  registry.freeSlotCount = freeIndex;
+  return index;
 }
 
 function validateHandleForUsage(

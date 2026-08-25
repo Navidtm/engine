@@ -60,6 +60,15 @@ describe("entity lifecycle generation exhaustion", () => {
       expect.objectContaining({ code: "LUME_CAPACITY_EXHAUSTED", capacityKind: "entity" }),
     );
   });
+
+  it("fails closed when the free-list count points outside its storage", () => {
+    const state = createState(1);
+    state.freeEntityCount = 2;
+
+    expect(() => allocateEntity(state)).toThrow("Entity free-list invariant violated");
+    expect(state.freeEntityCount).toBe(2);
+    expect(state.entityAlive[0]).toBe(0);
+  });
 });
 
 function createState(entityCapacity: number): EntityLifecycleState {
