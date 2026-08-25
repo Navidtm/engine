@@ -2,7 +2,7 @@ import { TransformField } from "@lume/runtime";
 import { camera, type Quat, transform, type Vec3 } from "@lume/scene";
 
 import type { EngineState } from "./engine/state.js";
-import { publishTransform } from "./engine/transport.js";
+import { publishTransformFields } from "./engine/transport.js";
 import type { EngineCamera, EngineCameraOptions, WorldApi } from "./engine/types.js";
 import { DEFAULT_CAMERA_PERSPECTIVE, resolveCameraPerspective } from "./engine/validation.js";
 import {
@@ -33,18 +33,22 @@ export function createEngineCamera(
   world.add(entity, camera(perspective));
   return {
     position: createVector3Control(transformValue.position, (next) =>
-      publishTransform(
+      publishTransformFields(
         state,
         entity,
-        { ...transformValue, position: next },
+        next,
+        transformValue.rotation,
+        transformValue.scale,
         TransformField.Position,
       ),
     ),
     rotation: createQuaternionControl(transformValue.rotation, (next) =>
-      publishTransform(
+      publishTransformFields(
         state,
         entity,
-        { ...transformValue, rotation: next },
+        transformValue.position,
+        next,
+        transformValue.scale,
         TransformField.Rotation,
       ),
     ),

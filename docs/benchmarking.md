@@ -45,6 +45,14 @@ update latency, worker round-trip cost, and worker preparation, plus
 cross-thread copies and estimated transport allocations. Raw output is exposed
 as `window.__LUME_TRANSPORT_RESULT__`.
 
+`pnpm benchmark:transport` additionally measures the production Node paths. Its
+control-write probe performs one million position updates through entity
+validation and shared-memory publication. The committed Node v24.19.0 result is
+73.89 ms for the allocating baseline and 73.50 ms for reusable control records;
+the observed ranges overlap. The source-level allocation model falls from two
+explicit tuple/object literals per write to zero, so the result supports lower
+GC pressure without claiming higher write throughput.
+
 ## WASM release profile suite
 
 Run the reproducible Rust/WASM and Node comparison with:

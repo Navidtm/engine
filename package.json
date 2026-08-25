@@ -16,7 +16,7 @@
     "benchmark:renderer-uploads": "node benchmarks/renderer/run-upload-matrix.mjs",
     "benchmark:renderer-scalability": "node benchmarks/renderer/run-scalability-matrix.mjs",
     "benchmark:render-world": "node benchmarks/renderer/run-extraction-comparison.mjs",
-    "benchmark:transport": "pnpm --filter @lume/runtime build && node --expose-gc benchmarks/transport/run.mjs",
+    "benchmark:transport": "pnpm --filter @lume/runtime build && tsdown packages/api/src/benchmark-internals.ts --no-config --format esm --platform node --target es2022 --out-dir benchmarks/transport/node_modules/.lume-api-benchmark --clean && node --expose-gc benchmarks/transport/run.mjs",
     "benchmark:entity-generation": "tsdown packages/runtime/src/benchmark-internals.ts --no-config --format esm --platform node --target es2022 --out-dir benchmarks/.runtime-dist --clean && node --expose-gc benchmarks/entity-generation/run.mjs",
     "format": "prettier --write . && cargo fmt --all",
     "format:check": "prettier --check . && cargo fmt --all -- --check",

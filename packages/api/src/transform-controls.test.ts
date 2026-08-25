@@ -31,6 +31,20 @@ describe("transform controls", () => {
     expect(publish).toHaveBeenCalledOnce();
   });
 
+  it("reuses control publication tuples across successful writes", () => {
+    const value: [number, number, number] = [0, 0, 0];
+    const published: Array<[number, number, number]> = [];
+    const control = createVector3Control(value, (next) => published.push(next));
+
+    control.set(1, 2, 3);
+    control.set(4, 5, 6);
+
+    expect(published).toHaveLength(2);
+    expect(published[0]).toBe(published[1]);
+    expect(published[1]).toEqual([4, 5, 6]);
+    expect(value).toEqual([4, 5, 6]);
+  });
+
   it("preserves vector and quaternion mirrors when publication fails", () => {
     const position: [number, number, number] = [1, 2, 3];
     const rotation: [number, number, number, number] = [0, 0, 0, 1];

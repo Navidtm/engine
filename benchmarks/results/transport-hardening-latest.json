@@ -1,23 +1,24 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "benchmark": "transport-hardening",
-  "generatedAt": "2026-08-02T12:24:54.310Z",
+  "generatedAt": "2026-08-25T11:02:13.415Z",
   "environment": {
     "runtime": "node",
-    "node": "v24.16.0",
+    "node": "v24.19.0",
     "platform": "darwin",
     "architecture": "arm64"
   },
   "notes": [
     "SAB and ring measurements execute the production runtime transport implementation.",
-    "Node results isolate transport CPU cost; use the browser harness for browser/worker latency."
+    "Node results isolate transport CPU cost; use the browser harness for browser/worker latency.",
+    "Control-write samples use the production validation and shared-memory publication path; modeled allocations count explicit command/tuple literals in steady-state source."
   ],
   "results": [
     {
       "scenario": "legacy_object_transform_transport",
       "entities": 10000,
-      "publishMs": 1.0961250000000007,
-      "drainMs": 0.2325840000000028,
+      "publishMs": 1.0336660000000002,
+      "drainMs": 0.3133750000000006,
       "allocations": 40001,
       "bytesUploaded": 400000,
       "checksum": 50005000
@@ -25,8 +26,8 @@
     {
       "scenario": "shared_partial_transform_transport",
       "entities": 10000,
-      "publishMs": 1.5290840000000046,
-      "drainMs": 1.253416999999999,
+      "publishMs": 1.630084,
+      "drainMs": 2.3870830000000005,
       "drained": 10000,
       "dirtyRanges": 1,
       "allocations": 0,
@@ -36,8 +37,8 @@
     {
       "scenario": "legacy_object_transform_transport",
       "entities": 100000,
-      "publishMs": 6.210708000000004,
-      "drainMs": 1.2862500000000026,
+      "publishMs": 9.625582999999999,
+      "drainMs": 2.334291999999998,
       "allocations": 400001,
       "bytesUploaded": 4000000,
       "checksum": 5000050000
@@ -45,8 +46,8 @@
     {
       "scenario": "shared_partial_transform_transport",
       "entities": 100000,
-      "publishMs": 9.563207999999996,
-      "drainMs": 7.937667000000005,
+      "publishMs": 9.639249999999997,
+      "drainMs": 8.915792000000003,
       "drained": 100000,
       "dirtyRanges": 1,
       "allocations": 0,
@@ -56,8 +57,8 @@
     {
       "scenario": "legacy_object_transform_transport",
       "entities": 500000,
-      "publishMs": 32.75375,
-      "drainMs": 1.6874579999999924,
+      "publishMs": 25.172040999999993,
+      "drainMs": 2.0667080000000055,
       "allocations": 2000001,
       "bytesUploaded": 20000000,
       "checksum": 125000250000
@@ -65,8 +66,8 @@
     {
       "scenario": "shared_partial_transform_transport",
       "entities": 500000,
-      "publishMs": 46.015208000000015,
-      "drainMs": 40.610083,
+      "publishMs": 46.320750000000004,
+      "drainMs": 36.86070799999999,
       "drained": 500000,
       "dirtyRanges": 1,
       "allocations": 0,
@@ -76,8 +77,8 @@
     {
       "scenario": "legacy_object_transform_transport",
       "entities": 1000000,
-      "publishMs": 71.549833,
-      "drainMs": 4.368416999999965,
+      "publishMs": 38.303207999999984,
+      "drainMs": 4.966666000000004,
       "allocations": 4000001,
       "bytesUploaded": 40000000,
       "checksum": 500000500000
@@ -85,8 +86,8 @@
     {
       "scenario": "shared_partial_transform_transport",
       "entities": 1000000,
-      "publishMs": 100.65129100000001,
-      "drainMs": 82.970459,
+      "publishMs": 93.54945899999998,
+      "drainMs": 73.56225,
       "drained": 1000000,
       "dirtyRanges": 1,
       "allocations": 0,
@@ -96,8 +97,8 @@
     {
       "scenario": "structural_spsc_ring",
       "commands": 10000,
-      "publishMs": 0.8797079999999937,
-      "drainMs": 0.5859169999999949,
+      "publishMs": 0.9298750000000382,
+      "drainMs": 0.5235000000000127,
       "drained": 10000,
       "droppedCommands": 0,
       "allocations": 0,
@@ -106,8 +107,8 @@
     {
       "scenario": "structural_spsc_ring",
       "commands": 100000,
-      "publishMs": 4.321458000000007,
-      "drainMs": 4.021582999999964,
+      "publishMs": 4.171042,
+      "drainMs": 3.5888330000000224,
       "drained": 100000,
       "droppedCommands": 0,
       "allocations": 0,
@@ -116,8 +117,8 @@
     {
       "scenario": "structural_spsc_ring",
       "commands": 500000,
-      "publishMs": 23.985666999999978,
-      "drainMs": 18.446666999999934,
+      "publishMs": 22.242042000000026,
+      "drainMs": 15.49558300000001,
       "drained": 500000,
       "droppedCommands": 0,
       "allocations": 0,
@@ -126,29 +127,49 @@
     {
       "scenario": "generational_entity_lifecycle",
       "entities": 10000,
-      "createMs": 0.1538749999999709,
-      "destroyMs": 0.17670799999996234,
-      "reuseMs": 0.23070900000004713,
+      "createMs": 0.16312499999997954,
+      "destroyMs": 0.2077499999999759,
+      "reuseMs": 0.2447090000000003,
       "staleRejected": true,
       "runtimeAllocations": 0
     },
     {
       "scenario": "generational_entity_lifecycle",
       "entities": 100000,
-      "createMs": 0.8728750000000218,
-      "destroyMs": 0.41287500000009913,
-      "reuseMs": 0.11700000000007549,
+      "createMs": 1.0064590000000067,
+      "destroyMs": 0.2529169999999681,
+      "reuseMs": 0.1215829999999869,
       "staleRejected": true,
       "runtimeAllocations": 0
     },
     {
       "scenario": "generational_entity_lifecycle",
       "entities": 1000000,
-      "createMs": 9.720084000000043,
-      "destroyMs": 1.2244160000000193,
-      "reuseMs": 1.0485840000000053,
+      "createMs": 10.341415999999981,
+      "destroyMs": 4.90220800000003,
+      "reuseMs": 1.056709000000012,
       "staleRejected": true,
       "runtimeAllocations": 0
+    }
+  ],
+  "controlWriteResults": [
+    {
+      "strategy": "allocating-control-publication",
+      "writes": 1000000,
+      "medianMs": 73.88924999999995,
+      "minMs": 73.13262499999996,
+      "maxMs": 74.9424160000001,
+      "modeledAllocationsPerWrite": 2,
+      "checksum": 127493856
+    },
+    {
+      "strategy": "reused-control-publication",
+      "writes": 1000000,
+      "medianMs": 73.50212499999998,
+      "minMs": 72.20308299999988,
+      "maxMs": 75.02979199999982,
+      "modeledAllocationsPerWrite": 0,
+      "checksum": 127493856
     }
   ]
 }

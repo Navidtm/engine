@@ -34,6 +34,25 @@ export function writeSharedTransform(
   value: SharedTransformValue,
   fieldMask: number = TransformField.All,
 ): boolean {
+  return writeSharedTransformFields(
+    views,
+    entity,
+    value.position,
+    value.rotation,
+    value.scale,
+    fieldMask,
+  );
+}
+
+/** Publishes transform fields without materializing a temporary aggregate value. */
+export function writeSharedTransformFields(
+  views: SharedRuntimeViews,
+  entity: number,
+  position: SharedTransformValue["position"],
+  rotation: SharedTransformValue["rotation"],
+  scale: SharedTransformValue["scale"],
+  fieldMask: number = TransformField.All,
+): boolean {
   const index = entity & 0x000f_ffff;
   validateEntity(views, index);
   if ((fieldMask & ~TransformField.All) !== 0 || fieldMask === 0) {
@@ -42,20 +61,20 @@ export function writeSharedTransform(
   Atomics.add(views.sequences, index, 1);
   const offset = index * SHARED_TRANSFORM_FLOATS;
   if ((fieldMask & TransformField.Position) !== 0) {
-    views.transforms[offset] = value.position[0];
-    views.transforms[offset + 1] = value.position[1];
-    views.transforms[offset + 2] = value.position[2];
+    views.transforms[offset] = position[0];
+    views.transforms[offset + 1] = position[1];
+    views.transforms[offset + 2] = position[2];
   }
   if ((fieldMask & TransformField.Rotation) !== 0) {
-    views.transforms[offset + 3] = value.rotation[0];
-    views.transforms[offset + 4] = value.rotation[1];
-    views.transforms[offset + 5] = value.rotation[2];
-    views.transforms[offset + 6] = value.rotation[3];
+    views.transforms[offset + 3] = rotation[0];
+    views.transforms[offset + 4] = rotation[1];
+    views.transforms[offset + 5] = rotation[2];
+    views.transforms[offset + 6] = rotation[3];
   }
   if ((fieldMask & TransformField.Scale) !== 0) {
-    views.transforms[offset + 7] = value.scale[0];
-    views.transforms[offset + 8] = value.scale[1];
-    views.transforms[offset + 9] = value.scale[2];
+    views.transforms[offset + 7] = scale[0];
+    views.transforms[offset + 8] = scale[1];
+    views.transforms[offset + 9] = scale[2];
   }
   publishGenerationAndMask(views, index, entity >>> 20, fieldMask);
   Atomics.add(views.sequences, index, 1);

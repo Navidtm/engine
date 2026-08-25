@@ -2,7 +2,7 @@ import { TransformField } from "@lume/runtime";
 import type { Entity, Quat, Vec3 } from "@lume/scene";
 
 import type { EngineState } from "./engine/state.js";
-import { publishTransform } from "./engine/transport.js";
+import { publishTransformFields } from "./engine/transport.js";
 import type { MeshHandle, QuaternionControl, Vector3Control } from "./engine/types.js";
 import { validateFiniteTuple, validateQuaternion } from "./engine/validation.js";
 
@@ -37,13 +37,34 @@ export function createMeshHandle(
   value: MutableTransformValue,
 ): MeshHandle {
   const position = createVector3Control(value.position, (next) =>
-    publishTransform(state, entity, { ...value, position: next }, TransformField.Position),
+    publishTransformFields(
+      state,
+      entity,
+      next,
+      value.rotation,
+      value.scale,
+      TransformField.Position,
+    ),
   );
   const rotation = createQuaternionControl(value.rotation, (next) =>
-    publishTransform(state, entity, { ...value, rotation: next }, TransformField.Rotation),
+    publishTransformFields(
+      state,
+      entity,
+      value.position,
+      next,
+      value.scale,
+      TransformField.Rotation,
+    ),
   );
   const scale = createVector3Control(value.scale, (next) =>
-    publishTransform(state, entity, { ...value, scale: next }, TransformField.Scale),
+    publishTransformFields(
+      state,
+      entity,
+      value.position,
+      value.rotation,
+      next,
+      TransformField.Scale,
+    ),
   );
   return {
     kind: "mesh",
@@ -58,6 +79,7 @@ export function createVector3Control(
   value: [number, number, number],
   publish: (next: [number, number, number]) => void,
 ): Vector3Control {
+  const next: [number, number, number] = [0, 0, 0];
   return {
     get x() {
       return value[0];
@@ -69,7 +91,9 @@ export function createVector3Control(
       return value[2];
     },
     set(x: number, y: number, z: number) {
-      const next: [number, number, number] = [x, y, z];
+      next[0] = x;
+      next[1] = y;
+      next[2] = z;
       validateFiniteTuple("vector", next, 3);
       publish(next);
       copyVec3(value, next);
@@ -81,6 +105,7 @@ export function createQuaternionControl(
   value: [number, number, number, number],
   publish: (next: [number, number, number, number]) => void,
 ): QuaternionControl {
+  const next: [number, number, number, number] = [0, 0, 0, 1];
   return {
     get x() {
       return value[0];
@@ -95,7 +120,10 @@ export function createQuaternionControl(
       return value[3];
     },
     set(x: number, y: number, z: number, w: number) {
-      const next: [number, number, number, number] = [x, y, z, w];
+      next[0] = x;
+      next[1] = y;
+      next[2] = z;
+      next[3] = w;
       validateQuaternion(next, "quaternion");
       publish(next);
       copyQuat(value, next);

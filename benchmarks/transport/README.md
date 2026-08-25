@@ -19,3 +19,10 @@ ring, lifecycle, and old-versus-new suite. It writes
 `benchmarks/results/transport-hardening-latest.json`. Node measurements isolate
 transport CPU cost; browser results remain the source for worker scheduling and
 round-trip latency.
+
+The Node suite also runs one million production position-control writes through
+entity validation and shared-memory publication. On Node v24.19.0, the retained
+allocating baseline measured 73.89 ms and two explicit object/tuple literals per
+write; the reusable path measured 73.50 ms with no steady-state literals. The
+timing ranges overlap, so this is an allocation-discipline result rather than a
+throughput claim.

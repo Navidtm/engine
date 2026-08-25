@@ -2,7 +2,7 @@ import {
   type MainToWorkerMessage,
   type RuntimeCommand,
   writeSharedCommand,
-  writeSharedTransform,
+  writeSharedTransformFields,
 } from "@lume/runtime";
 import type { Entity } from "@lume/scene";
 
@@ -23,6 +23,18 @@ export function publishTransform(
   value: TransformValue,
   fieldMask: number,
 ): void {
+  publishTransformFields(state, entity, value.position, value.rotation, value.scale, fieldMask);
+}
+
+/** Publishes transform fields without allocating an aggregate on the shared-memory fast path. */
+export function publishTransformFields(
+  state: EngineState,
+  entity: Entity,
+  position: TransformValue["position"],
+  rotation: TransformValue["rotation"],
+  scale: TransformValue["scale"],
+  fieldMask: number,
+): void {
   if (state.status === "disposed" || state.status === "failed") {
     throw new Error(`Cannot update a ${state.status} engine.`);
   }
@@ -30,15 +42,25 @@ export function publishTransform(
   validateTransformSlot(state, entity);
   const packedEntity = packEntity(entity);
   if (!state.structuralFallback && state.sharedMemory !== undefined) {
-    if (writeSharedTransform(state.sharedMemory, packedEntity, value, fieldMask)) return;
+    if (
+      writeSharedTransformFields(
+        state.sharedMemory,
+        packedEntity,
+        position,
+        rotation,
+        scale,
+        fieldMask,
+      )
+    )
+      return;
     state.structuralFallback = true;
   }
   dispatchCommand(state, {
     type: "add-transform",
     entity: packedEntity,
-    position: value.position,
-    rotation: value.rotation,
-    scale: value.scale,
+    position: [position[0], position[1], position[2]],
+    rotation: [rotation[0], rotation[1], rotation[2], rotation[3]],
+    scale: [scale[0], scale[1], scale[2]],
   });
 }
 

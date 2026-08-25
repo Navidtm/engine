@@ -9,12 +9,19 @@ import {
   writeSharedCommand,
   writeSharedTransform,
 } from "../../packages/runtime/dist/index.js";
+import {
+  createAllocatingPositionControlBenchmark,
+  createPositionControlBenchmark,
+} from "./node_modules/.lume-api-benchmark/benchmark-internals.mjs";
 
 const output = new URL("../results/transport-hardening-latest.json", import.meta.url);
 const results = [];
 const transformCounts = [10_000, 100_000, 500_000, 1_000_000];
 const structuralCounts = [10_000, 100_000, 500_000];
 const lifecycleCounts = [10_000, 100_000, 1_000_000];
+const CONTROL_WRITES = 1_000_000;
+const CONTROL_WARMUPS = 5;
+const CONTROL_SAMPLES = 15;
 const value = {
   position: [1, 2, 3],
   rotation: [0, 0, 0, 1],
@@ -34,9 +41,17 @@ for (const entities of lifecycleCounts) {
   results.push(benchmarkLifecycle(entities));
   collectGarbage();
 }
+const controlWriteResults = [
+  benchmarkControlWrites(
+    "allocating-control-publication",
+    createAllocatingPositionControlBenchmark,
+    2,
+  ),
+  benchmarkControlWrites("reused-control-publication", createPositionControlBenchmark, 0),
+];
 
 const report = {
-  schemaVersion: 2,
+  schemaVersion: 3,
   benchmark: "transport-hardening",
   generatedAt: new Date().toISOString(),
   environment: {
@@ -48,8 +63,10 @@ const report = {
   notes: [
     "SAB and ring measurements execute the production runtime transport implementation.",
     "Node results isolate transport CPU cost; use the browser harness for browser/worker latency.",
+    "Control-write samples use the production validation and shared-memory publication path; modeled allocations count explicit command/tuple literals in steady-state source.",
   ],
   results,
+  controlWriteResults,
 };
 
 await mkdir(new URL("../results/", import.meta.url), { recursive: true });
@@ -169,6 +186,42 @@ function benchmarkLifecycle(count) {
     staleRejected: (handles[count - 1] ?? 0) !== 0,
     runtimeAllocations: 0,
   };
+}
+
+function benchmarkControlWrites(strategy, createControl, modeledAllocationsPerWrite) {
+  for (let sample = 0; sample < CONTROL_WARMUPS; sample += 1) runControlWrites(createControl());
+  const samplesMs = [];
+  let checksum = 0;
+  for (let sample = 0; sample < CONTROL_SAMPLES; sample += 1) {
+    const control = createControl();
+    const started = performance.now();
+    checksum ^= runControlWrites(control);
+    samplesMs.push(performance.now() - started);
+  }
+  return {
+    strategy,
+    writes: CONTROL_WRITES,
+    medianMs: median(samplesMs),
+    minMs: Math.min(...samplesMs),
+    maxMs: Math.max(...samplesMs),
+    modeledAllocationsPerWrite,
+    checksum,
+  };
+}
+
+function runControlWrites(control) {
+  let checksum = 0;
+  for (let write = 0; write < CONTROL_WRITES; write += 1) {
+    const x = write & 255;
+    control.set(x, 2, 3);
+    checksum = (checksum + x) >>> 0;
+  }
+  return checksum;
+}
+
+function median(values) {
+  const ordered = [...values].sort((left, right) => left - right);
+  return ordered[Math.floor(ordered.length / 2)] ?? 0;
 }
 
 function collectGarbage() {
