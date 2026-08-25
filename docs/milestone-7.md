@@ -18,12 +18,12 @@ Milestone 7 currently has accepted design and implementation in progress.
 | ----- | ----------- | ----------------------------------------------------------------- |
 | 1     | Implemented | `@lume/assets` contracts, decoder, fixtures, and regression suite |
 | 2     | Implemented | Renderer external geometry registration, lifecycle, and replay    |
-| 3     | Pending     | Worker loading transaction and Resource Coordinator integration   |
+| 3     | Implemented | Worker transaction, budgets, cancellation, and recovery replay    |
 | 4     | Pending     | Public `engine.load.geometry()` API and browser integration       |
 | 5     | Pending     | Controlled measurements, final documentation, and completion gate |
 
-Phase 1 and Phase 2 do not make external geometry loadable through the engine
-yet; worker orchestration and public loading remain pending.
+Phases 1 through 3 do not make external geometry loadable through the public
+engine API yet; handle publication and browser integration remain Phase 4.
 
 ## Objective
 
@@ -115,12 +115,31 @@ It has no dependency on DOM canvas APIs,
 ECS, RenderWorld, runtime, or WebGPU and may be reused by a future offline CLI.
 Its accepted profile and rejection rules are fixed by ADR 011.
 
-### Runtime orchestration
+### Runtime orchestration — Phase 3 implemented
 
-Add request-correlated worker messages and Resource Coordinator loading records.
-Fetch, byte admission, parse, validation, index widening, decoded ownership,
-abort, and cleanup run in the worker. Large bytes never cross the structural
-SPSC ring or return to the main thread.
+Protocol version 13 adds correlated load, abort, ready, and typed-failure
+records. Fetch, bounded response reading, byte admission, parse, validation,
+index widening, decoded ownership, abort, and cleanup run in the worker. Large
+bytes never cross the structural SPSC ring or return to the main thread.
+
+The Resource Coordinator owns fixed-capacity loading records keyed by complete
+generational handles. Each request has a monotonic attempt epoch and a
+worker-owned `AbortController`; every async continuation revalidates both before
+decode, renderer acquisition, upload, and publication. Failure or cancellation
+releases reservations, advances the failed slot generation, and cannot publish a
+late descriptor into a reused slot.
+
+Runtime initialization accepts optional immutable geometry limits but supplies
+no unmeasured defaults. When configured, the coordinator reserves aggregate
+temporary download/decode bytes and enforces retained decoded and resident GPU
+geometry budgets before publication. Pull-based engine statistics expose
+pending/success/failed/aborted counts plus encoded, temporary, retained, and GPU
+byte accounting without frame-time polling.
+
+Publication is atomic: renderer upload succeeds first, then the replayable
+descriptor, accounting, and ready state commit together. Abort immediately
+before commit removes the just-uploaded buffers. Engine failure/disposal aborts
+all active attempts and suppresses late results.
 
 ### Renderer residency — Phase 2 implemented
 
@@ -139,13 +158,14 @@ retire before packed-generation wrap.
 
 External geometry retains a replayable worker-owned decoded descriptor.
 Recoverable device loss recreates currently live external geometry before frame
-scheduling resumes. Phase 2 proves that a replacement renderer registry can
-upload the same descriptor under the unchanged handle; Phase 3 will make the
-Resource Coordinator own and invoke that replay transaction.
+scheduling resumes. Phase 3 makes the Resource Coordinator retain and replay
+external descriptors under unchanged handles. A load that finishes decoding
+during recovery waits for the replacement renderer, while failed recovery or
+disposal invalidates the attempt.
 
-### Budgets and diagnostics
+### Budgets and diagnostics — Phase 3 implemented
 
-Define immutable engine-level limits for at least:
+Runtime initialization now defines immutable engine-level limits for:
 
 - maximum GLB download bytes per request;
 - maximum decoded geometry bytes per request;
@@ -154,12 +174,13 @@ Define immutable engine-level limits for at least:
 - renderer GPU geometry bytes.
 
 Admission reserves estimated peak bytes before decode/upload. Failure is typed
-and deterministic. Exact defaults require committed fixture measurements.
+and deterministic. No production defaults are selected before committed fixture
+measurements.
 
-Expose pull-based asset statistics only if they can be produced without
-frame-time polling or allocation. Required implementation diagnostics include
-pending loads, successes, failures, aborted loads, encoded bytes, decoded CPU
-bytes, and resident GPU geometry bytes.
+Pull-based asset statistics are included in the existing worker stats response;
+they add no frame-time polling or allocation. Diagnostics include pending loads,
+successes, failures, aborted loads, fetched encoded bytes, temporary
+reservations, retained decoded CPU bytes, and resident GPU geometry bytes.
 
 ## Explicit non-goals
 
@@ -204,7 +225,7 @@ engine state is involved.
 Exit gate: external descriptors can be registered/removed/replayed without ECS
 or public API changes.
 
-### Phase 3: Worker loading transaction
+### Phase 3: Worker loading transaction — implemented
 
 - Add versioned load/abort/result protocol records.
 - Add worker fetch, reservation, attempt epochs, decode, renderer upload, and
@@ -250,7 +271,8 @@ Implementation is incomplete without coverage for:
 - final usage release destroying CPU and GPU ownership once;
 - wrong-kind, foreign, retired, destroyed, and stale handle rejection;
 - device loss during loading and after readiness;
-- replay of all live external geometry and no retired geometry;
+- replay of all live external geometry, including retirement-pending usage, and
+  no finalized records;
 - deterministic cleanup of temporary source/decoded/upload memory; and
 - unchanged frame allocation/message counters after loading settles.
 

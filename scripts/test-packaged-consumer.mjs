@@ -13,7 +13,7 @@ try {
   await mkdir(packDirectory, { recursive: true });
   await mkdir(consumerDirectory, { recursive: true });
   runPnpm(["-r", "--filter", "./packages/**", "build"], repositoryRoot);
-  const packages = ["renderer", "scene", "runtime", "api"];
+  const packages = ["assets", "renderer", "scene", "runtime", "api"];
   const archives = new Map();
   for (const packageName of packages) {
     runPnpm(

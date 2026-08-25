@@ -65,8 +65,10 @@ position/normal descriptor with widened `uint32` indices and byte accounting.
 The package has no dependency on the API, runtime, ECS, RenderWorld, renderer,
 DOM canvas, or WebGPU. Phase 2 adds a structurally compatible renderer descriptor
 and transactional external geometry residency/removal/replay without coupling
-the renderer to `@lume/assets`. Worker fetch, Resource Coordinator loading and
-recovery orchestration, and the public `engine.load.geometry()` facade remain
+the renderer to `@lume/assets`. Phase 3 adds worker-owned bounded fetch/decode,
+attempt-epoch cancellation, Resource Coordinator descriptor ownership and byte
+accounting, atomic renderer publication/rollback, and unchanged-handle recovery
+replay. The public `engine.load.geometry()` facade and browser integration remain
 later Milestone 7 phases under
 [ADR 011](../.agents/decisions/011-glb-geometry-ingestion.md) and
 [ADR 012](../.agents/decisions/012-async-geometry-loading.md).

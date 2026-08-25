@@ -1,3 +1,4 @@
+import { AssetError } from "@lume/assets";
 import { createMeshRenderer, type MeshRenderer, type SurfaceSize } from "@lume/renderer";
 
 import {
@@ -9,6 +10,7 @@ import {
   recordFrameStage,
   requestFrameSample,
 } from "./frame-instrumentation.js";
+import { createGeometryLoader, type GeometryLoader } from "./geometry-loader.js";
 import {
   type EngineStats,
   type MainToWorkerMessage,
@@ -25,6 +27,7 @@ interface WorkerRuntimeState {
   renderer: MeshRenderer | undefined;
   core: WasmCore | undefined;
   coordinator: ResourceCoordinator | undefined;
+  geometryLoader: GeometryLoader | undefined;
   size: SurfaceSize | undefined;
   frameRequest: number | undefined;
   running: boolean;
@@ -37,12 +40,20 @@ interface WorkerRuntimeState {
   readonly deferredRecoveryMessages: Array<
     Extract<MainToWorkerMessage, { type: "command" | "batch" }>
   >;
+  readonly rendererWaiters: Set<RendererWaiter>;
   lastFrameTimeMs: number;
   lastCpuTimeMs: number;
   previousFrameStart: number;
   sharedMemory: SharedRuntimeViews | undefined;
   messages: number;
   readonly instrumentation: FrameInstrumentation;
+}
+
+interface RendererWaiter {
+  readonly signal: AbortSignal;
+  readonly resolve: (renderer: MeshRenderer) => void;
+  readonly reject: (error: unknown) => void;
+  readonly onAbort: () => void;
 }
 
 /** Small worker-global abstraction used by the runtime and deterministic tests. */
@@ -53,6 +64,8 @@ export interface WorkerHost {
   requestAnimationFrame(callback: FrameRequestCallback): number;
   /** Cancels a previously scheduled worker frame. */
   cancelAnimationFrame(handle: number): void;
+  /** Worker-owned network entry used only by cold-path asset loads. */
+  readonly fetch?: (source: string, init: RequestInit) => Promise<Response>;
 }
 
 /** Creates a stateful worker message handler with transactional initialization. */
@@ -61,6 +74,7 @@ export function createWorkerRuntime(host: WorkerHost): (message: MainToWorkerMes
     renderer: undefined,
     core: undefined,
     coordinator: undefined,
+    geometryLoader: undefined,
     size: undefined,
     frameRequest: undefined,
     running: false,
@@ -71,6 +85,7 @@ export function createWorkerRuntime(host: WorkerHost): (message: MainToWorkerMes
     recovering: false,
     recoveryRunningIntent: false,
     deferredRecoveryMessages: [],
+    rendererWaiters: new Set(),
     lastFrameTimeMs: 0,
     lastCpuTimeMs: 0,
     previousFrameStart: 0,
@@ -80,6 +95,11 @@ export function createWorkerRuntime(host: WorkerHost): (message: MainToWorkerMes
   };
 
   const report = (error: unknown): void => {
+    state.geometryLoader?.dispose();
+    state.coordinator?.abortAllGeometryLoads();
+    rejectRendererWaiters(
+      new AssetError("LUME_ASSET_ABORTED", "lifecycle", "Worker runtime failed."),
+    );
     const value = error instanceof Error ? error : new Error(String(error));
     const event: WorkerToMainMessage =
       value.stack === undefined
@@ -99,6 +119,44 @@ export function createWorkerRuntime(host: WorkerHost): (message: MainToWorkerMes
   const stopScheduling = (): void => {
     state.running = false;
     invalidateScheduler();
+  };
+
+  const acquireRenderer = (signal: AbortSignal): Promise<MeshRenderer> => {
+    if (signal.aborted || state.disposed) {
+      return Promise.reject(
+        new AssetError("LUME_ASSET_ABORTED", "lifecycle", "Renderer wait was aborted."),
+      );
+    }
+    if (state.renderer !== undefined) return Promise.resolve(state.renderer);
+    return new Promise((resolve, reject) => {
+      const waiter: RendererWaiter = {
+        signal,
+        resolve,
+        reject,
+        onAbort: () => {
+          state.rendererWaiters.delete(waiter);
+          reject(new AssetError("LUME_ASSET_ABORTED", "lifecycle", "Renderer wait was aborted."));
+        },
+      };
+      state.rendererWaiters.add(waiter);
+      signal.addEventListener("abort", waiter.onAbort, { once: true });
+    });
+  };
+
+  const resolveRendererWaiters = (renderer: MeshRenderer): void => {
+    for (const waiter of state.rendererWaiters) {
+      waiter.signal.removeEventListener("abort", waiter.onAbort);
+      waiter.resolve(renderer);
+    }
+    state.rendererWaiters.clear();
+  };
+
+  const rejectRendererWaiters = (error: unknown): void => {
+    for (const waiter of state.rendererWaiters) {
+      waiter.signal.removeEventListener("abort", waiter.onAbort);
+      waiter.reject(error);
+    }
+    state.rendererWaiters.clear();
   };
 
   const frame = (schedulerEpoch: number, scheduleNext: FrameRequestCallback): void => {
@@ -242,7 +300,18 @@ export function createWorkerRuntime(host: WorkerHost): (message: MainToWorkerMes
       state.coordinator = createResourceCoordinator(
         message.value.resourceCapacity,
         message.value.entityCapacity,
+        message.value.geometryLimits,
       );
+      if (message.value.geometryLimits !== undefined) {
+        const fetchGeometry = host.fetch ?? ((source, init) => globalThis.fetch(source, init));
+        state.geometryLoader = createGeometryLoader({
+          coordinator: state.coordinator,
+          limits: message.value.geometryLimits,
+          fetch: fetchGeometry,
+          acquireRenderer,
+          postMessage: (event) => host.postMessage(event),
+        });
+      }
       const latestSize = state.size;
       if (latestSize !== undefined && latestSize !== message.value.size) {
         core.resize(latestSize.width / Math.max(latestSize.height, 1));
@@ -306,6 +375,7 @@ export function createWorkerRuntime(host: WorkerHost): (message: MainToWorkerMes
       coordinator.rebuildRenderer(replacement);
       core.invalidateRendererCache();
       state.renderer = replacement;
+      resolveRendererWaiters(replacement);
       watchDeviceLoss(message, replacement);
       for (const deferred of state.deferredRecoveryMessages) {
         if (deferred.type === "command") {
@@ -329,6 +399,15 @@ export function createWorkerRuntime(host: WorkerHost): (message: MainToWorkerMes
       }
     } catch (error) {
       replacement?.dispose();
+      state.geometryLoader?.dispose();
+      state.coordinator?.abortAllGeometryLoads();
+      rejectRendererWaiters(
+        new AssetError(
+          "LUME_ASSET_GPU_UPLOAD",
+          "recovery",
+          "Renderer recovery failed before geometry publication.",
+        ),
+      );
       throw error;
     } finally {
       state.recovering = false;
@@ -402,6 +481,40 @@ export function createWorkerRuntime(host: WorkerHost): (message: MainToWorkerMes
           state.core?.resize(message.value.width / Math.max(message.value.height, 1));
           state.renderer?.resize(message.value);
           break;
+        case "load-geometry":
+          if (state.geometryLoader === undefined) {
+            host.postMessage({
+              type: "geometry-failed",
+              protocolVersion: RUNTIME_PROTOCOL_VERSION,
+              requestId: message.requestId,
+              handle: message.handle,
+              error: {
+                code: "LUME_ASSET_BUDGET_EXCEEDED",
+                stage: "budget",
+                message: "External geometry loading requires configured runtime budgets.",
+              },
+            });
+          } else {
+            state.geometryLoader.load(message);
+          }
+          break;
+        case "abort-geometry-load":
+          if (state.geometryLoader === undefined) {
+            host.postMessage({
+              type: "geometry-failed",
+              protocolVersion: RUNTIME_PROTOCOL_VERSION,
+              requestId: message.requestId,
+              handle: message.handle,
+              error: {
+                code: "LUME_ASSET_ABORTED",
+                stage: "lifecycle",
+                message: "Geometry load request is not active.",
+              },
+            });
+          } else {
+            state.geometryLoader.abort(message);
+          }
+          break;
         case "get-stats": {
           updateSharedCommands();
           const coreStats = state.core?.stats();
@@ -414,6 +527,16 @@ export function createWorkerRuntime(host: WorkerHost): (message: MainToWorkerMes
               cpuTime: state.lastCpuTimeMs,
               gpuTime: rendererStats?.gpuTimeMs ?? null,
               allocationsPerFrame: rendererStats?.browserObjectsPerFrame ?? 0,
+              assets: state.coordinator?.assetStats() ?? {
+                pendingLoads: 0,
+                successfulLoads: 0,
+                failedLoads: 0,
+                abortedLoads: 0,
+                fetchedEncodedBytes: 0,
+                temporaryReservedBytes: 0,
+                retainedDecodedBytes: 0,
+                residentGpuBytes: 0,
+              },
               render: {
                 drawCalls: rendererStats?.drawCalls ?? 0,
                 computeDispatches: rendererStats?.computeDispatches ?? 0,
@@ -464,7 +587,11 @@ export function createWorkerRuntime(host: WorkerHost): (message: MainToWorkerMes
         case "dispose":
           stopScheduling();
           state.disposed = true;
-          if (state.core !== undefined && state.renderer !== undefined) {
+          state.geometryLoader?.dispose();
+          rejectRendererWaiters(
+            new AssetError("LUME_ASSET_ABORTED", "lifecycle", "Engine was disposed."),
+          );
+          if (state.core !== undefined) {
             state.coordinator?.dispose(state.core, state.renderer);
           }
           state.renderer?.dispose();

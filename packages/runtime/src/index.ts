@@ -1,6 +1,10 @@
+export type { RuntimeGeometryLimits } from "./geometry-limits.js";
+export { defineRuntimeGeometryLimits } from "./geometry-limits.js";
 export type {
   EngineStats,
   FrameCpuStageTimings,
+  GeometryAssetStats,
+  GeometryLoadErrorPayload,
   MainToWorkerMessage,
   RuntimeCommand,
   RuntimeInit,

@@ -1,3 +1,6 @@
+// A replacement renderer must accept the worker's current live generation on first residency.
+const UNINITIALIZED_GENERATION = 0xffff;
+
 /** Private renderer-side residency mirror for color-only material keys. */
 export interface MaterialRegistry {
   register(handle: number): void;
@@ -9,6 +12,7 @@ export interface MaterialRegistry {
 /** Creates a fixed-capacity generational material registry with private slots. */
 export function createMaterialRegistry(capacity: number): MaterialRegistry {
   const generations = new Uint16Array(capacity);
+  generations.fill(UNINITIALIZED_GENERATION);
   const occupied = new Uint8Array(capacity);
   let disposed = false;
   return {
@@ -20,7 +24,7 @@ export function createMaterialRegistry(capacity: number): MaterialRegistry {
         index <= 0 ||
         index >= capacity ||
         occupied[index] !== 0 ||
-        generations[index] !== generation
+        (generations[index] !== UNINITIALIZED_GENERATION && generations[index] !== generation)
       ) {
         throw new Error(`Invalid or occupied material handle: ${handle}`);
       }

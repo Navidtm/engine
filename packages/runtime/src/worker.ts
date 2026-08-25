@@ -14,6 +14,9 @@ const receive = createWorkerRuntime({
   cancelAnimationFrame(handle: number) {
     scope.cancelAnimationFrame(handle);
   },
+  fetch(source, init) {
+    return scope.fetch(source, init);
+  },
 });
 
 scope.addEventListener("message", (event: MessageEvent<MainToWorkerMessage>) => {

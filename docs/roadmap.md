@@ -99,9 +99,13 @@ container/accessor validation, `uint32` index widening, exact owned-array byte
 accounting, and regression tests. Phase 2 adds renderer registration, removal,
 and unchanged-handle replay for structurally compatible external descriptors,
 with transactional GPU-buffer ownership and generational/capacity coverage.
-Worker loading, public API, and controlled measurements remain pending. Textures/KTX2, materials,
-multi-primitive assets, hierarchy, streaming, caching, compression, and an
-offline optimizer remain outside Milestone 7.
+Phase 3 adds versioned worker load/abort/result messages, bounded fetch/decode
+transactions, immutable budget accounting, attempt-epoch cancellation, atomic
+renderer publication/rollback, typed failures, and external descriptor replay
+across device recovery. Public API/browser integration and controlled
+measurements remain pending. Textures/KTX2, materials, multi-primitive assets,
+hierarchy, streaming, caching, compression, and an offline optimizer remain
+outside Milestone 7.
 
 ## Known future bottlenecks
 

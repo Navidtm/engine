@@ -1,7 +1,30 @@
+import type { AssetErrorCode, AssetErrorStage, GeometryBounds } from "@lume/assets";
 import type { RendererOptions, SurfaceSize } from "@lume/renderer";
 
+import type { RuntimeGeometryLimits } from "./geometry-limits.js";
+
 /** Version checked before a main thread and worker exchange runtime messages. */
-export const RUNTIME_PROTOCOL_VERSION = 12;
+export const RUNTIME_PROTOCOL_VERSION = 13;
+
+/** Transfer-safe typed failure returned for one correlated geometry request. */
+export interface GeometryLoadErrorPayload {
+  readonly code: AssetErrorCode;
+  readonly stage: AssetErrorStage;
+  readonly message: string;
+  readonly cause?: string;
+}
+
+/** Pull-only worker asset accounting; ordinary frames do not sample these fields. */
+export interface GeometryAssetStats {
+  readonly pendingLoads: number;
+  readonly successfulLoads: number;
+  readonly failedLoads: number;
+  readonly abortedLoads: number;
+  readonly fetchedEncodedBytes: number;
+  readonly temporaryReservedBytes: number;
+  readonly retainedDecodedBytes: number;
+  readonly residentGpuBytes: number;
+}
 
 /** CPU milliseconds attributed to one pull-sampled worker frame. */
 export interface FrameCpuStageTimings {
@@ -25,6 +48,7 @@ export interface EngineStats {
   readonly gpuTime: number | null;
   /** Frame-scoped WebGPU objects; reusable engine allocations are excluded. */
   readonly allocationsPerFrame: number;
+  readonly assets: GeometryAssetStats;
   readonly render: {
     /** Number of indexed draw calls encoded in the most recent frame. */
     readonly drawCalls: number;
@@ -180,6 +204,8 @@ export interface RuntimeInit {
   readonly renderer: RendererOptions;
   /** Optional initialized transport buffer; absent for message fallback. */
   readonly sharedMemory?: SharedArrayBuffer;
+  /** Optional immutable budgets; external loading is unavailable when absent. */
+  readonly geometryLimits?: RuntimeGeometryLimits;
 }
 
 /** Versioned messages sent from the main-thread API to the runtime worker. */
@@ -195,6 +221,21 @@ export type MainToWorkerMessage =
   | { readonly type: "start"; readonly lifecycleEpoch: number }
   | { readonly type: "stop"; readonly lifecycleEpoch: number }
   | { readonly type: "resize"; readonly value: SurfaceSize }
+  | {
+      readonly type: "load-geometry";
+      readonly protocolVersion: number;
+      readonly requestId: number;
+      /** Reserved complete generational identity; no public handle exists yet. */
+      readonly handle: number;
+      /** Main-thread-resolved absolute URL. */
+      readonly source: string;
+    }
+  | {
+      readonly type: "abort-geometry-load";
+      readonly protocolVersion: number;
+      readonly requestId: number;
+      readonly handle: number;
+    }
   | { readonly type: "get-stats"; readonly requestId: number }
   | { readonly type: "dispose" };
 
@@ -204,5 +245,19 @@ export type WorkerToMainMessage =
   | { readonly type: "stopped"; readonly lifecycleEpoch: number }
   | { readonly type: "disposed" }
   | { readonly type: "stats"; readonly requestId: number; readonly value: EngineStats }
+  | {
+      readonly type: "geometry-ready";
+      readonly protocolVersion: number;
+      readonly requestId: number;
+      readonly handle: number;
+      readonly bounds: GeometryBounds;
+    }
+  | {
+      readonly type: "geometry-failed";
+      readonly protocolVersion: number;
+      readonly requestId: number;
+      readonly handle: number;
+      readonly error: GeometryLoadErrorPayload;
+    }
   | { readonly type: "error"; readonly message: string; readonly stack?: string }
   | { readonly type: "device-lost"; readonly reason: string; readonly message: string };

@@ -279,6 +279,9 @@ importers:
 
   packages/runtime:
     dependencies:
+      '@lume/assets':
+        specifier: workspace:*
+        version: link:../assets
       '@lume/renderer':
         specifier: workspace:*
         version: link:../renderer
