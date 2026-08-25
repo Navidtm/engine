@@ -23,6 +23,41 @@ const identity = {
 };
 
 describe("engine transport ordering", () => {
+  it("falls back to an ordered command when the transform queue overflows", () => {
+    const { state, posted } = createState();
+    const entity = allocateEntity(state);
+    const load = Atomics.load;
+    const mockLoad = (array: ArrayBufferView, index: number): number | bigint =>
+      array === state.sharedMemory.header
+        ? state.sharedMemory.layout.capacity
+        : (Reflect.apply(load, Atomics, [array, index]) as number | bigint);
+    vi.spyOn(Atomics, "load").mockImplementation(mockLoad as typeof Atomics.load);
+    try {
+      publishTransform(
+        state,
+        entity,
+        { ...identity, position: [4, 5, 6] },
+        TransformField.Position,
+      );
+    } finally {
+      vi.restoreAllMocks();
+    }
+
+    expect(state.structuralFallback).toBe(true);
+    expect(posted).toEqual([
+      {
+        type: "command",
+        value: {
+          type: "add-transform",
+          entity: packEntity(entity),
+          position: [4, 5, 6],
+          rotation: identity.rotation,
+          scale: identity.scale,
+        },
+      },
+    ]);
+  });
+
   it("routes transforms through the ordered message stream after structural overflow", () => {
     const { state, posted } = createState();
     const entity = allocateEntity(state);

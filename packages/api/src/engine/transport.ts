@@ -30,8 +30,8 @@ export function publishTransform(
   validateTransformSlot(state, entity);
   const packedEntity = packEntity(entity);
   if (!state.structuralFallback && state.sharedMemory !== undefined) {
-    writeSharedTransform(state.sharedMemory, packedEntity, value, fieldMask);
-    return;
+    if (writeSharedTransform(state.sharedMemory, packedEntity, value, fieldMask)) return;
+    state.structuralFallback = true;
   }
   dispatchCommand(state, {
     type: "add-transform",

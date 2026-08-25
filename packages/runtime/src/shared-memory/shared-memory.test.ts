@@ -34,7 +34,7 @@ describe("shared runtime memory", () => {
   it("coalesces repeated writes and drains the latest value", () => {
     const views = allocateSharedRuntimeMemory(4);
     expect(writeSharedTransform(views, 2, identity)).toBe(true);
-    expect(writeSharedTransform(views, 2, { ...identity, position: [4, 5, 6] })).toBe(false);
+    expect(writeSharedTransform(views, 2, { ...identity, position: [4, 5, 6] })).toBe(true);
     const scratch = new Float32Array(SHARED_TRANSFORM_FLOATS);
     const entities: number[] = [];
     const drained = drainSharedTransforms(views, scratch, (entity, fieldMask, values) => {
@@ -59,7 +59,7 @@ describe("shared runtime memory", () => {
         { ...identity, rotation: [0, 1, 0, 0] },
         TransformField.Rotation,
       ),
-    ).toBe(false);
+    ).toBe(true);
 
     const scratch = new Float32Array(SHARED_TRANSFORM_FLOATS);
     drainSharedTransforms(views, scratch, (received, fieldMask, values) => {
@@ -88,7 +88,7 @@ describe("shared runtime memory", () => {
         { ...identity, position: [7, 8, 9] },
         TransformField.Position,
       ),
-    ).toBe(false);
+    ).toBe(true);
 
     const scratch = new Float32Array(SHARED_TRANSFORM_FLOATS);
     const received: Array<{ entity: number; fieldMask: number; values: number[] }> = [];

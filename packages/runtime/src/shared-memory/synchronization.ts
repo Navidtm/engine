@@ -23,8 +23,10 @@ export type SharedTransformConsumer = (
 
 /**
  * Publishes selected transform fields into a seqlock slot.
- * Returns true only when this write newly enqueues the entity; repeated writes
- * coalesce while preserving the newest generation and mask.
+ * Returns true when the publication is newly enqueued or coalesced into an
+ * existing dirty slot. Returns false only when a producer/consumer race finds
+ * the bounded queue full after the slot write; that newest value remains in the
+ * SAB slot but is not queued, and `OverflowCount` is incremented.
  */
 export function writeSharedTransform(
   views: SharedRuntimeViews,
@@ -58,7 +60,6 @@ export function writeSharedTransform(
   publishGenerationAndMask(views, index, entity >>> 20, fieldMask);
   Atomics.add(views.sequences, index, 1);
 
-  let enqueued = false;
   if (Atomics.compareExchange(views.dirty, index, 0, 1) === 0) {
     const pending = Atomics.load(views.header, SharedHeader.PendingCount);
     if (pending >= views.layout.capacity) {
@@ -70,12 +71,11 @@ export function writeSharedTransform(
     Atomics.store(views.queue, tail, index);
     Atomics.store(views.header, SharedHeader.QueueTail, (tail + 1) % views.layout.capacity);
     Atomics.add(views.header, SharedHeader.PendingCount, 1);
-    enqueued = true;
   }
   Atomics.add(views.header, SharedHeader.WriteEpoch, 1);
   Atomics.add(views.header, SharedHeader.SharedWrites, 1);
   Atomics.notify(views.header, SharedHeader.WriteEpoch);
-  return enqueued;
+  return true;
 }
 
 /** Drains stable transform publications on the single worker consumer. */
