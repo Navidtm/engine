@@ -80,11 +80,20 @@ export function resizeSurface(
   const height = physicalDimension(size.height, size.devicePixelRatio, limit);
   if (width === surface.width && height === surface.height) return false;
 
-  surface.depthTexture.destroy();
+  const depthTexture = createDepthTexture(device, width, height);
+  let depthView: GPUTextureView;
+  try {
+    depthView = depthTexture.createView({ label: "Lume main depth view" });
+  } catch (error) {
+    depthTexture.destroy();
+    throw error;
+  }
+
   surface.canvas.width = width;
   surface.canvas.height = height;
-  surface.depthTexture = createDepthTexture(device, width, height);
-  surface.depthView = surface.depthTexture.createView({ label: "Lume main depth view" });
+  surface.depthTexture.destroy();
+  surface.depthTexture = depthTexture;
+  surface.depthView = depthView;
   surface.width = width;
   surface.height = height;
   return true;
