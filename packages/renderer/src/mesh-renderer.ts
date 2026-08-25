@@ -1145,7 +1145,7 @@ function readStats(state: RendererState): RendererStats {
     bufferUploadCpuTimeMs: state.bufferUploadCpuTimeMs,
     bufferUploadBytes: state.bufferUploadBytes,
     bufferWriteCount: state.bufferWriteCount,
-    uploadBytesByDomain: state.uploadBytesByDomain,
+    uploadBytesByDomain: { ...state.uploadBytesByDomain },
     framePreparationCpuTimeMs: state.framePreparationCpuTimeMs,
     gpuTimeMs: state.profiler.gpuTimeMs,
     browserObjectsPerFrame: state.browserObjectsPerFrame,

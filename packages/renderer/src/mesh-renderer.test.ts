@@ -215,7 +215,11 @@ describe("mesh renderer initialization ownership", () => {
     renderer.execute(frame);
 
     expect(renderPass.drawIndexed).toHaveBeenCalledTimes(2);
-    expect(renderer.stats().drawCalls).toBe(1);
+    const stats = renderer.stats();
+    expect(stats.drawCalls).toBe(1);
+    const mutableDomains = stats.uploadBytesByDomain as { instances: number };
+    mutableDomains.instances = 999;
+    expect(renderer.stats().uploadBytesByDomain.instances).not.toBe(999);
   });
 
   it("rebuilds prepared CPU draw runs when resource keys change", async () => {
