@@ -183,6 +183,36 @@ describe("high-level engine API", () => {
     ).toThrow("transport.structuralCommandCapacity");
   });
 
+  it("does not consume entity capacity after the engine fails", async () => {
+    let onMessage: ((event: MessageEvent<WorkerToMainMessage>) => void) | undefined;
+    const worker = {
+      addEventListener(type: string, listener: EventListener) {
+        if (type === "message") {
+          onMessage = listener as (event: MessageEvent<WorkerToMainMessage>) => void;
+        }
+      },
+      postMessage: vi.fn(),
+      terminate: vi.fn(),
+    } as unknown as Worker;
+    const canvas = {
+      getBoundingClientRect: () => ({ width: 1, height: 1 }),
+      transferControlToOffscreen: () => ({}) as OffscreenCanvas,
+    } as HTMLCanvasElement;
+    vi.stubGlobal("window", { devicePixelRatio: 1 });
+    vi.stubGlobal("crossOriginIsolated", false);
+    const engine = createEngine(canvas, {
+      autoResize: false,
+      entityCapacity: 1,
+      workerFactory: () => worker,
+    });
+    const initialization = engine.init();
+    onMessage?.({ data: { type: "error", message: "worker failed" } } as MessageEvent);
+    await expect(initialization).rejects.toThrow("worker failed");
+
+    expect(() => engine.world.createEntity()).toThrow("failed engine");
+    expect(() => engine.world.createEntity()).toThrow("failed engine");
+  });
+
   it("rejects transform capacity beyond the entity budget", () => {
     expect(() =>
       createEngine({} as HTMLCanvasElement, {

@@ -30,6 +30,7 @@ export function createWorldApi(state: EngineState): WorldApi {
   return {
     createEntity() {
       if (state.status === "disposed") throw new Error("Cannot create an entity after disposal.");
+      if (state.status === "failed") throw new Error("Cannot create an entity on a failed engine.");
       ensureEntitySlotAvailable(state);
       const entity = allocateEntity(state);
       dispatchCommand(state, { type: "spawn", entity: packEntity(entity) });
