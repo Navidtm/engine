@@ -209,6 +209,7 @@ export interface MeshRenderer {
 
 interface RendererState {
   readonly device: GPUDevice;
+  readonly instanceCapacity: number;
   readonly surface: SurfaceState;
   readonly pipeline: GPURenderPipeline;
   readonly visibilityPipelines: VisibilityPipelines;
@@ -323,17 +324,10 @@ export async function createMeshRenderer(
     const slotRecordBytes = Math.max(SLOT_RECORD_BYTES, instanceCapacity * SLOT_RECORD_BYTES);
     const visibleSlotBytes = Math.max(VISIBLE_SLOT_BYTES, instanceCapacity * VISIBLE_SLOT_BYTES);
     const indirectBytes = Math.max(INDIRECT_BYTES, instanceCapacity * INDIRECT_BYTES);
-    if (
-      instanceBytes > device.limits.maxStorageBufferBindingSize ||
-      instanceBytes > device.limits.maxBufferSize ||
-      slotRecordBytes > device.limits.maxStorageBufferBindingSize ||
-      indirectBytes > device.limits.maxStorageBufferBindingSize ||
-      indirectBytes > device.limits.maxBufferSize
-    ) {
-      throw new RangeError(
-        `Configured render capacity requires ${instanceBytes} bytes, exceeding this device's storage-buffer limit.`,
-      );
-    }
+    validateStorageBufferSize(device.limits, "instance", instanceBytes);
+    validateStorageBufferSize(device.limits, "slot record", slotRecordBytes);
+    validateStorageBufferSize(device.limits, "visible slot", visibleSlotBytes);
+    validateStorageBufferSize(device.limits, "indirect command", indirectBytes);
 
     surface = createSurface(device, canvas, size, options.alphaMode ?? "opaque");
     const pipeline = await getMeshPipeline(device, pipelineCache, surface.format);
@@ -439,6 +433,7 @@ export async function createMeshRenderer(
     };
     const state: RendererState = {
       device,
+      instanceCapacity,
       surface,
       pipeline,
       visibilityPipelines,
@@ -532,6 +527,8 @@ export async function createMeshRenderer(
       },
       execute(frame, profileStages = false) {
         if (state.disposed) return;
+        validateFrameCount("instanceCount", frame.instanceCount, state.instanceCapacity);
+        validateFrameCount("candidateCount", frame.candidateCount, state.instanceCapacity);
         frameContext.frame = frame;
         frameContext.preparationStart = performance.now();
         frameContext.profileStages = profileStages;
@@ -562,6 +559,25 @@ export async function createMeshRenderer(
     if (surface !== undefined) destroySurface(surface);
     device.destroy();
     throw error;
+  }
+}
+
+function validateStorageBufferSize(
+  limits: GPUSupportedLimits,
+  label: string,
+  byteLength: number,
+): void {
+  if (byteLength <= limits.maxBufferSize && byteLength <= limits.maxStorageBufferBindingSize) {
+    return;
+  }
+  throw new RangeError(
+    `Configured render capacity requires ${byteLength} bytes for the ${label} buffer, exceeding device limits (maxBufferSize=${limits.maxBufferSize}, maxStorageBufferBindingSize=${limits.maxStorageBufferBindingSize}).`,
+  );
+}
+
+function validateFrameCount(label: string, count: number, capacity: number): void {
+  if (!Number.isSafeInteger(count) || count < 0 || count > capacity) {
+    throw new RangeError(`${label} ${count} exceeds configured render capacity ${capacity}.`);
   }
 }
 

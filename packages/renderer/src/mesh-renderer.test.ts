@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { createMeshRenderer } from "./mesh-renderer.js";
+import { createMeshRenderer, type RenderFrame } from "./mesh-renderer.js";
 import type * as SurfaceModule from "./webgpu/surface.js";
 
 const mocks = vi.hoisted(() => ({
@@ -35,6 +35,27 @@ vi.mock("./webgpu/surface.js", async (loadOriginal) => {
 });
 
 describe("mesh renderer initialization ownership", () => {
+  it("rejects oversized derived buffers before creating GPU resources", async () => {
+    const device = {
+      features: new Set<GPUFeatureName>(),
+      limits: {
+        maxStorageBufferBindingSize: 100,
+        maxBufferSize: 100,
+      },
+      createBuffer: vi.fn(),
+      destroy: vi.fn(),
+    } as unknown as GPUDevice;
+    mocks.requestAdapter.mockResolvedValueOnce({ features: new Set() });
+    mocks.requestDevice.mockResolvedValueOnce(device);
+
+    await expect(
+      createMeshRenderer({} as OffscreenCanvas, { width: 1, height: 1, devicePixelRatio: 1 }, 2),
+    ).rejects.toThrow("instance buffer");
+
+    expect(device.createBuffer).not.toHaveBeenCalled();
+    expect(device.destroy).toHaveBeenCalledTimes(1);
+  });
+
   it("destroys the surface and device when pipeline creation fails", async () => {
     const device = {
       features: new Set<GPUFeatureName>(),
@@ -96,6 +117,12 @@ describe("mesh renderer initialization ownership", () => {
       {} as OffscreenCanvas,
       { width: 1, height: 1, devicePixelRatio: 1 },
       4,
+    );
+    expect(() => renderer.execute({ instanceCount: 5, candidateCount: 0 } as RenderFrame)).toThrow(
+      "instanceCount 5",
+    );
+    expect(() => renderer.execute({ instanceCount: 0, candidateCount: 5 } as RenderFrame)).toThrow(
+      "candidateCount 5",
     );
     renderer.dispose();
     renderer.dispose();
