@@ -19,6 +19,7 @@ function dependencies() {
   const renderer = {
     lost: new Promise<GPUDeviceLostInfo>(() => undefined),
     registerGeometry: vi.fn(),
+    registerExternalGeometry: vi.fn(),
     removeGeometry: vi.fn(),
     registerBasicMaterial: vi.fn(),
     removeBasicMaterial: vi.fn(),

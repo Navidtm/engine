@@ -8,7 +8,7 @@ import {
 } from "./framegraph/graph.js";
 import { defineFramePass } from "./framegraph/pass.js";
 import { writeFrustumPlanes } from "./frustum-planes.js";
-import { BUILTIN_MESHES } from "./geometry/mesh-data.js";
+import { BUILTIN_MESHES, type MeshGeometryDescriptor } from "./geometry/mesh-data.js";
 import { createPipelineCache, type PipelineCache } from "./pipeline/cache.js";
 import { createMeshPipelineLayout, getMeshPipeline } from "./pipeline/mesh.js";
 import { createVisibilityPipelines, type VisibilityPipelines } from "./pipeline/visibility.js";
@@ -195,6 +195,8 @@ export interface MeshRenderer {
   readonly lost: Promise<GPUDeviceLostInfo>;
   /** Registers a built-in geometry under a worker-owned generational key. */
   registerGeometry(handle: number, builtin: "triangle" | "cube"): void;
+  /** Registers a validated external descriptor under a worker-owned generational key. */
+  registerExternalGeometry(handle: number, descriptor: MeshGeometryDescriptor): void;
   /** Removes a matching geometry generation from future submissions. */
   removeGeometry(handle: number): void;
   /** Registers a basic-material key used by extracted draw runs. */
@@ -542,6 +544,9 @@ export async function createMeshRenderer(
       registerGeometry(handle, builtin) {
         const source = builtinGeometrySource(builtin);
         state.meshes.register(handle, source);
+      },
+      registerExternalGeometry(handle, descriptor) {
+        state.meshes.register(handle, descriptor);
       },
       removeGeometry(handle) {
         if (!state.meshes.remove(handle)) throw new Error(`Unknown geometry handle: ${handle}`);

@@ -17,13 +17,13 @@ Milestone 7 currently has accepted design and implementation in progress.
 | Phase | Status      | Evidence                                                          |
 | ----- | ----------- | ----------------------------------------------------------------- |
 | 1     | Implemented | `@lume/assets` contracts, decoder, fixtures, and regression suite |
-| 2     | Pending     | Renderer external geometry registration and replay                |
+| 2     | Implemented | Renderer external geometry registration, lifecycle, and replay    |
 | 3     | Pending     | Worker loading transaction and Resource Coordinator integration   |
 | 4     | Pending     | Public `engine.load.geometry()` API and browser integration       |
 | 5     | Pending     | Controlled measurements, final documentation, and completion gate |
 
-Phase 1 implementation does not make external geometry loadable through the
-engine yet.
+Phase 1 and Phase 2 do not make external geometry loadable through the engine
+yet; worker orchestration and public loading remain pending.
 
 ## Objective
 
@@ -122,16 +122,26 @@ Fetch, byte admission, parse, validation, index widening, decoded ownership,
 abort, and cleanup run in the worker. Large bytes never cross the structural
 SPSC ring or return to the main thread.
 
-### Renderer residency
+### Renderer residency — Phase 2 implemented
 
-Extend the geometry registry to accept validated immutable vertex/index arrays
-under a complete generational resource key. Buffer creation remains
-transactional. Failed upload destroys partial buffers and publishes no ready
-resource.
+The geometry registry accepts a renderer-owned structural descriptor containing
+validated immutable six-float interleaved vertices and `uint32` triangle-list
+indices under a complete generational resource key. The type is structurally
+compatible with the array fields of `DecodedGeometry` without making the
+renderer depend on the asset decoder package. Built-ins and external geometry
+share the same upload and ownership path.
+
+Buffer creation is transactional. A failed upload destroys partial buffers and
+publishes no registry entry or GPU-byte accounting. Remove and renderer disposal
+destroy all owned geometry buffers, stale generations cannot resolve or be
+re-registered, resource capacity is checked before GPU allocation, and slots
+retire before packed-generation wrap.
 
 External geometry retains a replayable worker-owned decoded descriptor.
 Recoverable device loss recreates currently live external geometry before frame
-scheduling resumes. Handles remain unchanged.
+scheduling resumes. Phase 2 proves that a replacement renderer registry can
+upload the same descriptor under the unchanged handle; Phase 3 will make the
+Resource Coordinator own and invoke that replay transaction.
 
 ### Budgets and diagnostics
 
@@ -184,7 +194,7 @@ accepted GLB profile before deployment.
 Exit gate: every ADR 011 validation boundary has a deterministic test and no
 engine state is involved.
 
-### Phase 2: Renderer external geometry
+### Phase 2: Renderer external geometry — implemented
 
 - Generalize immutable mesh upload from built-ins to decoded descriptors.
 - Preserve the current six-float vertex layout and `uint32` indices.

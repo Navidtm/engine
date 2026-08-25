@@ -1,5 +1,8 @@
-import type { CpuMeshData } from "../geometry/mesh-data.js";
+import type { MeshGeometryDescriptor } from "../geometry/mesh-data.js";
 import { createStaticBuffer } from "./buffer.js";
+
+// A replacement renderer must accept the worker's current live generation on first residency.
+const UNINITIALIZED_GENERATION = 0xffff;
 
 /** GPU buffers and draw metadata for one immutable indexed mesh. */
 export interface GpuMesh {
@@ -13,10 +16,10 @@ export interface GpuMesh {
   readonly byteLength: number;
 }
 
-/** Owns the built-in mesh GPU buffers for one renderer lifetime. */
+/** Owns immutable mesh GPU buffers for one renderer lifetime. */
 export interface MeshRegistry {
-  /** Registers one built-in source under a complete generational resource key. */
-  register(handle: number, source: CpuMeshData): void;
+  /** Registers one validated source under a complete generational resource key. */
+  register(handle: number, source: MeshGeometryDescriptor): void;
   /** Removes and destroys a matching resource generation. */
   remove(handle: number): boolean;
   /** Looks up a mesh by its complete generational resource key. */
@@ -31,6 +34,7 @@ export interface MeshRegistry {
 export function createMeshRegistry(device: GPUDevice, capacity: number): MeshRegistry {
   const meshes: Array<GpuMesh | undefined> = new Array(capacity);
   const generations = new Uint16Array(capacity);
+  generations.fill(UNINITIALIZED_GENERATION);
   const occupied = new Uint8Array(capacity);
   let gpuBytes = 0;
   let disposed = false;
@@ -44,24 +48,30 @@ export function createMeshRegistry(device: GPUDevice, capacity: number): MeshReg
         index <= 0 ||
         index >= capacity ||
         occupied[index] !== 0 ||
-        generations[index] !== generation
+        (generations[index] !== UNINITIALIZED_GENERATION && generations[index] !== generation)
       ) {
         throw new Error(`Invalid or occupied geometry handle: ${handle}`);
       }
-      if (source.vertices.length % 6 !== 0 || source.indices.length === 0) {
-        throw new Error(`Mesh '${source.label}' has an invalid vertex/index layout.`);
+      const label = source.label ?? `Lume geometry ${handle}`;
+      if (
+        source.interleavedVertices.length === 0 ||
+        source.interleavedVertices.length % 6 !== 0 ||
+        source.indices.length === 0 ||
+        source.indices.length % 3 !== 0
+      ) {
+        throw new Error(`Mesh '${label}' has an invalid vertex/index layout.`);
       }
       const vertexBuffer = createStaticBuffer(
         device,
-        `${source.label} vertices`,
+        `${label} vertices`,
         GPUBufferUsage.VERTEX,
-        source.vertices,
+        source.interleavedVertices,
       );
       let indexBuffer: GPUBuffer;
       try {
         indexBuffer = createStaticBuffer(
           device,
-          `${source.label} indices`,
+          `${label} indices`,
           GPUBufferUsage.INDEX,
           source.indices,
         );

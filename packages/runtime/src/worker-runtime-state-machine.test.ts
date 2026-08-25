@@ -202,6 +202,7 @@ function createRenderer(lost: Promise<GPUDeviceLostInfo>): MeshRenderer {
       queueSubmitCpuTimeMs: 0,
     },
     registerGeometry: vi.fn(),
+    registerExternalGeometry: vi.fn(),
     removeGeometry: vi.fn(),
     registerBasicMaterial: vi.fn(),
     removeBasicMaterial: vi.fn(),

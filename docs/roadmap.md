@@ -96,8 +96,10 @@ correctness coverage, benchmarks, and completion gates.
 Phase 1 is implemented as the dependency-free `@lume/assets` package: immutable
 decode-limit contracts, typed asset errors, deterministic GLB fixtures, strict
 container/accessor validation, `uint32` index widening, exact owned-array byte
-accounting, and regression tests. Worker loading, renderer residency, public API,
-and controlled measurements remain pending. Textures/KTX2, materials,
+accounting, and regression tests. Phase 2 adds renderer registration, removal,
+and unchanged-handle replay for structurally compatible external descriptors,
+with transactional GPU-buffer ownership and generational/capacity coverage.
+Worker loading, public API, and controlled measurements remain pending. Textures/KTX2, materials,
 multi-primitive assets, hierarchy, streaming, caching, compression, and an
 offline optimizer remain outside Milestone 7.
 

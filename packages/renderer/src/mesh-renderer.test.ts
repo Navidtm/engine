@@ -91,6 +91,8 @@ describe("mesh renderer initialization ownership", () => {
       UNIFORM: 8,
       STORAGE: 16,
       INDIRECT: 32,
+      VERTEX: 64,
+      INDEX: 128,
     });
     const buffers: Array<{ size: number; destroy: ReturnType<typeof vi.fn> }> = [];
     const device = {
@@ -101,7 +103,13 @@ describe("mesh renderer initialization ownership", () => {
       },
       queue: { writeBuffer: vi.fn() },
       createBuffer: vi.fn((descriptor: GPUBufferDescriptor) => {
-        const buffer = { size: Number(descriptor.size), destroy: vi.fn() };
+        const size = Number(descriptor.size);
+        const buffer = {
+          size,
+          destroy: vi.fn(),
+          getMappedRange: vi.fn(() => new ArrayBuffer(size)),
+          unmap: vi.fn(),
+        };
         buffers.push(buffer);
         return buffer;
       }),
@@ -130,10 +138,14 @@ describe("mesh renderer initialization ownership", () => {
     expect(() => renderer.execute({ instanceCount: 0, candidateCount: 5 } as RenderFrame)).toThrow(
       "candidateCount 5",
     );
+    renderer.registerExternalGeometry(1, {
+      interleavedVertices: new Float32Array([0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 1]),
+      indices: new Uint32Array([0, 1, 2]),
+    });
     renderer.dispose();
     renderer.dispose();
 
-    expect(buffers).toHaveLength(12);
+    expect(buffers).toHaveLength(14);
     for (const buffer of buffers) expect(buffer.destroy).toHaveBeenCalledTimes(1);
     expect(device.destroy).toHaveBeenCalledTimes(1);
   });

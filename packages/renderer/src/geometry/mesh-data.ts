@@ -1,13 +1,17 @@
-/** Readonly-TypeScript CPU-side mesh source accepted by the built-in mesh registry. */
-export interface CpuMeshData {
-  /** Built-in replay descriptor selected by the worker coordinator. */
-  readonly builtin: "triangle" | "cube";
-  /** Diagnostic label used for WebGPU resources and validation errors. */
-  readonly label: string;
+/** Device-independent immutable geometry accepted by renderer residency. */
+export interface MeshGeometryDescriptor {
   /** Interleaved position.xyz and normal.xyz values. */
-  readonly vertices: Float32Array<ArrayBuffer>;
+  readonly interleavedVertices: Float32Array<ArrayBuffer>;
   /** Triangle-list indices into `vertices`. */
   readonly indices: Uint32Array<ArrayBuffer>;
+  /** Optional diagnostic label used for WebGPU resources and validation errors. */
+  readonly label?: string;
+}
+
+/** Replayable CPU-side descriptor for one built-in geometry kind. */
+export interface BuiltinMeshData extends MeshGeometryDescriptor {
+  readonly builtin: "triangle" | "cube";
+  readonly label: string;
 }
 
 const TRIANGLE_VERTICES = new Float32Array([
@@ -51,13 +55,13 @@ export const BUILTIN_MESHES = [
   {
     builtin: "triangle",
     label: "Lume triangle mesh",
-    vertices: TRIANGLE_VERTICES,
+    interleavedVertices: TRIANGLE_VERTICES,
     indices: TRIANGLE_INDICES,
   },
   {
     builtin: "cube",
     label: "Lume indexed cube mesh",
-    vertices: CUBE_VERTICES,
+    interleavedVertices: CUBE_VERTICES,
     indices: CUBE_INDICES,
   },
-] as const satisfies readonly CpuMeshData[];
+] as const satisfies readonly BuiltinMeshData[];

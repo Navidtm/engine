@@ -9,6 +9,7 @@ export {
 export type { FramePass } from "./framegraph/pass.js";
 export { defineFramePass } from "./framegraph/pass.js";
 export type { FrameResource } from "./framegraph/resource.js";
+export type { MeshGeometryDescriptor } from "./geometry/mesh-data.js";
 export type {
   MeshRenderer,
   RendererFrameTimings,
