@@ -479,6 +479,10 @@ describe("high-level engine API", () => {
       wasmUrl: "https://example.test/lume_core.wasm",
     });
 
+    engine.stop();
+    engine.resize();
+    expect(posted).toEqual([]);
+
     const initialization = engine.init();
     onMessage?.({ data: { type: "ready" } } as MessageEvent<WorkerToMainMessage>);
     await initialization;
@@ -516,5 +520,10 @@ describe("high-level engine API", () => {
     } as unknown as MessageEvent<WorkerToMainMessage>);
     onMessage?.({ data: { type: "ready" } } as MessageEvent<WorkerToMainMessage>);
     expect(engine.status).toBe("disposed");
+    const messageCount = posted.length;
+    engine.stop();
+    engine.resize();
+    engine.dispose();
+    expect(posted).toHaveLength(messageCount);
   });
 });

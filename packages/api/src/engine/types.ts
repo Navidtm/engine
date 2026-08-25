@@ -193,6 +193,7 @@ export interface BuiltinGeometryApi {
 
 /** Batched transform setter available as `engine.set`. */
 export interface SetApi {
+  /** Replaces supplied fields; an empty options object is an intentional no-op. */
   transform(
     handle: SceneHandle,
     options: {
@@ -245,16 +246,16 @@ export interface Engine {
   readonly status: EngineStatus;
   /** Initializes the worker, WASM core, and WebGPU renderer. */
   init(): Promise<void>;
-  /** Starts the worker frame loop after initialization; repeated calls are idempotent. */
+  /** Starts the initialized worker frame loop; repeated calls are idempotent. */
   start(): void;
-  /** Requests a stop without destroying resources; status changes after worker confirmation. */
+  /** Requests a stop; it is a no-op when no running intent exists. */
   stop(): void;
-  /** Publishes the canvas size; normally invoked by the resize observer. */
+  /** Publishes the canvas size; it is a no-op before initialization and after termination. */
   resize(): void;
-  /** Requests a worker statistics snapshot. */
+  /** Requests a worker statistics snapshot from an initialized engine. */
   getStats(): Promise<EngineStats>;
   /** Destroys an entity handle or retires an owned resource handle. */
   destroy(handle: EngineHandle): void;
-  /** Stops the engine and releases worker, WASM, and GPU resources. */
+  /** Stops and releases the engine; repeated calls are idempotent. */
   dispose(): void;
 }

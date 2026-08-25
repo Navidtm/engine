@@ -216,6 +216,17 @@ worker event. `start`, `stop`, `resize`, and `dispose` are idempotent. A failed
 initialization rejects pending work rather than silently falling back to a
 different graphics backend.
 
+Lifecycle controls use explicit idempotency rather than one global error rule:
+
+| Operation       | Contract                                                                    |
+| --------------- | --------------------------------------------------------------------------- |
+| `start()`       | Requires an initialized engine; repeated running intent is a no-op.         |
+| `stop()`        | Cancels running intent; it is a no-op when no such intent exists.           |
+| `resize()`      | Publishes only while initialized; pre-init and terminal calls are no-ops.   |
+| `dispose()`     | Releases ownership once; repeated calls are no-ops.                         |
+| `getStats()`    | Requires an initialized engine because an unavailable worker cannot answer. |
+| `set.transform` | Publishes supplied fields; an empty partial update is a no-op.              |
+
 ## Testing seams
 
 The Rust ECS and math code are tested without a browser. Renderer ownership is
