@@ -1,6 +1,6 @@
 # Current Project State
 
-Last verified: 2026-08-23 on master after Milestone 6
+Last verified: 2026-08-25 on master after Milestone 6 and Milestone 7 design acceptance
 
 This document records the implementation that exists in the repository. It is
 an evidence-based snapshot, not a description of intended future architecture.
@@ -365,16 +365,16 @@ scope and non-goals are in [`docs/milestone-6.md`](../../docs/milestone-6.md).
 
 ## Roadmap Comparison
 
-| Roadmap phase                 | Roadmap label | Actual repository state                           |
-| ----------------------------- | ------------- | ------------------------------------------------- |
-| 1. Runtime Foundation         | Completed     | Implemented                                       |
-| 2. Render Architecture        | Completed     | Implemented                                       |
-| 3. Performance Infrastructure | Completed     | Implemented                                       |
-| 4. Transport Hardening        | Completed     | Implemented                                       |
-| 6. Renderer Scalability       | Completed     | ADR 007/008/009 implemented, tested, and measured |
-| 6. Asset Pipeline             | Planned       | Not implemented                                   |
-| 7. Advanced Graphics          | Planned       | Not implemented                                   |
-| 8. Developer Ecosystem        | Planned       | Not implemented                                   |
+| Roadmap phase                 | Roadmap label   | Actual repository state                           |
+| ----------------------------- | --------------- | ------------------------------------------------- |
+| 1. Runtime Foundation         | Completed       | Implemented                                       |
+| 2. Render Architecture        | Completed       | Implemented                                       |
+| 3. Performance Infrastructure | Completed       | Implemented                                       |
+| 4. Transport Hardening        | Completed       | Implemented                                       |
+| 6. Renderer Scalability       | Completed       | ADR 007/008/009 implemented, tested, and measured |
+| 6. Asset Pipeline             | Design accepted | ADR 011/012 accepted; implementation pending      |
+| 7. Advanced Graphics          | Planned         | Not implemented                                   |
+| 8. Developer Ecosystem        | Planned         | Not implemented                                   |
 
 ## Intentionally Not Implemented
 
@@ -409,6 +409,10 @@ renderer-scalability milestone.
 
 Runtime transport and renderer-scalability semantics should now be treated as
 stable unless browser evidence finds a correctness or material performance
-problem. The next roadmap phase is the asset pipeline. Texture/mesh ingestion,
-compression, streaming, caching, and replayable device-loss descriptors must
+problem. Milestone 7 is the accepted, pending first asset-pipeline increment:
+one validated indexed static geometry from GLB 2.0, loaded and decoded in the
+worker through `engine.load.geometry()`, with atomic publication and replayable
+device-loss descriptors. ADR 011, ADR 012, and `docs/milestone-7.md` define the
+scope and gates. Textures/KTX2, materials, hierarchy, compression, streaming,
+caching, and an offline optimizer remain future work. All asset work must
 preserve the existing ECS -> RenderWorld -> renderer ownership boundary.

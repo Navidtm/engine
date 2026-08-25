@@ -79,6 +79,24 @@ counts with CPU/GPU/CPU/GPU ordering and correctness hashes. Render-graph
 resource lifetime analysis, occlusion culling, public multi-camera presentation,
 textures, lighting, material variants, and asset streaming remain pending.
 
+## Milestone 7 — asset pipeline foundation (accepted design)
+
+Milestone 7 introduces worker-owned loading of one validated static geometry
+from a constrained GLB 2.0 profile. The public target is
+`await engine.load.geometry(url)`, followed by existing
+`engine.create.mesh({ geometry })`; loading does not instantiate ECS entities or
+file node hierarchies.
+
+[ADR 011](../.agents/decisions/011-glb-geometry-ingestion.md) fixes the input and
+decoded geometry boundary. [ADR 012](../.agents/decisions/012-async-geometry-loading.md)
+fixes request correlation, abort, worker ownership, and atomic ready-handle
+publication. [milestone-7.md](milestone-7.md) defines implementation phases,
+correctness coverage, benchmarks, and completion gates.
+
+The design is accepted but not implemented. Textures/KTX2, materials,
+multi-primitive assets, hierarchy, streaming, caching, compression, and an
+offline optimizer remain outside Milestone 7.
+
 ## Known future bottlenecks
 
 1. **SAB-to-WASM staging:** one copy remains necessary to preserve canonical

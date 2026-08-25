@@ -5,7 +5,9 @@ product experiences. Phase 1 deliberately keeps the surface area small: a
 data-oriented Rust core compiled to WebAssembly, a worker-owned WebGPU renderer,
 and a functional TypeScript API.
 
-The repository currently contains five completed foundation milestones:
+The repository currently contains six completed foundation milestones. The
+geometry-only Asset Pipeline Foundation is the next accepted design and remains
+pending implementation:
 
 - a generational-entity, sparse-set ECS in Rust;
 - allocation-free math primitives and reusable frame memory;

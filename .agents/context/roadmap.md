@@ -281,7 +281,7 @@ same-frame count/hash equivalence diagnostics in benchmarks.
 
 ## Status
 
-Planned
+Milestone 7 design accepted; implementation pending
 
 ## Objective
 
@@ -296,6 +296,15 @@ Goals:
 - asset registry
 - streaming
 - caching
+
+The accepted first increment is geometry-only. ADR 011 constrains runtime input
+to one indexed static geometry in GLB 2.0 and defines the decoded descriptor.
+ADR 012 places fetch/decode in the worker and publishes an opaque
+`GeometryHandle` only after atomic readiness. Textures, compression, streaming,
+caching, scene hierarchy, and the offline optimizer remain later increments.
+
+Implementation and completion gates are in
+[`docs/milestone-7.md`](../../docs/milestone-7.md).
 
 Architecture:
 
@@ -439,18 +448,18 @@ before:
 
 Current development focus:
 
-Renderer Scalability
+Milestone 7: Asset Pipeline Foundation
 
 Primary questions:
 
-- Can explicit active/generational slot state make persistent storage safe for
-  direct compute consumption?
-- Can GPU visibility match the existing CPU reference across sparse occupancy,
-  churn, and multiple cameras?
-- Do indirect commands improve end-to-end CPU/GPU time without compromising
-  deterministic fallback or ownership?
-- Can the frame graph express publication, visibility, and submission ordering
-  while keeping derived GPU state rebuildable?
+- Can a constrained GLB decoder reject malformed/unbounded input before
+  publishing resource state?
+- Can worker-owned fetch/decode/upload remain atomic across abort, failure,
+  disposal, slot reuse, and device loss?
+- What configured encoded, decoded CPU, and GPU byte budgets fit measured web
+  product geometry workloads?
+- Does `engine.load.geometry()` remain simple without introducing scene-graph or
+  pending-handle semantics?
 
 ---
 
