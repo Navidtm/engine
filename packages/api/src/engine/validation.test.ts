@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import type { CanvasAlphaMode, ClearColor, EngineConfig } from "./types.js";
 import {
   DEFAULT_CAMERA_PERSPECTIVE,
   resolveCameraPerspective,
@@ -8,6 +9,14 @@ import {
   validateComponent,
   validateEngineCameraOptions,
 } from "./validation.js";
+
+const alphaMode: CanvasAlphaMode = "premultiplied";
+const clearColor: ClearColor = { r: 0, g: 0, b: 0, a: 1 };
+const publicRendererConfig = { alphaMode, clearColor } satisfies Pick<
+  EngineConfig,
+  "alphaMode" | "clearColor"
+>;
+void publicRendererConfig;
 
 const canvas = {} as HTMLCanvasElement;
 

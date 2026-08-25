@@ -20,6 +20,17 @@ export type EngineStatus =
 /** Simple application-level preference mapped to the WebGPU adapter preference. */
 export type PowerPreference = "high" | "low";
 
+/** Canvas compositing behavior without exposing the WebGPU IDL type. */
+export type CanvasAlphaMode = "opaque" | "premultiplied";
+
+/** Linear RGBA clear value accepted by the main render pass. */
+export interface ClearColor {
+  readonly r: number;
+  readonly g: number;
+  readonly b: number;
+  readonly a: number;
+}
+
 /** Advanced fixed budgets for the worker transport. */
 export interface EngineTransportOptions {
   /**
@@ -96,9 +107,9 @@ export interface EngineConfig {
   /** Visibility backend; `auto` uses the measured CPU reference policy. */
   readonly visibilityMode?: "auto" | "cpu" | "gpu";
   /** Canvas compositing mode; opaque by default. */
-  readonly alphaMode?: GPUCanvasAlphaMode;
+  readonly alphaMode?: CanvasAlphaMode;
   /** Main render-pass clear color. */
-  readonly clearColor?: GPUColor;
+  readonly clearColor?: ClearColor;
   /** Set false when the application controls resize timing. */
   readonly autoResize?: boolean;
   /** Worker factory hook for tests or custom embedding. */

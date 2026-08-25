@@ -29,6 +29,8 @@ export type {
   BasicMaterialOptions,
   BuiltinGeometryApi,
   CameraPerspectiveOptions,
+  CanvasAlphaMode,
+  ClearColor,
   CreateApi,
   Engine,
   EngineCamera,
