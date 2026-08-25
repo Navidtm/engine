@@ -124,6 +124,34 @@ describe("worker runtime resource ownership", () => {
     await Promise.allSettled([rendererResult.promise, coreResult.promise]);
   });
 
+  it("rejects lifecycle messages while initialization is pending", async () => {
+    const rendererResult = deferred<MeshRenderer>();
+    const coreResult = deferred<WasmCore>();
+    mocks.createMeshRenderer.mockReturnValueOnce(rendererResult.promise);
+    mocks.createWasmCore.mockReturnValueOnce(coreResult.promise);
+    const posted: WorkerToMainMessage[] = [];
+    const host: WorkerHost = {
+      postMessage: (message) => posted.push(message),
+      requestAnimationFrame: vi.fn(() => 1),
+      cancelAnimationFrame: vi.fn(),
+    };
+    const receive = createWorkerRuntime(host);
+
+    receive(initMessage());
+    receive({ type: "start", lifecycleEpoch: 1 });
+    receive({ type: "stop", lifecycleEpoch: 2 });
+
+    expect(host.requestAnimationFrame).not.toHaveBeenCalled();
+    expect(posted).toEqual([
+      expect.objectContaining({ type: "error", message: "Runtime is not initialized." }),
+      expect.objectContaining({ type: "error", message: "Runtime is not initialized." }),
+    ]);
+    receive({ type: "dispose" });
+    rendererResult.reject(new Error("disposed"));
+    coreResult.reject(new Error("disposed"));
+    await Promise.allSettled([rendererResult.promise, coreResult.promise]);
+  });
+
   it("flushes shared state before ordered fallback commands but not initialization batches", async () => {
     const order: string[] = [];
     const renderer = {

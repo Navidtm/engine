@@ -191,6 +191,16 @@ export function createWorkerRuntime(host: WorkerHost): (message: MainToWorkerMes
     state.core?.updateSharedCommands(applySharedCommand);
   };
 
+  const assertLifecycleReady = (): void => {
+    if (
+      state.core === undefined ||
+      state.coordinator === undefined ||
+      (state.renderer === undefined && !state.recovering)
+    ) {
+      throw new Error("Runtime is not initialized.");
+    }
+  };
+
   const initialize = async (
     message: Extract<MainToWorkerMessage, { type: "init" }>,
   ): Promise<void> => {
@@ -363,6 +373,7 @@ export function createWorkerRuntime(host: WorkerHost): (message: MainToWorkerMes
           for (const command of message.value) apply(command);
           break;
         case "start": {
+          assertLifecycleReady();
           if (message.lifecycleEpoch <= state.lifecycleEpoch) break;
           state.lifecycleEpoch = message.lifecycleEpoch;
           if (state.recovering) {
@@ -376,6 +387,7 @@ export function createWorkerRuntime(host: WorkerHost): (message: MainToWorkerMes
           break;
         }
         case "stop":
+          assertLifecycleReady();
           if (message.lifecycleEpoch <= state.lifecycleEpoch) break;
           state.lifecycleEpoch = message.lifecycleEpoch;
           if (state.recovering) state.recoveryRunningIntent = false;
