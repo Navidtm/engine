@@ -328,6 +328,84 @@ export async function createWasmCore(
     transformRangeCountsPointer,
     transformUpdateCapacity,
   );
+  const refreshMemoryViews = (): void => {
+    const memory = exports.memory.buffer;
+    if (memory === observedMemory) return;
+    observedMemory = memory;
+    const refreshed = createFrameViews(
+      observedMemory,
+      visibleCapacity,
+      renderEntityCapacity,
+      renderCameraCapacity,
+      geometriesPointer,
+      pipelinesPointer,
+      materialsPointer,
+      visibleSlotsPointer,
+      instancesPointer,
+      slotStatesPointer,
+      slotBoundsPointer,
+      slotResourcesPointer,
+      dirtyRangeStartsPointer,
+      dirtyRangeCountsPointer,
+      stateDirtyRangeStartsPointer,
+      stateDirtyRangeCountsPointer,
+      boundsDirtyRangeStartsPointer,
+      boundsDirtyRangeCountsPointer,
+      resourceDirtyRangeStartsPointer,
+      resourceDirtyRangeCountsPointer,
+      candidateGeometriesPointer,
+      candidatePipelinesPointer,
+      candidateMaterialsPointer,
+      candidateSlotsPointer,
+      camerasPointer,
+    );
+    frame.geometries = refreshed.geometries;
+    frame.pipelines = refreshed.pipelines;
+    frame.materials = refreshed.materials;
+    frame.visibleSlots = refreshed.visibleSlots;
+    frame.instanceData = refreshed.instanceData;
+    frame.slotStates = refreshed.slotStates;
+    frame.slotBounds = refreshed.slotBounds;
+    frame.slotResources = refreshed.slotResources;
+    frame.dirtyRangeStarts = refreshed.dirtyRangeStarts;
+    frame.dirtyRangeCounts = refreshed.dirtyRangeCounts;
+    frame.stateDirtyRangeStarts = refreshed.stateDirtyRangeStarts;
+    frame.stateDirtyRangeCounts = refreshed.stateDirtyRangeCounts;
+    frame.boundsDirtyRangeStarts = refreshed.boundsDirtyRangeStarts;
+    frame.boundsDirtyRangeCounts = refreshed.boundsDirtyRangeCounts;
+    frame.resourceDirtyRangeStarts = refreshed.resourceDirtyRangeStarts;
+    frame.resourceDirtyRangeCounts = refreshed.resourceDirtyRangeCounts;
+    frame.candidateGeometries = refreshed.candidateGeometries;
+    frame.candidatePipelines = refreshed.candidatePipelines;
+    frame.candidateMaterials = refreshed.candidateMaterials;
+    frame.candidateSlots = refreshed.candidateSlots;
+    frame.cameraData = refreshed.cameraData;
+    transformUpdateGenerations = new Uint32Array(
+      observedMemory,
+      transformUpdateGenerationsPointer,
+      transformUpdateCapacity,
+    );
+    transformUpdateValues = new Float32Array(
+      observedMemory,
+      transformUpdateValuesPointer,
+      transformUpdateCapacity * SHARED_TRANSFORM_FLOATS,
+    );
+    transformUpdateMasks = new Uint32Array(
+      observedMemory,
+      transformUpdateMasksPointer,
+      transformUpdateCapacity,
+    );
+    transformRangeStarts = new Uint32Array(
+      observedMemory,
+      transformRangeStartsPointer,
+      transformUpdateCapacity,
+    );
+    transformRangeCounts = new Uint32Array(
+      observedMemory,
+      transformRangeCountsPointer,
+      transformUpdateCapacity,
+    );
+  };
   const stagedEpochs = new Uint32Array(transformUpdateCapacity);
   const transformScratch = new Float32Array(SHARED_TRANSFORM_FLOATS);
   let stagedTransformCount = 0;
@@ -405,6 +483,7 @@ export async function createWasmCore(
   };
   const updateSharedTransforms = (): void => {
     if (sharedViews === undefined) return;
+    refreshMemoryViews();
     stagedTransformCount = 0;
     stagedRangeCount = 0;
     previousStagedIndex = -2;
@@ -444,82 +523,7 @@ export async function createWasmCore(
     updateSharedCommands,
     updateSharedTransforms,
     update(profileStages = false) {
-      if (exports.memory.buffer !== observedMemory) {
-        observedMemory = exports.memory.buffer;
-        const refreshed = createFrameViews(
-          observedMemory,
-          visibleCapacity,
-          renderEntityCapacity,
-          renderCameraCapacity,
-          geometriesPointer,
-          pipelinesPointer,
-          materialsPointer,
-          visibleSlotsPointer,
-          instancesPointer,
-          slotStatesPointer,
-          slotBoundsPointer,
-          slotResourcesPointer,
-          dirtyRangeStartsPointer,
-          dirtyRangeCountsPointer,
-          stateDirtyRangeStartsPointer,
-          stateDirtyRangeCountsPointer,
-          boundsDirtyRangeStartsPointer,
-          boundsDirtyRangeCountsPointer,
-          resourceDirtyRangeStartsPointer,
-          resourceDirtyRangeCountsPointer,
-          candidateGeometriesPointer,
-          candidatePipelinesPointer,
-          candidateMaterialsPointer,
-          candidateSlotsPointer,
-          camerasPointer,
-        );
-        frame.geometries = refreshed.geometries;
-        frame.pipelines = refreshed.pipelines;
-        frame.materials = refreshed.materials;
-        frame.visibleSlots = refreshed.visibleSlots;
-        frame.instanceData = refreshed.instanceData;
-        frame.slotStates = refreshed.slotStates;
-        frame.slotBounds = refreshed.slotBounds;
-        frame.slotResources = refreshed.slotResources;
-        frame.dirtyRangeStarts = refreshed.dirtyRangeStarts;
-        frame.dirtyRangeCounts = refreshed.dirtyRangeCounts;
-        frame.stateDirtyRangeStarts = refreshed.stateDirtyRangeStarts;
-        frame.stateDirtyRangeCounts = refreshed.stateDirtyRangeCounts;
-        frame.boundsDirtyRangeStarts = refreshed.boundsDirtyRangeStarts;
-        frame.boundsDirtyRangeCounts = refreshed.boundsDirtyRangeCounts;
-        frame.resourceDirtyRangeStarts = refreshed.resourceDirtyRangeStarts;
-        frame.resourceDirtyRangeCounts = refreshed.resourceDirtyRangeCounts;
-        frame.candidateGeometries = refreshed.candidateGeometries;
-        frame.candidatePipelines = refreshed.candidatePipelines;
-        frame.candidateMaterials = refreshed.candidateMaterials;
-        frame.candidateSlots = refreshed.candidateSlots;
-        frame.cameraData = refreshed.cameraData;
-        transformUpdateGenerations = new Uint32Array(
-          observedMemory,
-          transformUpdateGenerationsPointer,
-          transformUpdateCapacity,
-        );
-        transformUpdateValues = new Float32Array(
-          observedMemory,
-          transformUpdateValuesPointer,
-          transformUpdateCapacity * SHARED_TRANSFORM_FLOATS,
-        );
-        transformUpdateMasks = new Uint32Array(
-          observedMemory,
-          transformUpdateMasksPointer,
-          transformUpdateCapacity,
-        );
-        transformRangeStarts = new Uint32Array(
-          observedMemory,
-          transformRangeStartsPointer,
-          transformUpdateCapacity,
-        );
-        transformRangeCounts = new Uint32Array(
-          observedMemory,
-          transformRangeCountsPointer,
-          transformUpdateCapacity,
-        );
-      }
+      refreshMemoryViews();
       if (!disposed) {
         if (profileStages) {
           let stageStart = performance.now();
