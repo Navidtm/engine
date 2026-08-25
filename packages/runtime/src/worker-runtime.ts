@@ -264,11 +264,13 @@ export function createWorkerRuntime(host: WorkerHost): (message: MainToWorkerMes
     void renderer.lost.then((info) => {
       if (state.disposed || state.renderer !== renderer || state.recovering) return;
       void recoverRenderer(message, renderer).catch((error: unknown) => {
-        report(
-          new Error(`WebGPU device recovery failed (${info.reason}): ${info.message}`, {
-            cause: error,
-          }),
-        );
+        if (state.disposed) return;
+        const recoveryMessage = error instanceof Error ? error.message : String(error);
+        host.postMessage({
+          type: "device-lost",
+          reason: info.reason,
+          message: `${info.message} Recovery failed: ${recoveryMessage}`,
+        });
       });
     });
   };

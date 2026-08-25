@@ -442,6 +442,7 @@ describe("worker runtime resource ownership", () => {
 
   it("rebuilds renderer resources and republishes derived buffers after device loss", async () => {
     const lost = deferred<GPUDeviceLostInfo>();
+    const replacementLost = deferred<GPUDeviceLostInfo>();
     const rendererShape = (lostPromise: Promise<GPUDeviceLostInfo>) =>
       ({
         lost: lostPromise,
@@ -461,7 +462,7 @@ describe("worker runtime resource ownership", () => {
         dispose: vi.fn(),
       }) satisfies MeshRenderer;
     const first = rendererShape(lost.promise);
-    const replacement = rendererShape(new Promise<GPUDeviceLostInfo>(() => undefined));
+    const replacement = rendererShape(replacementLost.promise);
     const replacementResult = deferred<MeshRenderer>();
     const core = {
       frameTimings: {
@@ -513,6 +514,18 @@ describe("worker runtime resource ownership", () => {
     expect(replacement.execute).not.toHaveBeenCalled();
     receive({ type: "start", lifecycleEpoch: 3 });
     expect(replacement.execute).toHaveBeenCalled();
+    expect(posted.some((message) => message.type === "error")).toBe(false);
+
+    mocks.createMeshRenderer.mockRejectedValueOnce(new Error("adapter unavailable"));
+    replacementLost.resolve({ reason: "unknown", message: "second loss" } as GPUDeviceLostInfo);
+    await vi.waitFor(() =>
+      expect(posted.some((message) => message.type === "device-lost")).toBe(true),
+    );
+    expect(posted.at(-1)).toEqual({
+      type: "device-lost",
+      reason: "unknown",
+      message: "second loss Recovery failed: adapter unavailable",
+    });
     expect(posted.some((message) => message.type === "error")).toBe(false);
   });
 });
