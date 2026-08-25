@@ -74,4 +74,30 @@ describe("mesh registry initialization ownership", () => {
     registry.dispose();
     expect(buffers.every((buffer) => buffer.destroy.mock.calls.length === 1)).toBe(true);
   });
+
+  it("retires a geometry slot before its packed generation can wrap", () => {
+    vi.stubGlobal("GPUBufferUsage", { VERTEX: 1, INDEX: 2 });
+    const device = {
+      createBuffer: vi.fn(() => ({
+        size: 24,
+        destroy: vi.fn(),
+        getMappedRange: vi.fn(() => new ArrayBuffer(24)),
+        unmap: vi.fn(),
+      })),
+    } as unknown as GPUDevice;
+    const source: CpuMeshData = {
+      builtin: "triangle",
+      label: "test",
+      vertices: new Float32Array([0, 0, 0, 0, 0, 1]),
+      indices: new Uint32Array([0]),
+    };
+    const registry = createMeshRegistry(device, 2);
+    for (let generation = 0; generation <= 0x0fff; generation += 1) {
+      const handle = (generation << 20) | 1;
+      registry.register(handle, source);
+      expect(registry.remove(handle)).toBe(true);
+    }
+
+    expect(() => registry.register(1, source)).toThrow("geometry handle");
+  });
 });

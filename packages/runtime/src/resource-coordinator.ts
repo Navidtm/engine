@@ -247,7 +247,8 @@ function finalizeIfUnused(registry: RegistryState, handle: number, finalize: () 
   if (registry.status[index] !== ResourceStatus.Retired || registry.usage[index] !== 0) return;
   finalize();
   registry.status[index] = ResourceStatus.Empty;
-  registry.generation[index] = ((registry.generation[index] ?? 0) + 1) & GENERATION_MASK;
+  const generation = registry.generation[index] ?? 0;
+  registry.generation[index] = generation < GENERATION_MASK ? generation + 1 : GENERATION_MASK + 1;
 }
 
 function validateEntity(raw: number, alive: Uint8Array, generations: Uint16Array): number {

@@ -178,6 +178,12 @@ retained stale handle invalid without changing the compact transport ABI;
 extreme churn can eventually surface the normal entity-capacity error. ADR 010
 records the benchmark evidence and wider-identity alternatives.
 
+Renderer resource handles use the same packed 20/12 identity rule. The
+main-thread registry mirror, worker coordinator, renderer geometry/material
+registries, and Rust material registry all retire a slot after removing its
+generation-4095 resource. An unpublished allocation rollback may reuse its
+generation because no external handle crossed the ownership boundary.
+
 ## Capacity, allocation failure, and fallback
 
 The transform queue is bounded by `transport.transformCapacity`; dirty-bit

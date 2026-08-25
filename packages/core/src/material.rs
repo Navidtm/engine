@@ -107,7 +107,11 @@ impl MaterialRegistry {
             return None;
         }
         let removed = self.slots[index].take()?;
-        self.generations[index] = self.generations[index].wrapping_add(1) & 0x0fff;
+        self.generations[index] = if self.generations[index] < 0x0fff {
+            self.generations[index] + 1
+        } else {
+            0x1000
+        };
         self.len -= 1;
         Some(removed)
     }
@@ -150,5 +154,21 @@ mod tests {
         assert!(registry.insert(handle, BasicMaterial::default()).is_err());
         let recycled = MaterialHandle::from_raw((1 << 20) | 3);
         assert!(registry.insert(recycled, BasicMaterial::default()).is_ok());
+    }
+
+    #[test]
+    fn registry_retires_a_slot_before_generation_wrap() {
+        let mut registry = MaterialRegistry::with_capacity(2);
+        for generation in 0..=0x0fff {
+            let handle = MaterialHandle::from_raw((generation << 20) | 1);
+            assert!(registry.insert(handle, BasicMaterial::default()).is_ok());
+            assert!(registry.remove(handle).is_some());
+        }
+
+        assert!(
+            registry
+                .insert(MaterialHandle::from_raw(1), BasicMaterial::default())
+                .is_err()
+        );
     }
 }

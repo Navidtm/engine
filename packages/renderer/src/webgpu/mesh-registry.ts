@@ -96,7 +96,8 @@ export function createMeshRegistry(device: GPUDevice, capacity: number): MeshReg
       gpuBytes -= mesh?.byteLength ?? 0;
       meshes[index] = undefined;
       occupied[index] = 0;
-      generations[index] = (generations[index] + 1) & 0x0fff;
+      const generation = generations[index] ?? 0;
+      generations[index] = generation < 0x0fff ? generation + 1 : 0x1000;
       return true;
     },
     get(handle) {

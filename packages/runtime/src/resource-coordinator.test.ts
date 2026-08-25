@@ -221,4 +221,33 @@ describe("worker resource coordinator", () => {
     expect(replacement.registerGeometry).toHaveBeenCalledWith(2, "cube");
     expect(replacement.registerBasicMaterial).toHaveBeenCalledWith(3);
   });
+
+  it("retires a resource slot before its packed generation can wrap", () => {
+    const coordinator = createResourceCoordinator(2);
+    const { core, renderer } = dependencies();
+    for (let generation = 0; generation <= 0x0fff; generation += 1) {
+      const handle = (generation << 20) | 1;
+      coordinator.apply(
+        { type: "create-basic-material", handle, color: [1, 1, 1, 1] },
+        core,
+        renderer,
+        1,
+      );
+      coordinator.apply(
+        { type: "retire-resource", resourceKind: "basic-material", handle },
+        core,
+        renderer,
+        1,
+      );
+    }
+
+    expect(() =>
+      coordinator.apply(
+        { type: "create-basic-material", handle: 1, color: [1, 1, 1, 1] },
+        core,
+        renderer,
+        1,
+      ),
+    ).toThrow("stale");
+  });
 });

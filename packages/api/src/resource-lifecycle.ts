@@ -293,7 +293,9 @@ function releaseUsage(registry: ResourceRegistryMirror, raw: number): void {
 function finalizeIfUnused(registry: ResourceRegistryMirror, index: number): void {
   if (registry.states[index] !== ResourceStatus.Retired || registry.usage[index] !== 0) return;
   registry.states[index] = ResourceStatus.Empty;
-  registry.generations[index] = ((registry.generations[index] ?? 0) + 1) & RESOURCE_GENERATION_MASK;
+  const generation = registry.generations[index] ?? 0;
+  if (generation === RESOURCE_GENERATION_MASK) return;
+  registry.generations[index] = generation + 1;
   registry.freeSlots[registry.freeSlotCount++] = index;
 }
 

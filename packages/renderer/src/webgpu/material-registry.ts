@@ -38,7 +38,8 @@ export function createMaterialRegistry(capacity: number): MaterialRegistry {
         return false;
       }
       occupied[index] = 0;
-      generations[index] = (generations[index] + 1) & 0x0fff;
+      const generation = generations[index] ?? 0;
+      generations[index] = generation < 0x0fff ? generation + 1 : 0x1000;
       return true;
     },
     has(handle) {
