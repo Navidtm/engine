@@ -93,6 +93,7 @@ DecodedGeometry
   indices: Uint32Array
   vertexCount: u32
   indexCount: u32
+  bounds: { min: Vec3, max: Vec3 }  // verified mesh-local POSITION bounds
   replay metadata and accounted byte lengths
 ```
 

@@ -1,6 +1,6 @@
 import { AssetError } from "./errors.js";
 import { defineGeometryDecodeLimits, type GeometryDecodeLimits } from "./limits.js";
-import type { DecodedGeometry, GlbIndexComponentType } from "./types.js";
+import type { DecodedGeometry, GeometryBounds, GlbIndexComponentType } from "./types.js";
 
 const GLB_MAGIC = 0x4654_6c67;
 const GLB_VERSION = 2;
@@ -25,7 +25,6 @@ interface GlbContainer {
 }
 
 interface AccessorView {
-  readonly bufferViewIndex: number;
   readonly offset: number;
   readonly stride: number;
   readonly count: number;
@@ -88,7 +87,7 @@ export function decodeGlbGeometry(
   }
 
   const source = new DataView(input);
-  decodeAttributes(source, container.binaryOffset, geometry, interleavedVertices);
+  const bounds = decodeAttributes(source, container.binaryOffset, geometry, interleavedVertices);
   decodeIndices(source, container.binaryOffset, geometry, indices);
 
   return {
@@ -97,6 +96,7 @@ export function decodeGlbGeometry(
     vertexCount: geometry.positions.count,
     indexCount: geometry.indices.count,
     sourceIndexComponentType: geometry.sourceIndexComponentType,
+    bounds,
     bytes: {
       encodedBytes: input.byteLength,
       vertexBytes,
@@ -325,13 +325,6 @@ function validateGeometryDocument(
 
   if (positions.count !== normals.count)
     format("geometry", "POSITION and NORMAL counts must match.");
-  if (
-    positionIndex !== normalIndex &&
-    positions.bufferViewIndex === normals.bufferViewIndex &&
-    positions.stride === ATTRIBUTE_ELEMENT_BYTES
-  ) {
-    format("geometry", "Attributes sharing a bufferView require an explicit byteStride.");
-  }
   if (indices.count % 3 !== 0)
     format("geometry", "Triangle-list index count must be non-zero and divisible by 3.");
   if (positions.count > limits.maxVertices) {
@@ -439,7 +432,6 @@ function parseAccessor(
     format("geometry", `${label} accessor requires min and max bounds.`);
   }
   return {
-    bufferViewIndex,
     offset: checkedAdd(viewByteOffset, accessorByteOffset, `${label} data offset`),
     stride,
     count,
@@ -454,9 +446,17 @@ function decodeAttributes(
   binaryOffset: number,
   geometry: ParsedGeometry,
   output: Float32Array<ArrayBuffer>,
-): void {
-  const actualMin = [Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY];
-  const actualMax = [Number.NEGATIVE_INFINITY, Number.NEGATIVE_INFINITY, Number.NEGATIVE_INFINITY];
+): GeometryBounds {
+  const actualMin: [number, number, number] = [
+    Number.POSITIVE_INFINITY,
+    Number.POSITIVE_INFINITY,
+    Number.POSITIVE_INFINITY,
+  ];
+  const actualMax: [number, number, number] = [
+    Number.NEGATIVE_INFINITY,
+    Number.NEGATIVE_INFINITY,
+    Number.NEGATIVE_INFINITY,
+  ];
   for (let vertex = 0; vertex < geometry.positions.count; vertex += 1) {
     const positionOffset =
       binaryOffset + geometry.positions.offset + vertex * geometry.positions.stride;
@@ -487,6 +487,7 @@ function decodeAttributes(
       format("geometry", "POSITION accessor min/max do not match binary values.");
     }
   }
+  return { min: actualMin, max: actualMax };
 }
 
 function decodeIndices(

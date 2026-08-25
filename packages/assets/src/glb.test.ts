@@ -25,6 +25,7 @@ describe("GLB geometry decoder", () => {
       vertexCount: 3,
       indexCount: 3,
       sourceIndexComponentType: 5123,
+      bounds: { min: [0, 0, 0], max: [1, 1, 0] },
       bytes: {
         encodedBytes: fixture.buffer.byteLength,
         vertexBytes: 72,
@@ -265,14 +266,76 @@ describe("GLB geometry decoder", () => {
     expectDecodeFailure(fixture.buffer, TEST_LIMITS, "LUME_ASSET_FORMAT");
   });
 
-  it("rejects attributes sharing a bufferView without an explicit stride", () => {
+  it("accepts non-overlapping tightly packed accessors sharing a bufferView", () => {
     const fixture = createGlbFixture({
-      interleavedAttributes: true,
       mutateDocument(document) {
-        delete requiredItem(document.bufferViews, 0, "bufferView").byteStride;
+        requiredItem(document.bufferViews, 0, "bufferView").byteLength = 72;
+        const normal = requiredItem(document.accessors, 1, "normal accessor");
+        normal.bufferView = 0;
+        normal.byteOffset = 36;
+        document.bufferViews.splice(1, 1);
+        requiredItem(document.accessors, 2, "index accessor").bufferView = 1;
+      },
+    });
+    expect([...decodeGlbGeometry(fixture.buffer, TEST_LIMITS).indices]).toEqual([0, 1, 2]);
+  });
+
+  it("rounds JSON POSITION bounds to float32 before exact validation", () => {
+    const fixture = createGlbFixture({
+      mutateDocument(document) {
+        requiredItem(document.accessors, 0, "position accessor").max = [
+          1 + Number.EPSILON,
+          1 + Number.EPSILON,
+          0,
+        ];
+      },
+    });
+    expect(decodeGlbGeometry(fixture.buffer, TEST_LIMITS).bounds.max).toEqual([1, 1, 0]);
+  });
+
+  it("rejects containers shorter than one GLB header and JSON chunk", () => {
+    expectDecodeFailure(new ArrayBuffer(19), TEST_LIMITS, "LUME_ASSET_FORMAT", "container");
+  });
+
+  it.each([8, 14, 256])("rejects invalid vertex byteStride %i", (byteStride) => {
+    const fixture = createGlbFixture({
+      mutateDocument(document) {
+        requiredItem(document.bufferViews, 0, "bufferView").byteStride = byteStride;
       },
     });
     expectDecodeFailure(fixture.buffer, TEST_LIMITS, "LUME_ASSET_FORMAT", "geometry");
+  });
+
+  it("rejects an accessor span extending beyond its bufferView", () => {
+    const fixture = createGlbFixture({
+      mutateDocument(document) {
+        requiredItem(document.accessors, 0, "position accessor").count = 4;
+        requiredItem(document.accessors, 1, "normal accessor").count = 4;
+      },
+    });
+    expectDecodeFailure(fixture.buffer, TEST_LIMITS, "LUME_ASSET_FORMAT", "geometry");
+  });
+
+  it.each([-4, 4])("rejects declared buffer lengths differing by %i bytes", (difference) => {
+    const fixture = createGlbFixture({
+      mutateDocument(document) {
+        const buffer = requiredItem(document.buffers, 0, "buffer");
+        buffer.byteLength = Number(buffer.byteLength) + difference;
+      },
+    });
+    expectDecodeFailure(fixture.buffer, TEST_LIMITS, "LUME_ASSET_FORMAT", "schema");
+  });
+
+  it("accepts exact encoded, decoded, vertex, and index budget boundaries", () => {
+    const fixture = createGlbFixture();
+    expect(
+      decodeGlbGeometry(fixture.buffer, {
+        maxEncodedBytes: fixture.buffer.byteLength,
+        maxDecodedBytes: 84,
+        maxVertices: 3,
+        maxIndices: 3,
+      }).bytes.decodedBytes,
+    ).toBe(84);
   });
 
   it("rejects non-finite attribute data", () => {

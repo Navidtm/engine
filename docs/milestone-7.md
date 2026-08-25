@@ -110,7 +110,8 @@ It requires explicit positive safe-integer limits because production defaults
 remain measurement-gated. It validates container/chunk structure, UTF-8/JSON,
 the accepted profile, accessor layout/alignment/bounds, safe byte arithmetic,
 finite attributes, position bounds, index ranges, and output budgets before
-returning renderer-independent arrays. It has no dependency on DOM canvas APIs,
+returning renderer-independent arrays and verified mesh-local POSITION bounds.
+It has no dependency on DOM canvas APIs,
 ECS, RenderWorld, runtime, or WebGPU and may be reused by a future offline CLI.
 Its accepted profile and rejection rules are fixed by ADR 011.
 

@@ -11,6 +11,12 @@ export interface GeometryByteAccounting {
   readonly minimumPeakBytes: number;
 }
 
+/** Verified mesh-local POSITION bounds derived from decoded float32 values. */
+export interface GeometryBounds {
+  readonly min: readonly [number, number, number];
+  readonly max: readonly [number, number, number];
+}
+
 /** Device-independent, replayable geometry descriptor owned outside the renderer. */
 export interface DecodedGeometry {
   /** Interleaved position.xyz and normal.xyz values. */
@@ -20,5 +26,6 @@ export interface DecodedGeometry {
   readonly vertexCount: number;
   readonly indexCount: number;
   readonly sourceIndexComponentType: GlbIndexComponentType;
+  readonly bounds: GeometryBounds;
   readonly bytes: GeometryByteAccounting;
 }
