@@ -128,7 +128,7 @@ impl fmt::Display for VisibilityError {
     }
 }
 
-/// Fixed-capacity, compact renderer input ordered by pipeline/material/mesh.
+/// Fixed-capacity, compact renderer input ordered by pipeline and mesh.
 pub struct VisibleRenderBuffer {
     capacity: usize,
     source_indices: Vec<u32>,
@@ -145,7 +145,6 @@ pub struct VisibleRenderBuffer {
     bucket_heads: Vec<usize>,
     bucket_tails: Vec<usize>,
     bucket_pipelines: Vec<u32>,
-    bucket_materials: Vec<u32>,
     bucket_geometries: Vec<u32>,
     source_next: Vec<usize>,
     active_buckets: Vec<usize>,
@@ -172,7 +171,6 @@ impl VisibleRenderBuffer {
             bucket_heads: vec![usize::MAX; capacity],
             bucket_tails: vec![usize::MAX; capacity],
             bucket_pipelines: vec![0; capacity],
-            bucket_materials: vec![0; capacity],
             bucket_geometries: vec![0; capacity],
             source_next: vec![usize::MAX; capacity],
             active_buckets: Vec::with_capacity(capacity),
@@ -182,7 +180,8 @@ impl VisibleRenderBuffer {
     /// Culls, groups, and compacts `render_world` without per-frame allocation.
     ///
     /// The first camera supplies the frustum. With no camera, all instances are
-    /// considered visible. Output is grouped by pipeline, material, and geometry.
+    /// considered visible. Output is grouped by pipeline and geometry; color-only
+    /// materials remain per-instance data and do not fragment draw batches.
     pub fn cull(&mut self, render_world: &RenderWorld) -> Result<VisibilityStats, VisibilityError> {
         let frustum = render_world.cameras().first().map(Frustum::from_camera);
         self.rebuild(render_world, frustum.as_ref())
@@ -232,7 +231,6 @@ impl VisibleRenderBuffer {
         self.active_buckets.sort_unstable_by_key(|bucket| {
             (
                 self.bucket_pipelines[*bucket],
-                self.bucket_materials[*bucket],
                 self.bucket_geometries[*bucket],
             )
         });
@@ -285,19 +283,16 @@ impl VisibleRenderBuffer {
         source_index: usize,
     ) -> Result<(), VisibilityError> {
         let pipeline = render_world.pipelines()[source_index];
-        let material = render_world.materials()[source_index];
         let geometry = render_world.geometries()[source_index];
-        let mut bucket = hash_render_key(pipeline, material, geometry) % self.capacity;
+        let mut bucket = hash_render_key(pipeline, geometry) % self.capacity;
         loop {
             if self.bucket_heads[bucket] == usize::MAX {
                 self.bucket_pipelines[bucket] = pipeline;
-                self.bucket_materials[bucket] = material;
                 self.bucket_geometries[bucket] = geometry;
                 self.active_buckets.push(bucket);
                 break;
             }
             if self.bucket_pipelines[bucket] == pipeline
-                && self.bucket_materials[bucket] == material
                 && self.bucket_geometries[bucket] == geometry
             {
                 break;
@@ -417,10 +412,8 @@ impl VisibleRenderBuffer {
     }
 }
 
-fn hash_render_key(pipeline: u32, material: u32, geometry: u32) -> usize {
-    (pipeline.wrapping_mul(0x9e37_79b9)
-        ^ material.wrapping_mul(0x85eb_ca6b)
-        ^ geometry.wrapping_mul(0xc2b2_ae35)) as usize
+fn hash_render_key(pipeline: u32, geometry: u32) -> usize {
+    (pipeline.wrapping_mul(0x9e37_79b9) ^ geometry.wrapping_mul(0xc2b2_ae35)) as usize
 }
 
 #[cfg(test)]
@@ -487,8 +480,8 @@ mod tests {
             visible.materials(),
             &[
                 first_material.raw(),
-                first_material.raw(),
-                second_material.raw()
+                second_material.raw(),
+                first_material.raw()
             ]
         );
         assert!(visible.slots_dirty());
@@ -512,6 +505,39 @@ mod tests {
         let stats = visible.cull(&render_world).unwrap();
         assert_eq!(stats.visible, 3);
         assert!(visible.slots_dirty());
+    }
+
+    #[test]
+    fn color_only_materials_do_not_fragment_geometry_batches() {
+        let mut world = World::with_capacity(WorldCapacity::default());
+        let first_material = MaterialHandle::from_raw(1);
+        let second_material = MaterialHandle::from_raw(2);
+        assert!(world.add_material(first_material, Material::default()));
+        assert!(world.add_material(second_material, Material::default()));
+        for (geometry, material) in [
+            (1, first_material),
+            (2, first_material),
+            (1, second_material),
+            (2, second_material),
+        ] {
+            let entity = world.spawn().unwrap();
+            assert!(world.add_transform(entity, Transform::default()));
+            assert!(world.add_mesh_renderer(
+                entity,
+                MeshRenderer {
+                    geometry: crate::GeometryHandle::from_raw(geometry),
+                    material,
+                },
+            ));
+        }
+        world.update();
+        let mut render_world = RenderWorld::with_capacity(4, 1);
+        render_world.extract(&world).unwrap();
+        let mut visible = VisibleRenderBuffer::with_capacity(4);
+
+        assert_eq!(visible.cull(&render_world).unwrap().visible, 4);
+        assert_eq!(visible.geometries(), &[1, 1, 2, 2]);
+        assert_eq!(visible.materials().len(), 4);
     }
 
     #[test]

@@ -248,7 +248,7 @@ interface RendererState {
   readonly runStarts: Uint32Array<ArrayBuffer>;
   readonly runCounts: Uint32Array<ArrayBuffer>;
   readonly runPipelines: Uint32Array<ArrayBuffer>;
-  readonly runMaterials: Uint32Array<ArrayBuffer>;
+  readonly runResourcesValid: Uint8Array<ArrayBuffer>;
   readonly runMeshes: Array<GpuMesh | undefined>;
   readonly visibilityMode: "cpu" | "gpu";
   readonly uploadBytesByDomain: {
@@ -482,7 +482,7 @@ export async function createMeshRenderer(
       runStarts: new Uint32Array(instanceCapacity),
       runCounts: new Uint32Array(instanceCapacity),
       runPipelines: new Uint32Array(instanceCapacity),
-      runMaterials: new Uint32Array(instanceCapacity),
+      runResourcesValid: new Uint8Array(instanceCapacity),
       runMeshes: new Array<GpuMesh | undefined>(instanceCapacity),
       visibilityMode: options.visibilityMode === "gpu" ? "gpu" : "cpu",
       uploadBytesByDomain: {
@@ -846,21 +846,21 @@ function prepareRuns(
   while (candidate < itemCount) {
     const geometry = geometries[candidate] ?? 0;
     const pipeline = pipelines[candidate] ?? 0;
-    const material = materials[candidate] ?? 0;
+    let resourcesValid = state.materials.has(materials[candidate] ?? 0);
     let runEnd = candidate + 1;
     while (
       runEnd < itemCount &&
       geometries[runEnd] === geometry &&
-      pipelines[runEnd] === pipeline &&
-      materials[runEnd] === material
+      pipelines[runEnd] === pipeline
     ) {
+      resourcesValid = resourcesValid && state.materials.has(materials[runEnd] ?? 0);
       runEnd += 1;
     }
     const mesh = state.meshes.get(geometry);
     state.runStarts[run] = candidate;
     state.runCounts[run] = runEnd - candidate;
     state.runPipelines[run] = pipeline;
-    state.runMaterials[run] = material;
+    state.runResourcesValid[run] = resourcesValid ? 1 : 0;
     state.runMeshes[run] = mesh;
     if (prepareIndirect) {
       state.candidateRunIds.fill(run, candidate, runEnd);
@@ -929,9 +929,12 @@ function encodeMainPass(context: RendererFrameContext): void {
   if (state.visibilityMode === "gpu") {
     for (let run = 0; run < state.runCount; run += 1) {
       const pipeline = state.runPipelines[run] ?? 0;
-      const material = state.runMaterials[run] ?? 0;
       const mesh = state.runMeshes[run];
-      if (pipeline === BASIC_PIPELINE_ID && mesh !== undefined && state.materials.has(material)) {
+      if (
+        pipeline === BASIC_PIPELINE_ID &&
+        mesh !== undefined &&
+        state.runResourcesValid[run] !== 0
+      ) {
         pass.setVertexBuffer(0, mesh.vertexBuffer);
         pass.setIndexBuffer(mesh.indexBuffer, "uint32");
         pass.drawIndexedIndirect(state.indirectBuffer, run * INDIRECT_BYTES);
@@ -942,9 +945,12 @@ function encodeMainPass(context: RendererFrameContext): void {
   } else {
     for (let run = 0; run < state.runCount; run += 1) {
       const pipeline = state.runPipelines[run] ?? 0;
-      const material = state.runMaterials[run] ?? 0;
       const mesh = state.runMeshes[run];
-      if (pipeline === BASIC_PIPELINE_ID && mesh !== undefined && state.materials.has(material)) {
+      if (
+        pipeline === BASIC_PIPELINE_ID &&
+        mesh !== undefined &&
+        state.runResourcesValid[run] !== 0
+      ) {
         pass.setVertexBuffer(0, mesh.vertexBuffer);
         pass.setIndexBuffer(mesh.indexBuffer, "uint32");
         pass.drawIndexed(

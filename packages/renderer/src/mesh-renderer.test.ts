@@ -195,12 +195,13 @@ describe("mesh renderer initialization ownership", () => {
     );
     renderer.registerGeometry(1, "triangle");
     renderer.registerBasicMaterial(1);
+    renderer.registerBasicMaterial(2);
     const frame = createRenderFrame(4);
     frame.instanceCount = 2;
     frame.visibleSlotsDirty = true;
     frame.geometries.set([1, 1]);
     frame.pipelines.set([1, 1]);
-    frame.materials.set([1, 1]);
+    frame.materials.set([1, 2]);
     renderer.execute(frame);
 
     frame.visibleSlotsDirty = false;
