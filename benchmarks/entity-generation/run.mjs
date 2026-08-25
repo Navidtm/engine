@@ -1,12 +1,22 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { performance } from "node:perf_hooks";
 
+import {
+  allocateSharedRuntimeMemory,
+  createSharedCommandDecoder,
+  decodeSharedCommand,
+  drainSharedCommands,
+  writeSharedCommand,
+} from "../.runtime-dist/benchmark-internals.mjs";
+
 const INDEX_BITS = 20;
 const MAX_GENERATION = (1 << (32 - INDEX_BITS)) - 1;
 const REUSE_OPERATIONS = 1_000_000;
 const REUSE_POOL_CAPACITY = 256;
 const VALIDATION_OPERATIONS = 5_000_000;
 const ATOMIC_OPERATIONS = 1_000_000;
+const STRUCTURAL_DECODE_OPERATIONS = 1_000_000;
+const STRUCTURAL_RETAINED_COMMANDS = 100_000;
 const WARMUP_SAMPLES = 5;
 const MEASURED_SAMPLES = 15;
 const output = new URL("../results/entity-generation-latest.json", import.meta.url);
@@ -33,9 +43,19 @@ const memoryResults = [10_000, 100_000, 1_000_000].flatMap((capacity) => [
   memoryRecord("packed-16-16", capacity, 2, 56, 4, 65_536),
   memoryRecord("split-u32-u32", capacity, 4, 60, 8, 1_048_576),
 ]);
+const structuralRecord = createStructuralRecord();
+const sharedCommandDecoder = createSharedCommandDecoder();
+const structuralDecodeResults = [
+  benchmarkStructuralDecode("allocating-command-union", () =>
+    decodeSharedCommand(...structuralRecord),
+  ),
+  benchmarkStructuralDecode("reused-command-record", () =>
+    sharedCommandDecoder.decode(...structuralRecord),
+  ),
+];
 
 const report = {
-  schemaVersion: 1,
+  schemaVersion: 2,
   benchmark: "entity-generation-strategies",
   generatedAt: new Date().toISOString(),
   environment: {
@@ -49,6 +69,8 @@ const report = {
     reusePoolCapacity: REUSE_POOL_CAPACITY,
     validationOperations: VALIDATION_OPERATIONS,
     atomicOperations: ATOMIC_OPERATIONS,
+    structuralDecodeOperations: STRUCTURAL_DECODE_OPERATIONS,
+    structuralRetainedCommands: STRUCTURAL_RETAINED_COMMANDS,
     warmupSamples: WARMUP_SAMPLES,
     measuredSamples: MEASURED_SAMPLES,
   },
@@ -57,10 +79,13 @@ const report = {
     "Validation samples isolate identity decoding/comparison in Node; they are not browser or WASM timings.",
     "Memory records are deterministic layout accounting, not process heap measurements.",
     "The split layout keeps the existing 64-byte structural record by consuming one currently spare word.",
+    "Structural decode uses the production shared-memory record and forces decoded values to escape during timing.",
+    "Retained heap deltas compare 100,000 references after a full GC; they are Node/V8 measurements, not browser allocation counts.",
   ],
   lifecycleResults,
   validationResults,
   atomicsResults,
+  structuralDecodeResults,
   memoryResults,
 };
 
@@ -319,6 +344,73 @@ function createBigUint64Atomics() {
     }
     return checksum;
   };
+}
+
+function createStructuralRecord() {
+  const views = allocateSharedRuntimeMemory(4, 1);
+  writeSharedCommand(views, {
+    type: "add-transform",
+    entity: 1,
+    position: [1, 2, 3],
+    rotation: [0, 0, 0, 1],
+    scale: [1, 1, 1],
+  });
+  let record;
+  drainSharedCommands(views, (opcode, identity, offset, shared) => {
+    record = [opcode, identity, offset, shared];
+  });
+  if (record === undefined) throw new Error("Structural benchmark record was not produced.");
+  return record;
+}
+
+function benchmarkStructuralDecode(strategy, decode) {
+  for (let sample = 0; sample < WARMUP_SAMPLES; sample += 1) {
+    runStructuralDecode(decode);
+  }
+  const samplesMs = [];
+  let checksum = 0;
+  for (let sample = 0; sample < MEASURED_SAMPLES; sample += 1) {
+    const started = performance.now();
+    checksum ^= runStructuralDecode(decode);
+    samplesMs.push(performance.now() - started);
+  }
+  const retainedHeapDeltaBytes = measureRetainedStructuralHeap(decode);
+  return {
+    strategy,
+    operations: STRUCTURAL_DECODE_OPERATIONS,
+    medianMs: median(samplesMs),
+    minMs: Math.min(...samplesMs),
+    maxMs: Math.max(...samplesMs),
+    retainedCommands: STRUCTURAL_RETAINED_COMMANDS,
+    retainedHeapDeltaBytes,
+    retainedHeapBytesPerCommand: retainedHeapDeltaBytes / STRUCTURAL_RETAINED_COMMANDS,
+    checksum,
+  };
+}
+
+function runStructuralDecode(decode) {
+  let checksum = 0;
+  for (let operation = 0; operation < STRUCTURAL_DECODE_OPERATIONS; operation += 1) {
+    const command = decode();
+    globalThis.__lumeStructuralCommandSink = command;
+    checksum += command.entity + command.position[0];
+  }
+  return checksum;
+}
+
+function measureRetainedStructuralHeap(decode) {
+  if (typeof globalThis.gc !== "function") {
+    throw new Error("Run this benchmark with --expose-gc.");
+  }
+  const retained = new Array(STRUCTURAL_RETAINED_COMMANDS).fill(null);
+  globalThis.gc();
+  const before = process.memoryUsage().heapUsed;
+  for (let index = 0; index < retained.length; index += 1) retained[index] = decode();
+  globalThis.gc();
+  const after = process.memoryUsage().heapUsed;
+  retained.fill(null);
+  globalThis.gc();
+  return Math.max(0, after - before);
 }
 
 function memoryRecord(

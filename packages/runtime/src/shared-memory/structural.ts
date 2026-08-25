@@ -31,6 +31,16 @@ export type SharedCommandConsumer = (
   views: SharedRuntimeViews,
 ) => void;
 
+/** Reuses borrowed command records; a decoded value is valid only until the next decode call. */
+export interface SharedCommandDecoder {
+  decode(
+    opcode: StructuralOpcode,
+    identity: number,
+    offset: number,
+    views: SharedRuntimeViews,
+  ): RuntimeCommand;
+}
+
 /** Publishes one fixed-width structural command; false means the bounded ring is full. */
 export function writeSharedCommand(views: SharedRuntimeViews, command: RuntimeCommand): boolean {
   if (Atomics.load(views.header, SharedHeader.CommandPending) >= views.layout.commandCapacity) {
@@ -216,4 +226,156 @@ export function decodeSharedCommand(
     case StructuralOpcode.RemoveMaterial:
       throw new Error("Deprecated entity-backed material opcode received.");
   }
+}
+
+/** Creates the worker hot-path decoder with one preallocated record per command shape. */
+export function createSharedCommandDecoder(): SharedCommandDecoder {
+  const spawn = { type: "spawn" as const, entity: 0 };
+  const despawn = { type: "despawn" as const, entity: 0 };
+  const position: [number, number, number] = [0, 0, 0];
+  const rotation: [number, number, number, number] = [0, 0, 0, 0];
+  const scale: [number, number, number] = [0, 0, 0];
+  const addTransform = {
+    type: "add-transform" as const,
+    entity: 0,
+    position,
+    rotation,
+    scale,
+  };
+  const addCamera = {
+    type: "add-camera" as const,
+    entity: 0,
+    verticalFov: 0,
+    near: 0,
+    far: 0,
+  };
+  const addMesh = { type: "add-mesh" as const, entity: 0, geometry: 0, material: 0 };
+  const center: [number, number, number] = [0, 0, 0];
+  const addBounds = { type: "add-bounds" as const, entity: 0, center, radius: 0 };
+  const removeTransform = {
+    type: "remove-component" as const,
+    entity: 0,
+    component: "transform" as const,
+  };
+  const removeCamera = {
+    type: "remove-component" as const,
+    entity: 0,
+    component: "camera" as const,
+  };
+  const removeMesh = {
+    type: "remove-component" as const,
+    entity: 0,
+    component: "mesh" as const,
+  };
+  const removeBounds = {
+    type: "remove-component" as const,
+    entity: 0,
+    component: "bounds" as const,
+  };
+  const createTriangleGeometry = {
+    type: "create-geometry" as const,
+    handle: 0,
+    builtin: "triangle" as const,
+  };
+  const createCubeGeometry = {
+    type: "create-geometry" as const,
+    handle: 0,
+    builtin: "cube" as const,
+  };
+  const color: [number, number, number, number] = [0, 0, 0, 0];
+  const createBasicMaterial = {
+    type: "create-basic-material" as const,
+    handle: 0,
+    color,
+  };
+  const retireGeometry = {
+    type: "retire-resource" as const,
+    resourceKind: "geometry" as const,
+    handle: 0,
+  };
+  const retireBasicMaterial = {
+    type: "retire-resource" as const,
+    resourceKind: "basic-material" as const,
+    handle: 0,
+  };
+
+  return {
+    decode(opcode, identity, offset, views) {
+      const floats = views.commandFloats;
+      const words = views.commandWords;
+      switch (opcode) {
+        case StructuralOpcode.Spawn:
+          spawn.entity = identity;
+          return spawn;
+        case StructuralOpcode.Despawn:
+          despawn.entity = identity;
+          return despawn;
+        case StructuralOpcode.AddTransform:
+          addTransform.entity = identity;
+          position[0] = floats[offset + 2] ?? 0;
+          position[1] = floats[offset + 3] ?? 0;
+          position[2] = floats[offset + 4] ?? 0;
+          rotation[0] = floats[offset + 5] ?? 0;
+          rotation[1] = floats[offset + 6] ?? 0;
+          rotation[2] = floats[offset + 7] ?? 0;
+          rotation[3] = floats[offset + 8] ?? 0;
+          scale[0] = floats[offset + 9] ?? 0;
+          scale[1] = floats[offset + 10] ?? 0;
+          scale[2] = floats[offset + 11] ?? 0;
+          return addTransform;
+        case StructuralOpcode.AddCamera:
+          addCamera.entity = identity;
+          addCamera.verticalFov = floats[offset + 2] ?? 0;
+          addCamera.near = floats[offset + 3] ?? 0;
+          addCamera.far = floats[offset + 4] ?? 0;
+          return addCamera;
+        case StructuralOpcode.AddMesh:
+          addMesh.entity = identity;
+          addMesh.geometry = words[offset + 2] ?? 0;
+          addMesh.material = words[offset + 3] ?? 0;
+          return addMesh;
+        case StructuralOpcode.AddBounds:
+          addBounds.entity = identity;
+          center[0] = floats[offset + 2] ?? 0;
+          center[1] = floats[offset + 3] ?? 0;
+          center[2] = floats[offset + 4] ?? 0;
+          addBounds.radius = floats[offset + 5] ?? 0;
+          return addBounds;
+        case StructuralOpcode.RemoveTransform:
+          removeTransform.entity = identity;
+          return removeTransform;
+        case StructuralOpcode.RemoveCamera:
+          removeCamera.entity = identity;
+          return removeCamera;
+        case StructuralOpcode.RemoveMesh:
+          removeMesh.entity = identity;
+          return removeMesh;
+        case StructuralOpcode.RemoveBounds:
+          removeBounds.entity = identity;
+          return removeBounds;
+        case StructuralOpcode.CreateTriangleGeometry:
+          createTriangleGeometry.handle = identity;
+          return createTriangleGeometry;
+        case StructuralOpcode.CreateCubeGeometry:
+          createCubeGeometry.handle = identity;
+          return createCubeGeometry;
+        case StructuralOpcode.CreateBasicMaterial:
+          createBasicMaterial.handle = identity;
+          color[0] = floats[offset + 2] ?? 0;
+          color[1] = floats[offset + 3] ?? 0;
+          color[2] = floats[offset + 4] ?? 0;
+          color[3] = floats[offset + 5] ?? 0;
+          return createBasicMaterial;
+        case StructuralOpcode.RetireGeometry:
+          retireGeometry.handle = identity;
+          return retireGeometry;
+        case StructuralOpcode.RetireBasicMaterial:
+          retireBasicMaterial.handle = identity;
+          return retireBasicMaterial;
+        case StructuralOpcode.AddMaterial:
+        case StructuralOpcode.RemoveMaterial:
+          throw new Error("Deprecated entity-backed material opcode received.");
+      }
+    },
+  };
 }

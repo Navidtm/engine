@@ -12,3 +12,4 @@ examples/camera/public/lume_core.wasm
 benchmarks/renderer/public/lume_core.wasm
 benchmarks/renderer/public/wasm-profiles/
 benchmarks/comparison/public/lume_core.wasm
+benchmarks/.runtime-dist/

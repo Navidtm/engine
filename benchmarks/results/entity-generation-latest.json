@@ -1,7 +1,7 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "benchmark": "entity-generation-strategies",
-  "generatedAt": "2026-08-22T19:38:14.407Z",
+  "generatedAt": "2026-08-25T09:25:43.693Z",
   "environment": {
     "runtime": "node",
     "node": "v24.19.0",
@@ -13,6 +13,8 @@
     "reusePoolCapacity": 256,
     "validationOperations": 5000000,
     "atomicOperations": 1000000,
+    "structuralDecodeOperations": 1000000,
+    "structuralRetainedCommands": 100000,
     "warmupSamples": 5,
     "measuredSamples": 15
   },
@@ -20,16 +22,18 @@
     "Lifecycle samples model a LIFO hot slot, matching the production allocator's worst realistic concentration of churn.",
     "Validation samples isolate identity decoding/comparison in Node; they are not browser or WASM timings.",
     "Memory records are deterministic layout accounting, not process heap measurements.",
-    "The split layout keeps the existing 64-byte structural record by consuming one currently spare word."
+    "The split layout keeps the existing 64-byte structural record by consuming one currently spare word.",
+    "Structural decode uses the production shared-memory record and forces decoded values to escape during timing.",
+    "Retained heap deltas compare 100,000 references after a full GC; they are Node/V8 measurements, not browser allocation counts."
   ],
   "lifecycleResults": [
     {
       "strategy": "packed-20-12-wrap",
       "operations": 1000000,
       "poolCapacity": 256,
-      "medianMs": 4.265292000000002,
-      "minMs": 4.2605,
-      "maxMs": 4.309916000000001,
+      "medianMs": 4.443082999999987,
+      "minMs": 4.426040999999998,
+      "maxMs": 4.462291999999991,
       "retiredSlots": 0,
       "runtimeAllocationsPerCycle": 0,
       "checksum": 2100493760
@@ -38,9 +42,9 @@
       "strategy": "packed-20-12-retire",
       "operations": 1000000,
       "poolCapacity": 256,
-      "medianMs": 4.271541999999982,
-      "minMs": 4.259958000000012,
-      "maxMs": 4.2955829999999935,
+      "medianMs": 4.396874999999994,
+      "minMs": 4.374124999999992,
+      "maxMs": 4.427250000000015,
       "retiredSlots": 244,
       "runtimeAllocationsPerCycle": 0,
       "checksum": 1978923200
@@ -49,9 +53,9 @@
       "strategy": "split-index-u32-generation-u32",
       "operations": 1000000,
       "poolCapacity": 256,
-      "medianMs": 4.3073750000000075,
-      "minMs": 4.2603750000000105,
-      "maxMs": 4.34941699999996,
+      "medianMs": 4.307000000000016,
+      "minMs": 4.273040999999978,
+      "maxMs": 4.342916000000002,
       "retiredSlots": 0,
       "runtimeAllocationsPerCycle": 0,
       "checksum": 1783305952
@@ -61,37 +65,37 @@
     {
       "strategy": "packed-20-12",
       "operations": 5000000,
-      "medianMs": 4.332416000000023,
-      "nanosecondsPerValidation": 0.8664832000000047,
-      "minMs": 4.275500000000022,
-      "maxMs": 4.404042000000004,
+      "medianMs": 4.434249999999963,
+      "nanosecondsPerValidation": 0.8868499999999926,
+      "minMs": 4.416667000000018,
+      "maxMs": 4.4489169999999945,
       "checksum": 4687500
     },
     {
       "strategy": "packed-16-16",
       "operations": 5000000,
-      "medianMs": 4.380417000000023,
-      "nanosecondsPerValidation": 0.8760834000000045,
-      "minMs": 4.245124999999973,
-      "maxMs": 4.488792000000046,
+      "medianMs": 4.418875000000014,
+      "nanosecondsPerValidation": 0.8837750000000028,
+      "minMs": 4.413749999999993,
+      "maxMs": 4.453332999999986,
       "checksum": 4687500
     },
     {
       "strategy": "split-u32-u32",
       "operations": 5000000,
-      "medianMs": 5.370374999999967,
-      "nanosecondsPerValidation": 1.0740749999999935,
-      "minMs": 5.308874999999944,
-      "maxMs": 5.3950000000000955,
+      "medianMs": 5.377958000000035,
+      "nanosecondsPerValidation": 1.075591600000007,
+      "minMs": 5.369000000000028,
+      "maxMs": 5.44074999999998,
       "checksum": 4687500
     },
     {
       "strategy": "packed-biguint64",
       "operations": 5000000,
-      "medianMs": 133.78158299999996,
-      "nanosecondsPerValidation": 26.75631659999999,
-      "minMs": 131.89641699999993,
-      "maxMs": 164.1512499999999,
+      "medianMs": 136.14141699999982,
+      "nanosecondsPerValidation": 27.228283399999963,
+      "minMs": 131.3704580000001,
+      "maxMs": 176.03504199999998,
       "checksum": 4687500
     }
   ],
@@ -99,26 +103,50 @@
     {
       "strategy": "packed-int32-publication",
       "operations": 1000000,
-      "medianMs": 9.246417000000292,
-      "minMs": 9.156124999999975,
-      "maxMs": 9.895167000000129,
+      "medianMs": 9.193083999999999,
+      "minMs": 9.11999999999989,
+      "maxMs": 9.686957999999777,
       "checksum": -1524572448
     },
     {
       "strategy": "split-two-int32-publications",
       "operations": 1000000,
-      "medianMs": 19.431916,
-      "minMs": 19.270500000000084,
-      "maxMs": 22.23462500000005,
+      "medianMs": 19.48566699999992,
+      "minMs": 18.65604200000007,
+      "maxMs": 20.321042000000034,
       "checksum": 1790793664
     },
     {
       "strategy": "packed-biguint64-publication",
       "operations": 1000000,
-      "medianMs": 34.842375000000175,
-      "minMs": 34.71116700000039,
-      "maxMs": 35.07391699999971,
+      "medianMs": 35.33774999999969,
+      "minMs": 34.25904100000025,
+      "maxMs": 35.85599999999977,
       "checksum": -1524572448
+    }
+  ],
+  "structuralDecodeResults": [
+    {
+      "strategy": "allocating-command-union",
+      "operations": 1000000,
+      "medianMs": 21.265333000000282,
+      "minMs": 21.184167000000343,
+      "maxMs": 23.765833999999813,
+      "retainedCommands": 100000,
+      "retainedHeapDeltaBytes": 28799088,
+      "retainedHeapBytesPerCommand": 287.99088,
+      "checksum": 2000000
+    },
+    {
+      "strategy": "reused-command-record",
+      "operations": 1000000,
+      "medianMs": 11.934792000000016,
+      "minMs": 11.772625000000517,
+      "maxMs": 12.32695799999965,
+      "retainedCommands": 100000,
+      "retainedHeapDeltaBytes": 3496,
+      "retainedHeapBytesPerCommand": 0.03496,
+      "checksum": 2000000
     }
   ],
   "memoryResults": [

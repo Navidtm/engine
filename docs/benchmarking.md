@@ -141,7 +141,7 @@ uploads range below the nominal eight-megabyte batch. The median was 5,070,720
 bytes; this is retained as observed production scheduling, not normalized into
 a synthetic single-frame result.
 
-## Entity generation strategy suite
+## Entity generation and structural-churn suite
 
 Run:
 
@@ -156,6 +156,14 @@ one million SharedArrayBuffer atomic publication cycles, and deterministic
 memory/layout costs at 10k, 100k, and 1M slots. The committed result is
 `benchmarks/results/entity-generation-latest.json`; ADR 010 defines the decision
 and limits the interpretation of Node microbenchmarks.
+
+The same suite also stresses production structural-command decoding. It compares
+the former allocating command union against the worker's borrowed reusable
+record over one million decodes per sample, plus a 100,000-command retained-heap
+probe after full GC. On the committed Node v24.19.0 run, the median fell from
+21.27 ms to 11.93 ms (43.9%), while retained heap growth fell from 28,799,088
+bytes to 3,496 bytes. The reusable value is valid only until the decoder's next
+call; the worker consumes it synchronously before advancing the ring.
 
 ## Interpreting results
 

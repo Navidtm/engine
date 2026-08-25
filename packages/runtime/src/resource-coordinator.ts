@@ -45,11 +45,12 @@ export function createResourceCoordinator(
     const materialRaw = meshMaterial[entityIndex] ?? 0;
     meshGeometry[entityIndex] = 0;
     meshMaterial[entityIndex] = 0;
-    releaseUsage(geometry, geometryRaw, () => renderer.removeGeometry(geometryRaw));
-    releaseUsage(materials, materialRaw, () => {
-      core.removeBasicMaterial(materialRaw);
-      renderer.removeBasicMaterial(materialRaw);
-    });
+    if (releaseUsage(geometry, geometryRaw)) {
+      finalizeGeometry(geometry, geometryRaw, renderer);
+    }
+    if (releaseUsage(materials, materialRaw)) {
+      finalizeBasicMaterial(materials, materialRaw, core, renderer);
+    }
   };
 
   return {
@@ -80,13 +81,12 @@ export function createResourceCoordinator(
           const index = validateRecord(registry, command.handle, true);
           if (registry.status[index] === ResourceStatus.Retired) return;
           registry.status[index] = ResourceStatus.Retired;
-          finalizeIfUnused(registry, command.handle, () => {
-            if (command.resourceKind === "geometry") renderer.removeGeometry(command.handle);
-            else {
-              core.removeBasicMaterial(command.handle);
-              renderer.removeBasicMaterial(command.handle);
-            }
-          });
+          if (!isUnusedRetired(registry, command.handle)) return;
+          if (command.resourceKind === "geometry") {
+            finalizeGeometry(registry, command.handle, renderer);
+          } else {
+            finalizeBasicMaterial(registry, command.handle, core, renderer);
+          }
           return;
         }
         case "spawn": {
@@ -113,13 +113,12 @@ export function createResourceCoordinator(
           validateUsage(geometry, command.geometry, previousGeometry);
           validateUsage(materials, command.material, previousMaterial);
           core.apply(command, aspect);
-          replaceUsage(geometry, previousGeometry, command.geometry, () =>
-            renderer.removeGeometry(previousGeometry),
-          );
-          replaceUsage(materials, previousMaterial, command.material, () => {
-            core.removeBasicMaterial(previousMaterial);
-            renderer.removeBasicMaterial(previousMaterial);
-          });
+          if (replaceUsage(geometry, previousGeometry, command.geometry)) {
+            finalizeGeometry(geometry, previousGeometry, renderer);
+          }
+          if (replaceUsage(materials, previousMaterial, command.material)) {
+            finalizeBasicMaterial(materials, previousMaterial, core, renderer);
+          }
           meshGeometry[index] = command.geometry;
           meshMaterial[index] = command.material;
           return;
@@ -221,31 +220,45 @@ function validateRecord(registry: RegistryState, handle: number, allowRetired: b
   return index;
 }
 
-function replaceUsage(
-  registry: RegistryState,
-  previous: number,
-  next: number,
-  finalizePrevious: () => void,
-): void {
-  if (previous === next) return;
+function replaceUsage(registry: RegistryState, previous: number, next: number): boolean {
+  if (previous === next) return false;
   const nextIndex = resourceIndex(next);
   registry.usage[nextIndex] = (registry.usage[nextIndex] ?? 0) + 1;
-  releaseUsage(registry, previous, finalizePrevious);
+  return releaseUsage(registry, previous);
 }
 
-function releaseUsage(registry: RegistryState, handle: number, finalize: () => void): void {
-  if (handle === 0) return;
+function releaseUsage(registry: RegistryState, handle: number): boolean {
+  if (handle === 0) return false;
   const index = resourceIndex(handle);
   const count = registry.usage[index] ?? 0;
   if (count === 0) throw new Error("Resource coordinator usage underflow.");
   registry.usage[index] = count - 1;
-  finalizeIfUnused(registry, handle, finalize);
+  return isUnusedRetired(registry, handle);
 }
 
-function finalizeIfUnused(registry: RegistryState, handle: number, finalize: () => void): void {
+function isUnusedRetired(registry: RegistryState, handle: number): boolean {
   const index = resourceIndex(handle);
-  if (registry.status[index] !== ResourceStatus.Retired || registry.usage[index] !== 0) return;
-  finalize();
+  return registry.status[index] === ResourceStatus.Retired && registry.usage[index] === 0;
+}
+
+function finalizeGeometry(registry: RegistryState, handle: number, renderer: MeshRenderer): void {
+  renderer.removeGeometry(handle);
+  commitFinalization(registry, handle);
+}
+
+function finalizeBasicMaterial(
+  registry: RegistryState,
+  handle: number,
+  core: WasmCore,
+  renderer: MeshRenderer,
+): void {
+  core.removeBasicMaterial(handle);
+  renderer.removeBasicMaterial(handle);
+  commitFinalization(registry, handle);
+}
+
+function commitFinalization(registry: RegistryState, handle: number): void {
+  const index = resourceIndex(handle);
   registry.status[index] = ResourceStatus.Empty;
   const generation = registry.generation[index] ?? 0;
   registry.generation[index] = generation < GENERATION_MASK ? generation + 1 : GENERATION_MASK + 1;

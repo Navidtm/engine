@@ -2,7 +2,7 @@ import type { RenderFrame } from "@lume/renderer";
 
 import type { RuntimeCommand } from "./protocol.js";
 import { SHARED_TRANSFORM_FLOATS, TransformField } from "./shared-memory/layout.js";
-import { decodeSharedCommand, drainSharedCommands } from "./shared-memory/structural.js";
+import { createSharedCommandDecoder, drainSharedCommands } from "./shared-memory/structural.js";
 import { drainSharedTransforms } from "./shared-memory/synchronization.js";
 import { openSharedRuntimeViews } from "./shared-memory/views.js";
 import { LUME_WASM_ABI_VERSION } from "./wasm-abi.js";
@@ -468,13 +468,14 @@ export async function createWasmCore(
   };
   let disposed = false;
   let sharedCommandConsumer: (command: RuntimeCommand) => void = () => undefined;
+  const sharedCommandDecoder = createSharedCommandDecoder();
   const decodeAndConsumeSharedCommand: Parameters<typeof drainSharedCommands>[1] = (
     opcode,
     identity,
     offset,
     views,
   ) => {
-    sharedCommandConsumer(decodeSharedCommand(opcode, identity, offset, views));
+    sharedCommandConsumer(sharedCommandDecoder.decode(opcode, identity, offset, views));
   };
   const updateSharedCommands = (consume: (command: RuntimeCommand) => void): void => {
     if (sharedViews === undefined) return;
@@ -503,7 +504,16 @@ export async function createWasmCore(
     frameTimings,
     createBasicMaterial(materialHandle, color) {
       if (disposed) return;
-      if (exports.lume_engine_add_material(handle, materialHandle, ...color) === 0) {
+      if (
+        exports.lume_engine_add_material(
+          handle,
+          materialHandle,
+          color[0],
+          color[1],
+          color[2],
+          color[3],
+        ) === 0
+      ) {
         throw new Error(`WASM rejected basic-material resource ${materialHandle}.`);
       }
     },
@@ -718,9 +728,16 @@ function applyCommand(
       return wasm.lume_engine_add_transform(
         engine,
         command.entity,
-        ...command.position,
-        ...command.rotation,
-        ...command.scale,
+        command.position[0],
+        command.position[1],
+        command.position[2],
+        command.rotation[0],
+        command.rotation[1],
+        command.rotation[2],
+        command.rotation[3],
+        command.scale[0],
+        command.scale[1],
+        command.scale[2],
       );
     case "add-camera":
       return wasm.lume_engine_add_camera(
@@ -739,7 +756,14 @@ function applyCommand(
         command.material,
       );
     case "add-bounds":
-      return wasm.lume_engine_add_bounds(engine, command.entity, ...command.center, command.radius);
+      return wasm.lume_engine_add_bounds(
+        engine,
+        command.entity,
+        command.center[0],
+        command.center[1],
+        command.center[2],
+        command.radius,
+      );
     case "remove-component":
       return wasm.lume_engine_remove_component(
         engine,

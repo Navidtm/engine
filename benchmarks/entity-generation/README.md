@@ -1,4 +1,4 @@
-# Entity generation benchmark
+# Entity generation and structural-churn benchmark
 
 This Node microbenchmark compares the entity identity strategies considered by
 ADR 010:
@@ -8,6 +8,13 @@ ADR 010:
   wrap;
 - a packed 16/16 split; and
 - split 32-bit index/generation fields, including a BigUint64 validation probe.
+
+It also compares the allocating structural-command decoder with the worker's
+borrowed, reusable command records. The decode workload uses a production
+shared-memory `add-transform` record, performs one million decodes per timing
+sample, and forces each result to escape so V8 cannot discard the command
+materialization. A separate 100,000-command retained probe runs after full GC
+to expose the heap cost of the allocating command object and tuple arrays.
 
 The lifecycle workload performs one million destroy/recreate operations against
 a LIFO hot slot with a 256-slot pool. This models the production allocator's
@@ -31,5 +38,9 @@ Run from the repository root:
 pnpm benchmark:entity-generation
 ```
 
-Node timings isolate JavaScript representation cost. They do not claim browser
-Atomics, worker latency, or WASM performance equivalence.
+The committed Node v24.19.0 result measured a 21.27 ms allocating median versus
+11.93 ms with the reused record, a 43.9% reduction. Retaining 100,000 decoded
+results grew the measured heap by 28,799,088 bytes for the allocating decoder
+and 3,496 bytes for the reused decoder. These Node timings and heap deltas
+isolate JavaScript representation cost; they do not claim browser Atomics,
+worker latency, or WASM performance equivalence.

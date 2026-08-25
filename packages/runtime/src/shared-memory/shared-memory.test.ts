@@ -2,9 +2,11 @@ import { Worker } from "node:worker_threads";
 
 import { describe, expect, it, vi } from "vitest";
 
+import type { RuntimeCommand } from "../protocol.js";
 import { allocateSharedRuntimeMemory } from "./allocator.js";
 import { SHARED_TRANSFORM_FLOATS, SharedHeader, TransformField } from "./layout.js";
 import {
+  createSharedCommandDecoder,
   decodeSharedCommand,
   drainSharedCommands,
   StructuralOpcode,
@@ -325,5 +327,78 @@ describe("shared runtime memory", () => {
       { type: "create-basic-material", handle: 1, color: [0.25, 0.5, 0.75, 1] },
       { type: "retire-resource", resourceKind: "basic-material", handle: 1 },
     ]);
+  });
+
+  it("reuses a borrowed command record while decoding the structural hot path", () => {
+    const views = allocateSharedRuntimeMemory(8, 2);
+    const decoder = createSharedCommandDecoder();
+    writeSharedCommand(views, {
+      type: "add-transform",
+      entity: 1,
+      position: [1, 2, 3],
+      rotation: [0, 0, 0, 1],
+      scale: [1, 1, 1],
+    });
+    writeSharedCommand(views, {
+      type: "add-transform",
+      entity: 2,
+      position: [4, 5, 6],
+      rotation: [0, 1, 0, 0],
+      scale: [2, 2, 2],
+    });
+    let first: ReturnType<typeof decoder.decode> | undefined;
+    let second: ReturnType<typeof decoder.decode> | undefined;
+    const snapshots: unknown[] = [];
+
+    drainSharedCommands(views, (opcode, entity, offset, shared) => {
+      const command = decoder.decode(opcode, entity, offset, shared);
+      first ??= command;
+      second = command;
+      if (command.type === "add-transform") {
+        snapshots.push({ entity: command.entity, position: [...command.position] });
+      }
+    });
+
+    expect(second).toBe(first);
+    expect(snapshots).toEqual([
+      { entity: 1, position: [1, 2, 3] },
+      { entity: 2, position: [4, 5, 6] },
+    ]);
+  });
+
+  it("decodes every supported opcode with reusable records", () => {
+    const commands: RuntimeCommand[] = [
+      { type: "spawn", entity: 1 },
+      { type: "despawn", entity: 2 },
+      {
+        type: "add-transform",
+        entity: 3,
+        position: [1, 2, 3],
+        rotation: [0, 0, 0, 1],
+        scale: [2, 2, 2],
+      },
+      { type: "add-camera", entity: 4, verticalFov: 1, near: 0.25, far: 512 },
+      { type: "add-mesh", entity: 5, geometry: 6, material: 7 },
+      { type: "add-bounds", entity: 6, center: [1, 2, 3], radius: 4 },
+      { type: "remove-component", entity: 7, component: "transform" },
+      { type: "remove-component", entity: 8, component: "camera" },
+      { type: "remove-component", entity: 9, component: "mesh" },
+      { type: "remove-component", entity: 10, component: "bounds" },
+      { type: "create-geometry", handle: 11, builtin: "triangle" },
+      { type: "create-geometry", handle: 12, builtin: "cube" },
+      { type: "create-basic-material", handle: 13, color: [0.25, 0.5, 0.75, 1] },
+      { type: "retire-resource", resourceKind: "geometry", handle: 14 },
+      { type: "retire-resource", resourceKind: "basic-material", handle: 15 },
+    ];
+    const views = allocateSharedRuntimeMemory(32, commands.length);
+    const decoder = createSharedCommandDecoder();
+    for (const command of commands) expect(writeSharedCommand(views, command)).toBe(true);
+    const decoded: RuntimeCommand[] = [];
+
+    drainSharedCommands(views, (opcode, entity, offset, shared) => {
+      decoded.push(structuredClone(decoder.decode(opcode, entity, offset, shared)));
+    });
+
+    expect(decoded).toEqual(commands);
   });
 });
