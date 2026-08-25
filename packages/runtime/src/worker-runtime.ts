@@ -251,6 +251,7 @@ export function createWorkerRuntime(host: WorkerHost): (message: MainToWorkerMes
       watchDeviceLoss(message, renderer);
       host.postMessage({ type: "ready" });
     } catch (error) {
+      if (state.disposed) return;
       renderer?.dispose();
       core?.dispose();
       report(error);

@@ -98,6 +98,69 @@ describe("worker runtime resource ownership", () => {
     expect(posted[0]).toMatchObject({ type: "error", message: "WASM failed" });
   });
 
+  it("keeps disposal terminal when initialization fails reentrantly", async () => {
+    const rendererResult = deferred<MeshRenderer>();
+    const coreResult = deferred<WasmCore>();
+    const renderer = {
+      lost: new Promise<GPUDeviceLostInfo>(() => undefined),
+      frameTimings: {
+        bufferUploadCpuTimeMs: 0,
+        renderPreparationCpuTimeMs: 0,
+        commandEncodingCpuTimeMs: 0,
+        queueSubmitCpuTimeMs: 0,
+      },
+      registerGeometry: vi.fn(),
+      removeGeometry: vi.fn(),
+      registerBasicMaterial: vi.fn(),
+      removeBasicMaterial: vi.fn(),
+      execute: vi.fn(),
+      resize: vi.fn(),
+      stats: vi.fn(),
+      dispose: vi.fn(),
+    } satisfies MeshRenderer;
+    const core = {
+      frameTimings: {
+        systemsCpuTimeMs: 0,
+        extractionCpuTimeMs: 0,
+        visibilityCpuTimeMs: 0,
+      },
+      createBasicMaterial: vi.fn(),
+      removeBasicMaterial: vi.fn(),
+      apply: vi.fn(),
+      updateSharedCommands: vi.fn(),
+      updateSharedTransforms: vi.fn(),
+      resize: vi.fn(() => {
+        receive({ type: "dispose" });
+        throw new Error("late initialization failure");
+      }),
+      invalidateRendererCache: vi.fn(),
+      update: vi.fn(),
+      stats: vi.fn(),
+      dispose: vi.fn(),
+    } satisfies WasmCore;
+    mocks.createMeshRenderer.mockReturnValueOnce(rendererResult.promise);
+    mocks.createWasmCore.mockReturnValueOnce(coreResult.promise);
+    const posted: WorkerToMainMessage[] = [];
+    const host: WorkerHost = {
+      postMessage: (message) => posted.push(message),
+      requestAnimationFrame: vi.fn(() => 1),
+      cancelAnimationFrame: vi.fn(),
+    };
+    const receive = createWorkerRuntime(host);
+
+    receive(initMessage());
+    receive({
+      type: "resize",
+      value: { width: 800, height: 600, devicePixelRatio: 1 },
+    });
+    rendererResult.resolve(renderer);
+    coreResult.resolve(core);
+
+    await vi.waitFor(() => expect(posted).toEqual([{ type: "disposed" }]));
+    expect(renderer.dispose).toHaveBeenCalledTimes(1);
+    expect(core.dispose).toHaveBeenCalledTimes(1);
+  });
+
   it("rejects a second init while the first init is pending", async () => {
     const rendererResult = deferred<MeshRenderer>();
     const coreResult = deferred<WasmCore>();
