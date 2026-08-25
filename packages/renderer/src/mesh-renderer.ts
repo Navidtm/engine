@@ -31,6 +31,7 @@ import {
   type GpuTimestampProfiler,
   requestGpuTimestampRead,
   requestGpuTimestampSample,
+  unmapBufferSafely,
 } from "./webgpu/timestamp-profiler.js";
 
 const INSTANCE_FLOATS = 20;
@@ -1085,8 +1086,8 @@ function beginVisibilityReadback(state: RendererState): void {
     })
     .finally(() => {
       if (!state.disposed) {
-        state.indirectReadbackBuffer.unmap();
-        state.visibleReadbackBuffer.unmap();
+        unmapBufferSafely(state.indirectReadbackBuffer);
+        unmapBufferSafely(state.visibleReadbackBuffer);
       }
       state.visibilityReadbackPending = false;
     });

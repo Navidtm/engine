@@ -7,6 +7,7 @@ import {
   encodeGpuTimestampResolve,
   requestGpuTimestampRead,
   requestGpuTimestampSample,
+  unmapBufferSafely,
 } from "./timestamp-profiler.js";
 
 afterEach(() => vi.unstubAllGlobals());
@@ -51,6 +52,17 @@ function createSupportedFixture(mapAsync = vi.fn(() => Promise.resolve())) {
 }
 
 describe("GPU timestamp profiler", () => {
+  it("contains WebGPU unmap cleanup failures", () => {
+    const buffer = {
+      unmap: vi.fn(() => {
+        throw new Error("not mapped");
+      }),
+    } as unknown as GPUBuffer;
+
+    expect(unmapBufferSafely(buffer)).toBe(false);
+    expect(buffer.unmap).toHaveBeenCalledTimes(1);
+  });
+
   it("stays disabled when timestamp queries are unavailable", () => {
     const device = {
       features: new Set<GPUFeatureName>(),

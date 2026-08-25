@@ -1,6 +1,16 @@
 const QUERY_COUNT = 2;
 const QUERY_BYTES = QUERY_COUNT * BigUint64Array.BYTES_PER_ELEMENT;
 
+/** Releases a mapped WebGPU buffer without allowing cleanup errors to escape. */
+export function unmapBufferSafely(buffer: GPUBuffer): boolean {
+  try {
+    buffer.unmap();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** Optional, pull-triggered timestamp-query resources for one renderer. */
 export interface GpuTimestampProfiler {
   readonly querySet: GPUQuerySet | undefined;
@@ -132,11 +142,7 @@ export function requestGpuTimestampRead(profiler: GpuTimestampProfiler, sampled:
         profiler.gpuTimeMs = null;
       } finally {
         profiler.samplePending = false;
-        try {
-          buffer.unmap();
-        } catch {
-          profiler.gpuTimeMs = null;
-        }
+        if (!unmapBufferSafely(buffer)) profiler.gpuTimeMs = null;
       }
     },
     () => {
