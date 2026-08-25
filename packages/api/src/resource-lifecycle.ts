@@ -21,6 +21,7 @@ type ResourceHandle = GeometryHandle | BasicMaterialHandle;
 interface HandleRecord {
   readonly kind: ResourceKind;
   readonly raw: number;
+  readonly ownership: "application" | "engine";
   ownerReleased: boolean;
 }
 
@@ -140,6 +141,9 @@ export function hasMeshResources(state: EngineState, entity: Entity): boolean {
 /** Retires an owner edge; physical destruction waits for existing mesh usage edges. */
 export function retireResource(state: EngineState, handle: ResourceHandle): void {
   const record = ownedRecord(state, handle);
+  if (record.ownership === "engine") {
+    throw new Error("Engine-owned built-in geometry cannot be destroyed.");
+  }
   if (record.ownerReleased) return;
   const registry = registryFor(state.resources, record.kind);
   const index = resourceIndex(record.raw);
@@ -194,7 +198,7 @@ export function rollbackCreatedResource(state: EngineState, handle: ResourceHand
 }
 
 function createGeometry(state: EngineState, builtin: "cube" | "triangle"): GeometryHandle {
-  const handle = allocateHandle(state, "geometry") as GeometryHandle;
+  const handle = allocateHandle(state, "geometry", "engine") as GeometryHandle;
   const raw = ownedRecord(state, handle).raw;
   try {
     dispatchCommand(state, { type: "create-geometry", handle: raw, builtin });
@@ -205,7 +209,11 @@ function createGeometry(state: EngineState, builtin: "cube" | "triangle"): Geome
   return handle;
 }
 
-function allocateHandle(state: EngineState, kind: ResourceKind): ResourceHandle {
+function allocateHandle(
+  state: EngineState,
+  kind: ResourceKind,
+  ownership: HandleRecord["ownership"] = "application",
+): ResourceHandle {
   if (state.status === "disposed" || state.status === "failed") {
     throw new Error(`Cannot create a resource on a ${state.status} engine.`);
   }
@@ -221,6 +229,7 @@ function allocateHandle(state: EngineState, kind: ResourceKind): ResourceHandle 
   state.resources.handles.set(handle, {
     kind,
     raw: packResource(index, generation),
+    ownership,
     ownerReleased: false,
   });
   return handle;

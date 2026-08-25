@@ -296,10 +296,11 @@ describe("high-level engine API", () => {
   });
 
   it("rejects wrong-kind, foreign, retired, and destroyed resource handles", () => {
+    const postMessage = vi.fn();
     const workerFactory = () =>
       ({
         addEventListener: vi.fn(),
-        postMessage: vi.fn(),
+        postMessage,
         terminate: vi.fn(),
       }) as unknown as Worker;
     const first = createEngine({} as HTMLCanvasElement, { autoResize: false, workerFactory });
@@ -317,8 +318,10 @@ describe("high-level engine API", () => {
     first.destroy(mesh);
     expect(() => first.create.mesh({ geometry: "cube", material })).toThrow("stale");
 
-    first.destroy(first.geometry.triangle);
-    expect(() => first.create.mesh({ geometry: "triangle" })).toThrow("stale");
+    const commandCount = postMessage.mock.calls.length;
+    expect(() => first.destroy(first.geometry.triangle)).toThrow("Engine-owned built-in geometry");
+    expect(postMessage).toHaveBeenCalledTimes(commandCount);
+    expect(() => first.create.mesh({ geometry: "triangle" })).not.toThrow();
   });
 
   it("updates mesh resource usage transactionally across replacement and removal", () => {
