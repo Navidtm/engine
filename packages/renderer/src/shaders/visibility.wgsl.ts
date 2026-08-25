@@ -35,6 +35,7 @@ struct VisibilityParameters {
   run_count: u32,
   reserved_0: u32,
   reserved_1: u32,
+  frustum_planes: array<vec4f, 6>,
 }
 
 @group(0) @binding(0) var<uniform> camera: CameraData;
@@ -52,13 +53,7 @@ fn finite(value: f32) -> bool {
 }
 
 fn plane_contains(coefficients: vec4f, center: vec3f, radius: f32) -> bool {
-  let length_squared = dot(coefficients.xyz, coefficients.xyz);
-  if (!finite(length_squared) || length_squared <= 0.0) {
-    return true;
-  }
-  let inverse_length = inverseSqrt(length_squared);
-  return dot(coefficients.xyz * inverse_length, center) +
-    coefficients.w * inverse_length >= -radius;
+  return dot(coefficients.xyz, center) + coefficients.w >= -radius;
 }
 
 fn sphere_visible(center_radius: vec4f) -> bool {
@@ -66,19 +61,14 @@ fn sphere_visible(center_radius: vec4f) -> bool {
       !finite(center_radius.z) || !finite(center_radius.w)) {
     return true;
   }
-  let view_projection = camera.projection * camera.view;
-  let row_0 = vec4f(view_projection[0][0], view_projection[1][0], view_projection[2][0], view_projection[3][0]);
-  let row_1 = vec4f(view_projection[0][1], view_projection[1][1], view_projection[2][1], view_projection[3][1]);
-  let row_2 = vec4f(view_projection[0][2], view_projection[1][2], view_projection[2][2], view_projection[3][2]);
-  let row_3 = vec4f(view_projection[0][3], view_projection[1][3], view_projection[2][3], view_projection[3][3]);
   let center = center_radius.xyz;
   let radius = center_radius.w;
-  return plane_contains(row_3 + row_0, center, radius) &&
-    plane_contains(row_3 - row_0, center, radius) &&
-    plane_contains(row_3 + row_1, center, radius) &&
-    plane_contains(row_3 - row_1, center, radius) &&
-    plane_contains(row_2, center, radius) &&
-    plane_contains(row_3 - row_2, center, radius);
+  return plane_contains(parameters.frustum_planes[0], center, radius) &&
+    plane_contains(parameters.frustum_planes[1], center, radius) &&
+    plane_contains(parameters.frustum_planes[2], center, radius) &&
+    plane_contains(parameters.frustum_planes[3], center, radius) &&
+    plane_contains(parameters.frustum_planes[4], center, radius) &&
+    plane_contains(parameters.frustum_planes[5], center, radius);
 }
 
 @compute @workgroup_size(64)

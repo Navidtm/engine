@@ -7,6 +7,7 @@ import {
   executeFrameGraph,
 } from "./framegraph/graph.js";
 import { defineFramePass } from "./framegraph/pass.js";
+import { writeFrustumPlanes } from "./frustum-planes.js";
 import { BUILTIN_MESHES } from "./geometry/mesh-data.js";
 import { createPipelineCache, type PipelineCache } from "./pipeline/cache.js";
 import { getMeshPipeline } from "./pipeline/mesh.js";
@@ -14,11 +15,7 @@ import { createVisibilityPipelines, type VisibilityPipelines } from "./pipeline/
 import { requestAdapter } from "./webgpu/adapter.js";
 import { requestDevice } from "./webgpu/device.js";
 import { createMaterialRegistry, type MaterialRegistry } from "./webgpu/material-registry.js";
-import {
-  createMeshRegistry,
-  type GpuMesh,
-  type MeshRegistry,
-} from "./webgpu/mesh-registry.js";
+import { createMeshRegistry, type GpuMesh, type MeshRegistry } from "./webgpu/mesh-registry.js";
 import {
   createSurface,
   destroySurface,
@@ -42,7 +39,9 @@ const VISIBLE_SLOT_BYTES = Uint32Array.BYTES_PER_ELEMENT;
 const SLOT_RECORD_BYTES = 4 * Uint32Array.BYTES_PER_ELEMENT;
 const INDIRECT_WORDS = 5;
 const INDIRECT_BYTES = INDIRECT_WORDS * Uint32Array.BYTES_PER_ELEMENT;
-const VISIBILITY_PARAMETER_BYTES = 4 * Uint32Array.BYTES_PER_ELEMENT;
+const VISIBILITY_PARAMETER_WORDS = 28;
+const VISIBILITY_PARAMETER_BYTES = VISIBILITY_PARAMETER_WORDS * Uint32Array.BYTES_PER_ELEMENT;
+const FRUSTUM_PLANE_OFFSET = 4;
 const CAMERA_FLOATS = 32;
 const CAMERA_BYTES = CAMERA_FLOATS * Float32Array.BYTES_PER_ELEMENT;
 const BASIC_PIPELINE_ID = 1;
@@ -245,6 +244,8 @@ interface RendererState {
   readonly candidateRunIds: Uint32Array<ArrayBuffer>;
   readonly indirectWords: Uint32Array<ArrayBuffer>;
   readonly visibilityParameters: Uint32Array<ArrayBuffer>;
+  readonly visibilityParameterFloats: Float32Array<ArrayBuffer>;
+  readonly viewProjection: Float32Array<ArrayBuffer>;
   readonly runStarts: Uint32Array<ArrayBuffer>;
   readonly runCounts: Uint32Array<ArrayBuffer>;
   readonly runPipelines: Uint32Array<ArrayBuffer>;
@@ -440,6 +441,7 @@ export async function createMeshRenderer(
       depthLoadOp: "clear",
       depthStoreOp: "discard",
     };
+    const visibilityParameters = new Uint32Array(VISIBILITY_PARAMETER_WORDS);
     const state: RendererState = {
       device,
       instanceCapacity,
@@ -478,7 +480,9 @@ export async function createMeshRenderer(
       submissions: new Array<GPUCommandBuffer>(1),
       candidateRunIds: new Uint32Array(instanceCapacity),
       indirectWords: new Uint32Array(instanceCapacity * INDIRECT_WORDS),
-      visibilityParameters: new Uint32Array(4),
+      visibilityParameters,
+      visibilityParameterFloats: new Float32Array(visibilityParameters.buffer),
+      viewProjection: new Float32Array(16),
       runStarts: new Uint32Array(instanceCapacity),
       runCounts: new Uint32Array(instanceCapacity),
       runPipelines: new Uint32Array(instanceCapacity),
@@ -702,41 +706,60 @@ function uploadFrame(context: RendererFrameContext): void {
       recordUpload(state, "visibility", byteLength);
     }
   }
-  if (state.visibilityMode === "gpu" && frame.candidateSlotsDirty) {
-    prepareGpuRuns(state, frame);
-    state.visibilityParameters[0] = frame.candidateCount;
-    state.visibilityParameters[1] = state.runCount;
-    state.device.queue.writeBuffer(state.visibilityParameterBuffer, 0, state.visibilityParameters);
-    recordUpload(state, "visibility", VISIBILITY_PARAMETER_BYTES);
-    if (frame.candidateCount > 0) {
-      const candidateBytes = frame.candidateCount * VISIBLE_SLOT_BYTES;
-      state.device.queue.writeBuffer(
-        state.candidateSlotBuffer,
-        0,
-        frame.candidateSlots.buffer,
-        frame.candidateSlots.byteOffset,
-        candidateBytes,
-      );
-      state.device.queue.writeBuffer(
-        state.candidateRunIdBuffer,
-        0,
-        state.candidateRunIds.buffer,
-        0,
-        candidateBytes,
-      );
-      recordUpload(state, "visibility", candidateBytes * 2);
-      state.bufferWriteCount += 1;
+  if (state.visibilityMode === "gpu") {
+    let visibilityParametersDirty = false;
+    if (frame.candidateSlotsDirty) {
+      prepareGpuRuns(state, frame);
+      state.visibilityParameters[0] = frame.candidateCount;
+      state.visibilityParameters[1] = state.runCount;
+      visibilityParametersDirty = true;
+      if (frame.candidateCount > 0) {
+        const candidateBytes = frame.candidateCount * VISIBLE_SLOT_BYTES;
+        state.device.queue.writeBuffer(
+          state.candidateSlotBuffer,
+          0,
+          frame.candidateSlots.buffer,
+          frame.candidateSlots.byteOffset,
+          candidateBytes,
+        );
+        state.device.queue.writeBuffer(
+          state.candidateRunIdBuffer,
+          0,
+          state.candidateRunIds.buffer,
+          0,
+          candidateBytes,
+        );
+        recordUpload(state, "visibility", candidateBytes * 2);
+        state.bufferWriteCount += 1;
+      }
+      if (state.runCount > 0) {
+        const indirectBytes = state.runCount * INDIRECT_BYTES;
+        state.device.queue.writeBuffer(
+          state.indirectBuffer,
+          0,
+          state.indirectWords.buffer,
+          0,
+          indirectBytes,
+        );
+        recordUpload(state, "indirect", indirectBytes);
+      }
     }
-    if (state.runCount > 0) {
-      const indirectBytes = state.runCount * INDIRECT_BYTES;
-      state.device.queue.writeBuffer(
-        state.indirectBuffer,
-        0,
-        state.indirectWords.buffer,
-        0,
-        indirectBytes,
+    if (frame.cameraCount > 0 && frame.camerasDirty) {
+      writeFrustumPlanes(
+        state.visibilityParameterFloats,
+        FRUSTUM_PLANE_OFFSET,
+        frame.cameraData,
+        state.viewProjection,
       );
-      recordUpload(state, "indirect", indirectBytes);
+      visibilityParametersDirty = true;
+    }
+    if (visibilityParametersDirty) {
+      state.device.queue.writeBuffer(
+        state.visibilityParameterBuffer,
+        0,
+        state.visibilityParameters,
+      );
+      recordUpload(state, "visibility", VISIBILITY_PARAMETER_BYTES);
     }
   }
   if (frame.cameraCount > 0 && frame.camerasDirty) {
