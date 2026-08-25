@@ -77,6 +77,26 @@ export interface CameraOptions {
   readonly far?: number;
 }
 
+/** Validates the perspective projection range shared by every authoring entry point. */
+export function validateCameraPerspective(value: {
+  readonly verticalFov: number;
+  readonly near: number;
+  readonly far: number;
+}): void {
+  if (
+    !Number.isFinite(value.verticalFov) ||
+    !(value.verticalFov > 0 && value.verticalFov < Math.PI)
+  ) {
+    throw new RangeError("verticalFov must be a finite number between 0 and PI radians");
+  }
+  if (!Number.isFinite(value.near) || value.near <= 0) {
+    throw new RangeError("camera near must be a positive finite number");
+  }
+  if (!Number.isFinite(value.far) || value.far <= value.near) {
+    throw new RangeError("camera far must be finite and greater than near");
+  }
+}
+
 /**
  * Creates a validated perspective-camera descriptor with readonly TypeScript properties.
  *
@@ -86,12 +106,7 @@ export function camera(options: CameraOptions = {}): CameraComponent {
   const verticalFov = options.verticalFov ?? Math.PI / 3;
   const near = options.near ?? 0.1;
   const far = options.far ?? 1_000;
-  if (!(verticalFov > 0 && verticalFov < Math.PI)) {
-    throw new RangeError("verticalFov must be between 0 and PI radians");
-  }
-  if (!(near > 0 && far > near)) {
-    throw new RangeError("camera planes must satisfy 0 < near < far");
-  }
+  validateCameraPerspective({ verticalFov, near, far });
   return { kind: "camera", verticalFov, near, far } as const satisfies CameraComponent;
 }
 

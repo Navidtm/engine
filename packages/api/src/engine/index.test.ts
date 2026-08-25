@@ -239,7 +239,7 @@ describe("high-level engine API", () => {
         camera: { near: 10, far: 1 },
         workerFactory,
       }),
-    ).toThrow("Camera far");
+    ).toThrow("camera far");
     expect(workerFactory).not.toHaveBeenCalled();
   });
 

@@ -1,4 +1,4 @@
-import type { Color, Component, Quat } from "@lume/scene";
+import { type Color, type Component, type Quat, validateCameraPerspective } from "@lume/scene";
 
 import { type EngineCapacities, EngineCapacityError } from "../capacity.js";
 import { peekEntityIndex } from "../entity-lifecycle.js";
@@ -161,21 +161,6 @@ export function validateMeshOptions(state: EngineState, options: MeshOptions): v
     if (options.bounds.center !== undefined) {
       validateFiniteTuple("bounds center", options.bounds.center, 3);
     }
-  }
-}
-
-export function validateCameraPerspective(options: CameraPerspective): void {
-  if (!Number.isFinite(options.verticalFov) || options.verticalFov <= 0) {
-    throw new RangeError("Camera verticalFov must be a positive finite number.");
-  }
-  if (!Number.isFinite(options.near) || options.near <= 0) {
-    throw new RangeError("Camera near must be a positive finite number.");
-  }
-  if (!Number.isFinite(options.far) || options.far <= 0) {
-    throw new RangeError("Camera far must be a positive finite number.");
-  }
-  if (options.far <= options.near) {
-    throw new RangeError("Camera far must be greater than near.");
   }
 }
 

@@ -5,6 +5,7 @@ import {
   resolveCameraPerspective,
   resolveEngineBudgets,
   validateColor,
+  validateComponent,
   validateEngineCameraOptions,
 } from "./validation.js";
 
@@ -97,8 +98,14 @@ describe("engine validation", () => {
       far: 1_000,
     });
     expect(() => resolveCameraPerspective({ near: 2, far: 1 }, DEFAULT_CAMERA_PERSPECTIVE)).toThrow(
-      "Camera far",
+      "camera far",
     );
+    expect(() =>
+      resolveCameraPerspective({ verticalFov: Math.PI }, DEFAULT_CAMERA_PERSPECTIVE),
+    ).toThrow("verticalFov");
+    expect(() =>
+      validateComponent({ kind: "camera", verticalFov: Math.PI, near: 0.1, far: 1_000 }),
+    ).toThrow("verticalFov");
     expect(() => validateEngineCameraOptions({ rotation: [0, 0, 0, 0] })).toThrow(
       "rotation must be non-zero",
     );

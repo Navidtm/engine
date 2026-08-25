@@ -1,4 +1,11 @@
-export { bounds, camera, material, mesh, transform } from "./components.js";
+export {
+  bounds,
+  camera,
+  material,
+  mesh,
+  transform,
+  validateCameraPerspective,
+} from "./components.js";
 export type {
   BasicMaterialHandle,
   BoundsComponent,

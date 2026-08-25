@@ -12,6 +12,8 @@ describe("component constructors", () => {
 
   it("rejects invalid camera clipping planes", () => {
     expect(() => camera({ near: 10, far: 1 })).toThrow(RangeError);
+    expect(() => camera({ verticalFov: Math.PI })).toThrow(RangeError);
+    expect(() => camera({ far: Number.POSITIVE_INFINITY })).toThrow(RangeError);
   });
 
   it("rejects negative bounding spheres", () => {
