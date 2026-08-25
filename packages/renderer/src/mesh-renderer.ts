@@ -557,7 +557,12 @@ export async function createMeshRenderer(
         frameContext.frame = frame;
         frameContext.preparationStart = performance.now();
         frameContext.profileStages = profileStages;
-        executeFrameGraph(frameGraph, frameContext);
+        frameContext.encoder = undefined;
+        try {
+          executeFrameGraph(frameGraph, frameContext);
+        } finally {
+          frameContext.encoder = undefined;
+        }
       },
       resize: (nextSize) => resize(state, nextSize),
       stats: () => readStats(state),

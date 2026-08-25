@@ -296,6 +296,103 @@ describe("mesh renderer initialization ownership", () => {
 
     expect(renderer.stats().drawCalls).toBe(2);
   });
+
+  it("discards a frame encoder when encoding throws mid-frame", async () => {
+    vi.stubGlobal("GPUBufferUsage", {
+      MAP_READ: 1,
+      COPY_SRC: 2,
+      COPY_DST: 4,
+      UNIFORM: 8,
+      STORAGE: 16,
+      INDIRECT: 32,
+      VERTEX: 64,
+      INDEX: 128,
+    });
+    const computePass = {
+      setBindGroup: vi.fn(),
+      setPipeline: vi.fn(),
+      dispatchWorkgroups: vi.fn(),
+      end: vi.fn(),
+    };
+    const renderPass = {
+      setPipeline: vi.fn(),
+      setBindGroup: vi.fn(),
+      setVertexBuffer: vi.fn(),
+      setIndexBuffer: vi.fn(),
+      drawIndexedIndirect: vi.fn(),
+      end: vi.fn(),
+    };
+    const failedEncoder = {
+      beginComputePass: vi.fn(() => computePass),
+      beginRenderPass: vi.fn(() => {
+        throw new Error("encoding failed");
+      }),
+      finish: vi.fn(),
+    };
+    const replacementEncoder = {
+      beginComputePass: vi.fn(() => computePass),
+      beginRenderPass: vi.fn(() => renderPass),
+      finish: vi.fn(() => ({})),
+    };
+    const device = {
+      features: new Set<GPUFeatureName>(),
+      limits: {
+        maxStorageBufferBindingSize: 1_000_000,
+        maxBufferSize: 1_000_000,
+      },
+      queue: { writeBuffer: vi.fn(), submit: vi.fn() },
+      createBuffer: vi.fn((descriptor: GPUBufferDescriptor) => {
+        const size = Number(descriptor.size);
+        return {
+          size,
+          getMappedRange: vi.fn(() => new ArrayBuffer(size)),
+          unmap: vi.fn(),
+          destroy: vi.fn(),
+        };
+      }),
+      createBindGroup: vi.fn(() => ({})),
+      createCommandEncoder: vi
+        .fn()
+        .mockReturnValueOnce(failedEncoder)
+        .mockReturnValueOnce(replacementEncoder),
+      destroy: vi.fn(),
+      lost: new Promise<GPUDeviceLostInfo>(() => undefined),
+    } as unknown as GPUDevice;
+    const pipeline = {} as GPURenderPipeline;
+    mocks.requestAdapter.mockResolvedValueOnce({ features: new Set() });
+    mocks.requestDevice.mockResolvedValueOnce(device);
+    mocks.getMeshPipeline.mockResolvedValueOnce(pipeline);
+    mocks.createVisibilityPipelines.mockResolvedValueOnce({
+      bindGroupLayout: {},
+      reset: {},
+      cull: {},
+    });
+
+    const renderer = await createMeshRenderer(
+      {} as OffscreenCanvas,
+      { width: 1, height: 1, devicePixelRatio: 1 },
+      2,
+      { visibilityMode: "gpu" },
+    );
+    renderer.registerGeometry(1, "triangle");
+    renderer.registerBasicMaterial(1);
+    const frame = createRenderFrame(2);
+    frame.candidateCount = 1;
+    frame.candidateSlotsDirty = true;
+    frame.candidateGeometries[0] = 1;
+    frame.candidatePipelines[0] = 1;
+    frame.candidateMaterials[0] = 1;
+
+    expect(() => renderer.execute(frame)).toThrow("encoding failed");
+    frame.candidateCount = 0;
+    frame.candidateSlotsDirty = true;
+    renderer.execute(frame);
+
+    expect(device.createCommandEncoder).toHaveBeenCalledTimes(2);
+    expect(failedEncoder.beginRenderPass).toHaveBeenCalledTimes(1);
+    expect(replacementEncoder.beginRenderPass).toHaveBeenCalledTimes(1);
+    expect(device.queue.submit).toHaveBeenCalledTimes(1);
+  });
 });
 
 function createRenderFrame(capacity: number): RenderFrame {
