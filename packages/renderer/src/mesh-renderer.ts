@@ -545,6 +545,7 @@ export async function createMeshRenderer(
       },
       removeGeometry(handle) {
         if (!state.meshes.remove(handle)) throw new Error(`Unknown geometry handle: ${handle}`);
+        state.runCount = 0;
       },
       registerBasicMaterial: (handle) => state.materials.register(handle),
       removeBasicMaterial(handle) {
