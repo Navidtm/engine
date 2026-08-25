@@ -1,12 +1,14 @@
 import {
   allocateSharedRuntimeMemory,
   createDefaultWorker,
+  defineRuntimeGeometryLimits,
   supportsSharedRuntimeMemory,
   type WorkerToMainMessage,
 } from "@lume/runtime";
 
 import { createEngineCamera } from "../camera-api.js";
 import { createComponentCapacityState } from "../capacity.js";
+import { createGeometryLoadApi, GeometryLoadError } from "../geometry-load-api.js";
 import { createHighLevelApi } from "../resource-api.js";
 import { createBuiltinGeometryApi, createResourceState } from "../resource-lifecycle.js";
 import { createWorldApi } from "../world-api.js";
@@ -42,6 +44,9 @@ export type {
   EngineStatus,
   EngineTransportOptions,
   GeometryHandle,
+  GeometryLoadLimits,
+  GeometryLoadOptions,
+  LoadApi,
   MeshHandle,
   MeshOptions,
   PowerPreference,
@@ -70,6 +75,7 @@ export function createEngine(
   const world = createWorldApi(state);
   const engineCamera = createEngineCamera(state, world, config.camera);
   const highLevel = createHighLevelApi(state, world, geometry);
+  const load = createGeometryLoadApi(state, (error) => fail(state, error));
 
   state.worker.addEventListener("message", (event: MessageEvent<WorkerToMainMessage>) => {
     handleWorkerMessage(state, event.data);
@@ -80,6 +86,7 @@ export function createEngine(
 
   return {
     create: highLevel.create,
+    load,
     geometry,
     set: highLevel.set,
     world,
@@ -101,6 +108,10 @@ export function createEngine(
 function createEngineState(config: EngineConfig): EngineState {
   const budgets = resolveEngineBudgets(config);
   validateEngineCameraOptions(config.camera);
+  const geometryLimits =
+    config.geometryLimits === undefined
+      ? undefined
+      : defineRuntimeGeometryLimits(config.geometryLimits);
   return {
     config,
     worker: (config.workerFactory ?? createDefaultWorker)(),
@@ -126,6 +137,7 @@ function createEngineState(config: EngineConfig): EngineState {
       budgets.boundsCapacity,
     ),
     capacities: budgets.capacities,
+    geometryLimits,
     commandTransaction: undefined,
     nextEntityIndex: 0,
     freeEntityCount: 0,
@@ -135,8 +147,12 @@ function createEngineState(config: EngineConfig): EngineState {
     resizeObserver: undefined,
     statsRequests: new Map(),
     nextStatsRequest: 1,
+    geometryLoads: new Map(),
+    nextGeometryRequest: 1,
     structuralFallback: false,
     lifecycleEpoch: 0,
     runningIntent: false,
   };
 }
+
+export { GeometryLoadError };

@@ -102,10 +102,12 @@ with transactional GPU-buffer ownership and generational/capacity coverage.
 Phase 3 adds versioned worker load/abort/result messages, bounded fetch/decode
 transactions, immutable budget accounting, attempt-epoch cancellation, atomic
 renderer publication/rollback, typed failures, and external descriptor replay
-across device recovery. Public API/browser integration and controlled
-measurements remain pending. Textures/KTX2, materials, multi-primitive assets,
-hierarchy, streaming, caching, compression, and an offline optimizer remain
-outside Milestone 7.
+across device recovery. Phase 4 adds the public `engine.load.geometry()` facade,
+optional cancellation, typed errors, atomic ready-handle publication, terminal
+lifecycle rejection, and a browser integration example that verifies worker
+decode and the existing mesh/resource lifecycle. Controlled measurements remain
+pending. Textures/KTX2, materials, multi-primitive assets, hierarchy, streaming,
+caching, compression, and an offline optimizer remain outside Milestone 7.
 
 ## Known future bottlenecks
 

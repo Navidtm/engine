@@ -68,8 +68,12 @@ and transactional external geometry residency/removal/replay without coupling
 the renderer to `@lume/assets`. Phase 3 adds worker-owned bounded fetch/decode,
 attempt-epoch cancellation, Resource Coordinator descriptor ownership and byte
 accounting, atomic renderer publication/rollback, and unchanged-handle recovery
-replay. The public `engine.load.geometry()` facade and browser integration remain
-later Milestone 7 phases under
+replay. Phase 4 exposes `engine.load.geometry()` after initialization: the main
+thread owns only promise correlation and a private fixed-capacity handle mirror,
+publishes the opaque handle after a matching worker-ready response, and rejects
+pending promises on abort or terminal engine lifecycle. Fetch, validation,
+decoded bytes, replay descriptors, and GPU residency remain worker-owned. These
+Milestone 7 boundaries are governed by
 [ADR 011](../.agents/decisions/011-glb-geometry-ingestion.md) and
 [ADR 012](../.agents/decisions/012-async-geometry-loading.md).
 
@@ -219,6 +223,15 @@ published, so a foreign or stale handle cannot enter the transport stream.
 Scene constructors enforce the same contract for advanced authoring: transform
 vectors must be finite, quaternions must be finite and non-zero, and linear
 RGBA color channels must be finite values in the inclusive `[0, 1]` range.
+
+External geometry loading is enabled only by explicit immutable
+`EngineConfig.geometryLimits`; the engine deliberately supplies no unmeasured
+defaults. `engine.load.geometry(string | URL, { signal? })` resolves only after
+the renderer owns the geometry buffers, so the resulting `GeometryHandle`
+immediately follows the existing mesh usage, retirement, and device-replay
+contracts. Recoverable request failures surface as `GeometryLoadError` with a
+stable code and stage. Cancellation uses `name === "AbortError"` and is complete
+only after the worker confirms transaction cleanup.
 
 ## Failure model
 

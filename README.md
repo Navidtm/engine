@@ -6,9 +6,9 @@ data-oriented Rust core compiled to WebAssembly, a worker-owned WebGPU renderer,
 and a functional TypeScript API.
 
 The repository currently contains six completed foundation milestones. The
-geometry-only Asset Pipeline Foundation is in progress: its pure constrained-GLB
-decoder and validation contracts are implemented, while worker loading and GPU
-residency remain pending:
+geometry-only Asset Pipeline Foundation is in progress: its constrained-GLB
+decoder, worker transaction, GPU residency, replay, and public loading API are
+implemented; controlled measurements and the completion gate remain pending:
 
 - a generational-entity, sparse-set ECS in Rust;
 - allocation-free math primitives and reusable frame memory;
@@ -21,8 +21,10 @@ residency remain pending:
 - SharedArrayBuffer transform transport with a bulk WASM update boundary;
 - generation-safe partial transform publication, a structural SPSC ring, and
   transport metrics;
-- a renderer-independent, budgeted GLB 2.0 static-geometry decoder; and
-- a high-level functional TypeScript API plus six focused Vite examples.
+- a renderer-independent, budgeted GLB 2.0 static-geometry decoder;
+- worker-owned external geometry loading with atomic ready-handle publication;
+  and
+- a high-level functional TypeScript API plus seven focused Vite examples.
 
 See [the architecture notes](docs/architecture.md) and
 [the implementation roadmap](docs/roadmap.md) before extending the runtime.
@@ -35,6 +37,7 @@ See [the architecture notes](docs/architecture.md) and
 - `examples/transform-controls` — partial position updates through the public control API.
 - `examples/lifecycle` — handle destruction, generation changes, and safe slot recycling.
 - `examples/camera` — the engine-owned camera's position, rotation, and perspective controls.
+- `examples/geometry-loading` — public GLB loading, worker decode, and asset accounting.
 
 The [examples guide](examples/README.md) includes an execution command and learning goal for each sample.
 
@@ -136,6 +139,7 @@ mismatches fail initialization with the expected and actual versions.
 | `packages/core`         | Rust ECS, math, components, and reusable memory                    |
 | `packages/renderer`     | WebGPU device, surface, mesh ownership, pipeline cache, and passes |
 | `packages/scene`        | Public component constructors and geometry descriptors             |
+| `packages/assets`       | Pure constrained-GLB validation and geometry decoding              |
 | `packages/runtime/wasm` | Raw-WASM ABI over World and extracted RenderWorld                  |
 | `packages/runtime`      | Main-thread/worker protocol and worker orchestration               |
 | `packages/api`          | Functional browser-facing API                                      |

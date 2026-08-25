@@ -1,0 +1,54 @@
+:root {
+  color: #e9f1ff;
+  background: #07101f;
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  overflow: hidden;
+}
+
+#viewport {
+  display: block;
+  width: 100vw;
+  height: 100vh;
+}
+
+aside {
+  position: fixed;
+  top: 1rem;
+  left: 1rem;
+  min-width: 18rem;
+  padding: 1rem 1.15rem;
+  border: 1px solid #4f79a955;
+  border-radius: 0.8rem;
+  background: #07101fdd;
+  backdrop-filter: blur(12px);
+}
+
+h1 {
+  margin: 0 0 0.45rem;
+  font-size: 1rem;
+}
+
+p,
+output {
+  display: block;
+  margin: 0.2rem 0;
+  color: #a9bdd8;
+  font-size: 0.84rem;
+}
+
+#status[data-state="ready"] {
+  color: #83e5b2;
+}
+
+#status[data-state="error"] {
+  color: #ff9a9a;
+}

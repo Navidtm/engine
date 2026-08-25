@@ -1,4 +1,10 @@
-import type { EngineStats, RuntimeCommand, SharedRuntimeViews } from "@lume/runtime";
+import type {
+  EngineStats,
+  RuntimeCommand,
+  RuntimeGeometryLimits,
+  SharedRuntimeViews,
+} from "@lume/runtime";
+import type { GeometryHandle } from "@lume/scene";
 
 import type { ComponentCapacityState, EngineCapacities } from "../capacity.js";
 import type { ResourceState } from "../resource-lifecycle.js";
@@ -22,6 +28,7 @@ export interface EngineState {
   readonly resources: ResourceState;
   readonly components: ComponentCapacityState;
   readonly capacities: EngineCapacities;
+  readonly geometryLimits: Readonly<RuntimeGeometryLimits> | undefined;
   commandTransaction: RuntimeCommand[] | undefined;
   nextEntityIndex: number;
   freeEntityCount: number;
@@ -37,9 +44,20 @@ export interface EngineState {
     }
   >;
   nextStatsRequest: number;
+  readonly geometryLoads: Map<number, PendingGeometryLoad>;
+  nextGeometryRequest: number;
   structuralFallback: boolean;
   /** Monotonic control request used to reject stale worker acknowledgements. */
   lifecycleEpoch: number;
   /** Latest desired scheduling state, including an in-flight stop or restart. */
   runningIntent: boolean;
+}
+
+/** One main-thread correlation record; the handle is not public until worker readiness. */
+export interface PendingGeometryLoad {
+  readonly handle: GeometryHandle;
+  readonly raw: number;
+  readonly resolve: (handle: GeometryHandle) => void;
+  readonly reject: (error: Error) => void;
+  readonly removeAbortListener: () => void;
 }

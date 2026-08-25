@@ -1,4 +1,4 @@
-import type { EngineStats } from "@lume/runtime";
+import type { EngineStats, RuntimeGeometryLimits } from "@lume/runtime";
 import type {
   BasicMaterialHandle,
   Color,
@@ -12,6 +12,9 @@ import type {
 import type { EngineCapacities } from "../capacity.js";
 
 export type { BasicMaterialHandle, GeometryHandle } from "@lume/scene";
+
+/** Explicit worker geometry budgets; Milestone 7 intentionally supplies no defaults. */
+export type GeometryLoadLimits = RuntimeGeometryLimits;
 
 /** Lifecycle state exposed by an engine instance. */
 export type EngineStatus =
@@ -102,6 +105,8 @@ export interface EngineConfig {
   readonly camera?: EngineCameraOptions;
   /** Advanced SharedArrayBuffer and worker transport budgets. */
   readonly transport?: EngineTransportOptions;
+  /** Required budgets when using `engine.load.geometry()`; omitted means external loading is disabled. */
+  readonly geometryLimits?: GeometryLoadLimits;
   /** Prefers a high-performance (`"high"`) or power-efficient (`"low"`) adapter. */
   readonly powerPreference?: PowerPreference;
   /** Visibility backend; `auto` uses the measured CPU reference policy. */
@@ -202,6 +207,18 @@ export interface BuiltinGeometryApi {
   readonly triangle: GeometryHandle;
 }
 
+/** Options for one independent geometry load request. */
+export interface GeometryLoadOptions {
+  /** Cancels worker loading; aborting after readiness has no effect. */
+  readonly signal?: AbortSignal;
+}
+
+/** Asynchronous external resource loading available as `engine.load`. */
+export interface LoadApi {
+  /** Loads one constrained GLB geometry and resolves only after GPU residency is ready. */
+  geometry(source: string | URL, options?: GeometryLoadOptions): Promise<GeometryHandle>;
+}
+
 /** Batched transform setter available as `engine.set`. */
 export interface SetApi {
   /** Replaces supplied fields; an empty options object is an intentional no-op. */
@@ -245,6 +262,8 @@ export interface Engine {
   readonly capacities: EngineCapacities;
   /** High-level creation API. */
   readonly create: CreateApi;
+  /** Worker-owned external resource loading. */
+  readonly load: LoadApi;
   /** Typed handles for built-in geometry registered by this engine. */
   readonly geometry: BuiltinGeometryApi;
   /** Partial transform updates. */

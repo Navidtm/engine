@@ -19,11 +19,11 @@ Milestone 7 currently has accepted design and implementation in progress.
 | 1     | Implemented | `@lume/assets` contracts, decoder, fixtures, and regression suite |
 | 2     | Implemented | Renderer external geometry registration, lifecycle, and replay    |
 | 3     | Implemented | Worker transaction, budgets, cancellation, and recovery replay    |
-| 4     | Pending     | Public `engine.load.geometry()` API and browser integration       |
+| 4     | Implemented | Public `engine.load.geometry()` API and browser integration       |
 | 5     | Pending     | Controlled measurements, final documentation, and completion gate |
 
-Phases 1 through 3 do not make external geometry loadable through the public
-engine API yet; handle publication and browser integration remain Phase 4.
+Phases 1 through 4 provide the complete public loading path. Controlled
+measurement and the milestone completion gate remain Phase 5.
 
 ## Objective
 
@@ -58,7 +58,8 @@ Application URL
   `engine.load.geometry()`, worker-owned loading, optional abort, and atomic
   ready-handle publication.
 
-These decisions do not mark implementation complete.
+These decisions are implemented through Phase 4; measurement-gated completion
+remains pending.
 
 ## Implemented starting point
 
@@ -182,6 +183,27 @@ they add no frame-time polling or allocation. Diagnostics include pending loads,
 successes, failures, aborted loads, fetched encoded bytes, temporary
 reservations, retained decoded CPU bytes, and resident GPU geometry bytes.
 
+### Public loading — Phase 4 implemented
+
+`engine.load.geometry(source, { signal })` is available after initialization
+when explicit `geometryLimits` were supplied in `EngineConfig`. Relative string
+sources resolve against `document.baseURI`; `URL` values are accepted directly.
+The main thread reserves a private generational slot, correlates the worker
+transaction by request and complete handle, and installs the opaque public
+handle only after renderer residency succeeds.
+
+Failures reject with `GeometryLoadError`, whose stable `code` and `stage`
+identify format, budget, capacity, fetch, decode, upload, request, and lifecycle
+boundaries. Cancellation uses the same class with `name === "AbortError"` and
+waits for the worker's correlated cleanup result before releasing the slot.
+Engine failure and disposal reject every pending promise; late or duplicate
+results cannot publish a handle.
+
+The `geometry-loading` browser example exercises a deterministic constrained
+GLB through fetch, worker decode, renderer upload, mesh creation, and pull-based
+asset statistics. Its result proves the worker transaction completed rather
+than substituting a built-in geometry.
+
 ## Explicit non-goals
 
 Milestone 7 does not include:
@@ -236,7 +258,7 @@ or public API changes.
 Exit gate: concurrent, aborted, failed, late, and recovery-interleaved loads are
 transactional under deterministic state-machine tests.
 
-### Phase 4: Public API
+### Phase 4: Public API — implemented
 
 - Add `engine.load.geometry` and optional `AbortSignal` support.
 - Install public handles only after matching worker readiness.

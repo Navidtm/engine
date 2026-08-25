@@ -13,6 +13,7 @@ const enum ResourceStatus {
   Empty = 0,
   Ready = 1,
   Retired = 2,
+  Loading = 3,
 }
 
 type ResourceKind = "geometry" | "basic-material";
@@ -51,6 +52,12 @@ export interface PreparedMeshResources {
   readonly material: number;
 }
 
+/** Private main-thread reservation that becomes a public handle only after worker readiness. */
+export interface GeometryLoadReservation {
+  readonly handle: GeometryHandle;
+  readonly raw: number;
+}
+
 /** Allocates fixed-capacity main-thread mirrors for one engine's resource identities. */
 export function createResourceState(capacity: number, entityCapacity: number): ResourceState {
   return {
@@ -84,6 +91,61 @@ export function createBasicMaterialResource(state: EngineState, color: Color): B
     throw error;
   }
   return handle;
+}
+
+/** Reserves a complete geometry identity without installing a public owner handle. */
+export function reserveGeometryLoadResource(state: EngineState): GeometryLoadReservation {
+  const registry = state.resources.geometry;
+  ensureResourceSlotAvailable(state, "geometry");
+  const index = takeResourceSlot(registry, state.resources.capacity);
+  registry.states[index] = ResourceStatus.Loading;
+  const raw = packResource(index, registry.generations[index] ?? 0);
+  return { handle: Object.freeze({ kind: "geometry" }) as GeometryHandle, raw };
+}
+
+/** Atomically installs a ready public owner after the matching worker publication. */
+export function publishGeometryLoadResource(
+  state: EngineState,
+  reservation: GeometryLoadReservation,
+): void {
+  const registry = state.resources.geometry;
+  const index = resourceIndex(reservation.raw);
+  if (
+    registry.states[index] !== ResourceStatus.Loading ||
+    registry.generations[index] !== resourceGeneration(reservation.raw)
+  ) {
+    throw new Error("Geometry load reservation is stale or no longer pending.");
+  }
+  registry.states[index] = ResourceStatus.Ready;
+  state.resources.handles.set(reservation.handle, {
+    kind: "geometry",
+    raw: reservation.raw,
+    ownership: "application",
+    ownerReleased: false,
+  });
+}
+
+/** Releases a failed reservation, optionally mirroring a worker-consumed generation. */
+export function rollbackGeometryLoadResource(
+  state: EngineState,
+  reservation: GeometryLoadReservation,
+  generationConsumed: boolean,
+): void {
+  const registry = state.resources.geometry;
+  const index = resourceIndex(reservation.raw);
+  if (
+    registry.states[index] !== ResourceStatus.Loading ||
+    registry.generations[index] !== resourceGeneration(reservation.raw)
+  ) {
+    return;
+  }
+  registry.states[index] = ResourceStatus.Empty;
+  const generation = registry.generations[index] ?? 0;
+  if (generationConsumed) {
+    if (generation === RESOURCE_GENERATION_MASK) return;
+    registry.generations[index] = generation + 1;
+  }
+  registry.freeSlots[registry.freeSlotCount++] = index;
 }
 
 /** Validates new mesh edges without changing usage counts. */
@@ -219,10 +281,7 @@ function allocateHandle(
   }
   const registry = registryFor(state.resources, kind);
   ensureResourceSlotAvailable(state, kind);
-  const index =
-    registry.freeSlotCount > 0
-      ? reuseResourceSlot(registry, state.resources.capacity)
-      : registry.nextSlot++;
+  const index = takeResourceSlot(registry, state.resources.capacity);
   registry.states[index] = ResourceStatus.Ready;
   const generation = registry.generations[index] ?? 0;
   const handle = Object.freeze({ kind }) as ResourceHandle;
@@ -233,6 +292,10 @@ function allocateHandle(
     ownerReleased: false,
   });
   return handle;
+}
+
+function takeResourceSlot(registry: ResourceRegistryMirror, capacity: number): number {
+  return registry.freeSlotCount > 0 ? reuseResourceSlot(registry, capacity) : registry.nextSlot++;
 }
 
 function reuseResourceSlot(registry: ResourceRegistryMirror, capacity: number): number {

@@ -341,12 +341,22 @@ export function createResourceCoordinator(
         cancelled: false,
         finalized: false,
       };
-      replaceTemporaryReservation(attempt, initialReservation);
       geometryLoadEpochs[index] = attempt.epoch;
       geometry.status[index] = ResourceStatus.Loading;
       geometryAttempts[index] = attempt;
       geometryRequests.set(requestId, attempt);
       pendingLoads += 1;
+      try {
+        replaceTemporaryReservation(attempt, initialReservation);
+      } catch (error) {
+        finishAttempt(attempt);
+        geometry.status[index] = ResourceStatus.Empty;
+        failedLoads += 1;
+        const generation = geometry.generation[index] ?? 0;
+        geometry.generation[index] =
+          generation < GENERATION_MASK ? generation + 1 : GENERATION_MASK + 1;
+        throw error;
+      }
       return attempt;
     },
     prepareGeometryDecode(attempt, encodedBytes) {

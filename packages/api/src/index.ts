@@ -18,6 +18,9 @@ export type {
   EngineStatus,
   EngineTransportOptions,
   GeometryHandle,
+  GeometryLoadLimits,
+  GeometryLoadOptions,
+  LoadApi,
   MeshHandle,
   MeshOptions,
   PowerPreference,
@@ -27,6 +30,6 @@ export type {
   Vector3Control,
   WorldApi,
 } from "./engine/index.js";
-export { createEngine } from "./engine/index.js";
+export { createEngine, GeometryLoadError } from "./engine/index.js";
 export type { EngineStats, FrameCpuStageTimings } from "@lume/runtime";
 export type { Color, Quat, Vec2, Vec3, Vec4 } from "@lume/scene";

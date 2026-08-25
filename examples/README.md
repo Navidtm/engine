@@ -14,5 +14,6 @@ cross-origin-isolation headers required for the shared-memory transport.
 | Transform controls | `pnpm --filter @lume/example-transform-controls dev` | Position-only shared transform updates from a UI control.                        |
 | Entity lifecycle   | `pnpm --filter @lume/example-lifecycle dev`          | Destroy/recreate flow, generation changes, and safe slot recycling.              |
 | Camera controls    | `pnpm --filter @lume/example-camera dev`             | The engine camera's position, yaw quaternion, field of view, and clipping setup. |
+| Geometry loading   | `pnpm --filter @lume/example-geometry-loading dev`   | Public GLB loading, worker decode, typed errors, and asset accounting.           |
 
 For a complete production setup, serve over HTTPS with `Cross-Origin-Opener-Policy: same-origin` and `Cross-Origin-Embedder-Policy: require-corp`; otherwise Lume transparently uses its worker-message fallback.

@@ -1,4 +1,4 @@
-export type { WorldApi } from "./engine/index.js";
+export type { GeometryLoadLimits, GeometryLoadOptions, WorldApi } from "./engine/index.js";
 export type {
   BasicMaterialHandle,
   BoundsComponent,

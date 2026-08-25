@@ -327,7 +327,7 @@ describe("worker resource coordinator", () => {
     expect(coordinator.assetStats()).toEqual({
       pendingLoads: 0,
       successfulLoads: 1,
-      failedLoads: 1,
+      failedLoads: 2,
       abortedLoads: 0,
       fetchedEncodedBytes: 64,
       temporaryReservedBytes: 0,

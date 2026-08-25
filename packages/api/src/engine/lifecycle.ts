@@ -6,6 +6,7 @@ import {
 } from "@lume/runtime";
 import { getLumeWasmUrl } from "@lume/runtime/wasm-url";
 
+import { handleGeometryLoadMessage, rejectPendingGeometryLoads } from "../geometry-load-api.js";
 import type { EngineState } from "./state.js";
 import { post } from "./transport.js";
 import type { PowerPreference } from "./types.js";
@@ -60,6 +61,7 @@ export function initialize(state: EngineState): Promise<void> {
         devicePixelRatio: window.devicePixelRatio,
       },
       renderer,
+      ...(state.geometryLimits === undefined ? {} : { geometryLimits: state.geometryLimits }),
       ...(state.sharedMemory === undefined ? {} : { sharedMemory: state.sharedMemory.buffer }),
     },
   };
@@ -117,6 +119,12 @@ export function handleWorkerMessage(state: EngineState, message: WorkerToMainMes
       }
       break;
     }
+    case "geometry-ready":
+    case "geometry-failed": {
+      const protocolError = handleGeometryLoadMessage(state, message);
+      if (protocolError !== undefined) fail(state, protocolError);
+      break;
+    }
     case "error":
       fail(state, Object.assign(new Error(message.message), { stack: message.stack }));
       break;
@@ -162,6 +170,7 @@ export function dispose(state: EngineState): void {
   state.runningIntent = false;
   advanceLifecycleEpoch(state);
   state.status = "disposed";
+  rejectPendingGeometryLoads(state, "Engine disposed before geometry loading completed.");
   rejectStatsRequests(state, new Error("Engine disposed before statistics were returned."));
   post(state, { type: "dispose" });
 }
@@ -190,6 +199,7 @@ export function fail(state: EngineState, error: Error): void {
   state.resolveInit = undefined;
   state.rejectInit = undefined;
   state.config.onError?.(error);
+  rejectPendingGeometryLoads(state, "Engine failed before geometry loading completed.");
   rejectStatsRequests(state, error);
   post(state, { type: "dispose" });
 }

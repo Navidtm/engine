@@ -69,3 +69,59 @@ at most 4,096 generations and is then permanently retired instead of returning t
 generation zero. Churn-heavy applications should reuse live entities or budget
 enough entity slots; eventual retirement exhaustion reports the normal
 machine-readable entity-capacity error.
+
+## External geometry loading
+
+External loading is opt-in and requires application-specific byte and count
+budgets; Lume intentionally supplies no defaults before controlled Phase 5
+measurements. The accepted input is the constrained static GLB 2.0 profile
+documented by Milestone 7.
+
+```ts
+import { createEngine, GeometryLoadError } from "@lume/api";
+
+const engine = createEngine({
+  canvas,
+  geometryLimits: {
+    decode: {
+      maxEncodedBytes: 16 * 1024 * 1024,
+      maxDecodedBytes: 64 * 1024 * 1024,
+      maxVertices: 1_000_000,
+      maxIndices: 3_000_000,
+    },
+    maxTemporaryBytes: 128 * 1024 * 1024,
+    maxRetainedDecodedBytes: 256 * 1024 * 1024,
+    maxResidentGpuBytes: 256 * 1024 * 1024,
+  },
+});
+
+await engine.init();
+
+const controller = new AbortController();
+const abortOnPageHide = () => controller.abort();
+window.addEventListener("pagehide", abortOnPageHide, { once: true });
+try {
+  const geometry = await engine.load.geometry("/assets/product.glb", {
+    signal: controller.signal,
+  });
+  const mesh = engine.create.mesh({ geometry });
+
+  // Retiring the owner blocks new meshes; existing mesh usage stays valid.
+  engine.destroy(geometry);
+  engine.destroy(mesh);
+} catch (error) {
+  if (error instanceof GeometryLoadError) {
+    console.error(error.name, error.code, error.stage, error.message);
+  }
+} finally {
+  window.removeEventListener("pagehide", abortOnPageHide);
+}
+
+// Rejects any still-pending loads and releases engine ownership.
+engine.dispose();
+```
+
+The promise resolves only after worker fetch/decode and GPU upload have
+completed. `GeometryLoadError.code` and `.stage` are stable diagnostics;
+cancellation reports the same typed error with `name === "AbortError"`.
+Destroying a loaded handle uses the normal deferred resource lifecycle.
