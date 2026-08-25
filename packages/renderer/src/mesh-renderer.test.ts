@@ -5,13 +5,17 @@ import type * as SurfaceModule from "./webgpu/surface.js";
 
 const mocks = vi.hoisted(() => ({
   destroySurface: vi.fn(),
+  createMeshPipelineLayout: vi.fn(() => ({ bindGroupLayout: {}, pipelineLayout: {} })),
   getMeshPipeline: vi.fn(),
   createVisibilityPipelines: vi.fn(),
   requestAdapter: vi.fn(),
   requestDevice: vi.fn(),
 }));
 
-vi.mock("./pipeline/mesh.js", () => ({ getMeshPipeline: mocks.getMeshPipeline }));
+vi.mock("./pipeline/mesh.js", () => ({
+  createMeshPipelineLayout: mocks.createMeshPipelineLayout,
+  getMeshPipeline: mocks.getMeshPipeline,
+}));
 vi.mock("./pipeline/visibility.js", () => ({
   createVisibilityPipelines: mocks.createVisibilityPipelines,
 }));

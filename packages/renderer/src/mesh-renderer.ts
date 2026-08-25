@@ -10,7 +10,7 @@ import { defineFramePass } from "./framegraph/pass.js";
 import { writeFrustumPlanes } from "./frustum-planes.js";
 import { BUILTIN_MESHES } from "./geometry/mesh-data.js";
 import { createPipelineCache, type PipelineCache } from "./pipeline/cache.js";
-import { getMeshPipeline } from "./pipeline/mesh.js";
+import { createMeshPipelineLayout, getMeshPipeline } from "./pipeline/mesh.js";
 import { createVisibilityPipelines, type VisibilityPipelines } from "./pipeline/visibility.js";
 import { requestAdapter } from "./webgpu/adapter.js";
 import { requestDevice } from "./webgpu/device.js";
@@ -341,7 +341,13 @@ export async function createMeshRenderer(
     validateStorageBufferSize(device.limits, "indirect command", indirectBytes);
 
     surface = createSurface(device, canvas, size, options.alphaMode ?? "opaque");
-    const pipeline = await getMeshPipeline(device, pipelineCache, surface.format);
+    const meshPipelineLayout = createMeshPipelineLayout(device);
+    const pipeline = await getMeshPipeline(
+      device,
+      pipelineCache,
+      surface.format,
+      meshPipelineLayout.pipelineLayout,
+    );
     const visibilityPipelines = await createVisibilityPipelines(device);
     meshes = createMeshRegistry(device, resourceCapacity);
     materials = createMaterialRegistry(resourceCapacity);
@@ -427,7 +433,7 @@ export async function createMeshRenderer(
     });
     const bindGroup = device.createBindGroup({
       label: "Lume frame bind group",
-      layout: pipeline.getBindGroupLayout(0),
+      layout: meshPipelineLayout.bindGroupLayout,
       entries: [
         { binding: 0, resource: { buffer: cameraBuffer } },
         { binding: 1, resource: { buffer: instanceBuffer } },
