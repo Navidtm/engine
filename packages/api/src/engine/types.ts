@@ -97,7 +97,7 @@ export interface EngineConfig {
   readonly wasmUrl?: string | URL;
   /** Maximum application-owned entity slots, from 1 through 1,048,575. */
   readonly entityCapacity?: number;
-  /** Maximum slots in each typed resource registry; defaults to `min(max(entityCapacity, 2), 1,024)`. */
+  /** Maximum non-zero slots per resource registry; two geometry slots are reserved for built-ins. */
   readonly resourceCapacity?: number;
   /** Explicit fixed component budgets. */
   readonly componentCapacities?: EngineComponentCapacityOptions;

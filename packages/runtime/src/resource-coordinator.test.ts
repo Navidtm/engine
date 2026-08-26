@@ -68,6 +68,29 @@ function dependencies() {
 }
 
 describe("worker resource coordinator", () => {
+  it("keeps mandatory built-ins outside external geometry residency budgets", () => {
+    const coordinator = createResourceCoordinator(4, 4, {
+      ...GEOMETRY_LIMITS,
+      maxResidentGpuBytes: 1,
+    });
+    const { core, renderer } = dependencies();
+
+    coordinator.apply(
+      { type: "create-geometry", handle: 1, builtin: "triangle" },
+      core,
+      renderer,
+      1,
+    );
+    coordinator.apply({ type: "create-geometry", handle: 2, builtin: "cube" }, core, renderer, 1);
+    expect(coordinator.assetStats().residentGpuBytes).toBe(0);
+
+    const attempt = coordinator.beginGeometryLoad(1, 3);
+    coordinator.prepareGeometryDecode(attempt, 32);
+    expect(() => coordinator.commitGeometryLoad(attempt, decodedGeometry(), renderer)).toThrow(
+      "configured GPU budget",
+    );
+  });
+
   it("accepts the engine-owned entity-zero camera lifecycle", () => {
     const coordinator = createResourceCoordinator(8);
     const { core, renderer } = dependencies();

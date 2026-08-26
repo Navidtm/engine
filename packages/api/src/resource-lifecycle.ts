@@ -243,7 +243,7 @@ export function ensureResourceSlotAvailable(
   if (registry.freeSlotCount > 0 || registry.nextSlot < state.resources.capacity) return;
   throw new EngineCapacityError(
     kind === "basic-material" ? "material" : "geometry",
-    state.resources.capacity - 1,
+    kind === "geometry" ? state.resources.capacity - 3 : state.resources.capacity - 1,
   );
 }
 

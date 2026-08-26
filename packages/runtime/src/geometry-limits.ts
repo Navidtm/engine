@@ -7,7 +7,7 @@ export interface RuntimeGeometryLimits {
   readonly maxTemporaryBytes: number;
   /** Maximum decoded arrays retained by ready external geometry records. */
   readonly maxRetainedDecodedBytes: number;
-  /** Maximum renderer buffer bytes owned by all geometry records. */
+  /** Maximum renderer buffer bytes owned by ready external geometry records. */
   readonly maxResidentGpuBytes: number;
 }
 

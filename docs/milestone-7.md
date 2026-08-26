@@ -172,7 +172,7 @@ Runtime initialization now defines immutable engine-level limits for:
 - maximum decoded geometry bytes per request;
 - total retained decoded geometry bytes;
 - geometry registry capacity; and
-- renderer GPU geometry bytes.
+- renderer GPU bytes owned by ready external geometry records.
 
 Admission reserves estimated peak bytes before decode/upload. Failure is typed
 and deterministic. No production defaults are selected before committed fixture

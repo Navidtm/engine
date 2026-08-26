@@ -106,7 +106,7 @@ export function resolveEngineBudgets(config: EngineConfig): EngineBudgets {
       meshRenderers: userMeshRendererCapacity,
       cameras: userCameraCapacity,
       materials: userResourceCapacity,
-      geometries: userResourceCapacity,
+      geometries: userResourceCapacity - 2,
       bounds: userBoundsCapacity,
       renderInstances: userEntityCapacity,
       renderCameras: userCameraCapacity,

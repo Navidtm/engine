@@ -7,10 +7,6 @@ import type { WasmCore } from "./wasm.js";
 
 const INDEX_MASK = 0x000f_ffff;
 const GENERATION_MASK = 0x0fff;
-const TRIANGLE_GPU_BYTES =
-  3 * 6 * Float32Array.BYTES_PER_ELEMENT + 3 * Uint32Array.BYTES_PER_ELEMENT;
-const CUBE_GPU_BYTES = 24 * 6 * Float32Array.BYTES_PER_ELEMENT + 36 * Uint32Array.BYTES_PER_ELEMENT;
-
 const enum ResourceStatus {
   Empty = 0,
   Loading = 1,
@@ -187,15 +183,11 @@ export function createResourceCoordinator(
       switch (command.type) {
         case "create-geometry": {
           preflightCreate(geometry, command.handle);
-          const gpuBytes = command.builtin === "triangle" ? TRIANGLE_GPU_BYTES : CUBE_GPU_BYTES;
-          assertResidentGpuBudget(geometryLimits, residentGpuBytes, gpuBytes);
           renderer.registerGeometry(command.handle, command.builtin);
           commitCreate(geometry, command.handle);
           const index = resourceIndex(command.handle);
           geometryKind[index] =
             command.builtin === "triangle" ? GeometryKind.Triangle : GeometryKind.Cube;
-          geometryGpuBytes[index] = gpuBytes;
-          residentGpuBytes += gpuBytes;
           return;
         }
         case "create-basic-material": {

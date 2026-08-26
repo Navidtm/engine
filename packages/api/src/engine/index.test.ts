@@ -28,7 +28,7 @@ describe("high-level engine API", () => {
       meshRenderers: 1,
       cameras: 1,
       materials: 3,
-      geometries: 3,
+      geometries: 1,
       bounds: 1,
       renderInstances: 4,
       renderCameras: 1,

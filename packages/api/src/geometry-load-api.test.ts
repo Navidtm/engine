@@ -223,6 +223,26 @@ describe("public geometry loading", () => {
     expect(workerFactory).not.toHaveBeenCalled();
   });
 
+  it("reports and enforces external geometry capacity after built-in reservations", async () => {
+    const harness = createWorkerHarness();
+    const engine = await initializedEngine(harness, LIMITS, 4);
+    expect(engine.capacities.geometries).toBe(2);
+
+    const first = engine.load.geometry("first-capacity.glb");
+    const firstRequest = requiredLoadMessage(harness.posted);
+    const second = engine.load.geometry("second-capacity.glb");
+    const secondRequest = requiredLoadMessage(harness.posted);
+    await expect(engine.load.geometry("overflow.glb")).rejects.toMatchObject({
+      code: "LUME_ASSET_CAPACITY_EXHAUSTED",
+      stage: "request",
+    });
+    expect(loadMessages(harness.posted)).toHaveLength(2);
+
+    harness.receive(failedMessage(firstRequest, "LUME_ASSET_FORMAT", "geometry"));
+    harness.receive(failedMessage(secondRequest, "LUME_ASSET_FORMAT", "geometry"));
+    await Promise.allSettled([first, second]);
+  });
+
   it("rejects the triggering promise when ready-handle publication fails", () => {
     const reject = vi.fn();
     const onError = vi.fn();
