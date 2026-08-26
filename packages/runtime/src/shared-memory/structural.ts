@@ -44,7 +44,7 @@ export interface SharedCommandDecoder {
 /** Publishes one fixed-width structural command; false means the bounded ring is full. */
 export function writeSharedCommand(views: SharedRuntimeViews, command: RuntimeCommand): boolean {
   if (Atomics.load(views.header, SharedHeader.CommandPending) >= views.layout.commandCapacity) {
-    Atomics.add(views.header, SharedHeader.DroppedCommands, 1);
+    Atomics.add(views.header, SharedHeader.StructuralCommandOverflows, 1);
     return false;
   }
   const tail = Atomics.load(views.header, SharedHeader.CommandTail);

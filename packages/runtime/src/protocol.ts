@@ -1,10 +1,10 @@
-import type { AssetErrorCode, AssetErrorStage, GeometryBounds } from "@lume/assets";
+import type { AssetErrorCode, AssetErrorStage } from "@lume/assets";
 import type { RendererOptions, SurfaceSize } from "@lume/renderer";
 
 import type { RuntimeGeometryLimits } from "./geometry-limits.js";
 
 /** Version checked before a main thread and worker exchange runtime messages. */
-export const RUNTIME_PROTOCOL_VERSION = 13;
+export const RUNTIME_PROTOCOL_VERSION = 14;
 
 /** Transfer-safe typed failure returned for one correlated geometry request. */
 export interface GeometryLoadErrorPayload {
@@ -119,8 +119,10 @@ export interface EngineStats {
     readonly bytesUploaded: number;
     /** Current pending structural-command or transform queue depth. */
     readonly queueDepth: number;
-    /** Structural commands rejected because the bounded ring was full. */
+    /** @deprecated Commands fall back to messages and are not dropped. Always zero. */
     readonly droppedCommands: number;
+    /** Structural-ring overflow attempts preserved through ordered message fallback. */
+    readonly structuralCommandOverflows: number;
     /** Transform publications routed to fallback because the dirty ring was full. */
     readonly droppedTransforms: number;
   };
@@ -250,7 +252,6 @@ export type WorkerToMainMessage =
       readonly protocolVersion: number;
       readonly requestId: number;
       readonly handle: number;
-      readonly bounds: GeometryBounds;
     }
   | {
       readonly type: "geometry-failed";

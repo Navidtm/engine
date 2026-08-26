@@ -7,8 +7,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { handleWorkerMessage } from "./engine/lifecycle.js";
 import type { EngineState } from "./engine/state.js";
+import { rejectPendingGeometryLoads } from "./geometry-load-api.js";
 import { createEngine, GeometryLoadError, type GeometryLoadLimits } from "./index.js";
-import { createResourceState } from "./resource-lifecycle.js";
+import { createResourceState, reserveGeometryLoadResource } from "./resource-lifecycle.js";
 
 const LIMITS: GeometryLoadLimits = {
   decode: {
@@ -46,7 +47,6 @@ describe("public geometry loading", () => {
       protocolVersion: RUNTIME_PROTOCOL_VERSION,
       requestId: request.requestId,
       handle: request.handle,
-      bounds: { min: [0, 0, 0], max: [1, 1, 0] },
     });
     const geometry = await loading;
     const mesh = engine.create.mesh({ geometry });
@@ -208,6 +208,41 @@ describe("public geometry loading", () => {
     );
   });
 
+  it("rejects blank sources before reserving or posting a load", async () => {
+    const harness = createWorkerHarness();
+    const engine = await initializedEngine(harness, LIMITS);
+    const messageCount = harness.posted.length;
+
+    await expect(engine.load.geometry("  \n\t ")).rejects.toMatchObject({
+      name: "GeometryLoadError",
+      code: "LUME_ASSET_FORMAT",
+      stage: "request",
+    });
+    expect(harness.posted).toHaveLength(messageCount);
+  });
+
+  it("rolls back loading mirror slots when all pending loads are rejected", () => {
+    const state = {
+      resources: createResourceState(2, 1),
+      geometryLoads: new Map(),
+    } as unknown as EngineState;
+    const reservation = reserveGeometryLoadResource(state);
+    const reject = vi.fn();
+    state.geometryLoads.set(1, {
+      ...reservation,
+      resolve: vi.fn(),
+      reject,
+      removeAbortListener: vi.fn(),
+      abortRequested: false,
+    });
+
+    rejectPendingGeometryLoads(state, "fixture shutdown");
+
+    expect(reject).toHaveBeenCalledOnce();
+    expect(state.geometryLoads).toHaveLength(0);
+    expect(reserveGeometryLoadResource(state).raw).toBe(reservation.raw);
+  });
+
   it("validates explicit geometry budgets before creating worker resources", () => {
     const workerFactory = vi.fn();
     expect(() =>
@@ -278,7 +313,6 @@ describe("public geometry loading", () => {
       protocolVersion: RUNTIME_PROTOCOL_VERSION,
       requestId: 17,
       handle: 1,
-      bounds: { min: [0, 0, 0], max: [1, 1, 0] },
     });
 
     expect(state.status).toBe("failed");
@@ -387,7 +421,6 @@ function readyMessage(
     protocolVersion: RUNTIME_PROTOCOL_VERSION,
     requestId: request.requestId,
     handle: request.handle,
-    bounds: { min: [0, 0, 0], max: [1, 1, 0] },
   };
 }
 

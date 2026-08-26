@@ -295,22 +295,58 @@ describe("worker geometry loading transaction", () => {
     expect(fetch).toHaveBeenCalledTimes(1);
     expect(coordinator.assetStats()).toMatchObject({ pendingLoads: 0, failedLoads: 1 });
   });
+
+  it("cancels an unread response body after an unsuccessful HTTP status", async () => {
+    const coordinator = createResourceCoordinator(4, 4, LIMITS);
+    const failedResponse = new Response(new Uint8Array(32), { status: 404 });
+    const cancel = vi.spyOn(requiredBody(failedResponse), "cancel");
+    const posted: WorkerToMainMessage[] = [];
+    const loader = createGeometryLoader({
+      coordinator,
+      limits: LIMITS,
+      fetch: vi.fn(async () => failedResponse),
+      acquireRenderer: vi.fn(async () => renderer()),
+      postMessage: (message) => posted.push(message),
+    });
+
+    loader.load(loadMessage(10, 1, "https://assets.test/missing.glb"));
+
+    await vi.waitFor(() => expect(posted).toHaveLength(1));
+    expect(cancel).toHaveBeenCalledOnce();
+    expect(posted[0]).toMatchObject({
+      type: "geometry-failed",
+      error: { code: "LUME_ASSET_NETWORK", stage: "fetch" },
+    });
+  });
 });
 
 describe("bounded geometry response reading", () => {
   it("rejects declared and streamed bytes beyond the configured limit", async () => {
     const signal = new AbortController().signal;
-    await expect(
-      readGeometryResponse(
-        new Response(new Uint8Array(8), { headers: { "content-length": "9" } }),
-        8,
-        signal,
-      ),
-    ).rejects.toMatchObject({ code: "LUME_ASSET_BUDGET_EXCEEDED" });
+    const declaredOversize = new Response(new Uint8Array(8), {
+      headers: { "content-length": "9" },
+    });
+    const cancel = vi.spyOn(requiredBody(declaredOversize), "cancel");
+    await expect(readGeometryResponse(declaredOversize, 8, signal)).rejects.toMatchObject({
+      code: "LUME_ASSET_BUDGET_EXCEEDED",
+    });
+    expect(cancel).toHaveBeenCalledOnce();
 
     await expect(readGeometryResponse(response(0, 9), 8, signal)).rejects.toMatchObject({
       code: "LUME_ASSET_BUDGET_EXCEEDED",
     });
+  });
+
+  it("cancels the body before rejecting an invalid Content-Length", async () => {
+    const invalid = new Response(new Uint8Array(8), {
+      headers: { "content-length": "not-a-number" },
+    });
+    const cancel = vi.spyOn(requiredBody(invalid), "cancel");
+
+    await expect(
+      readGeometryResponse(invalid, 8, new AbortController().signal),
+    ).rejects.toMatchObject({ code: "LUME_ASSET_FORMAT", stage: "fetch" });
+    expect(cancel).toHaveBeenCalledOnce();
   });
 });
 
@@ -331,4 +367,9 @@ function abortMessage(requestId: number, handle: number) {
     requestId,
     handle,
   };
+}
+
+function requiredBody(response: Response): ReadableStream<Uint8Array> {
+  if (response.body === null) throw new Error("Expected a response body.");
+  return response.body;
 }

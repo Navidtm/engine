@@ -124,6 +124,7 @@ async function executeLoad(
     const response = await dependencies.fetch(source, { signal: attempt.signal });
     assertCurrent(dependencies.coordinator, attempt);
     if (!response.ok) {
+      await cancelResponseBody(response);
       throw new AssetError(
         "LUME_ASSET_NETWORK",
         "fetch",
@@ -155,7 +156,6 @@ async function executeLoad(
       protocolVersion: RUNTIME_PROTOCOL_VERSION,
       requestId: message.requestId,
       handle: message.handle,
-      bounds: descriptor.bounds,
     });
   } catch (error) {
     const aborted = attempt.signal.aborted || isAbortError(error);
@@ -181,9 +181,13 @@ export async function readGeometryResponse(
   if (declaredLength !== null) {
     const parsedLength = Number(declaredLength);
     if (!Number.isSafeInteger(parsedLength) || parsedLength < 0) {
+      await cancelResponseBody(response);
       throw new AssetError("LUME_ASSET_FORMAT", "fetch", "Invalid geometry Content-Length header.");
     }
-    if (parsedLength > maxEncodedBytes) encodedBudgetExceeded();
+    if (parsedLength > maxEncodedBytes) {
+      await cancelResponseBody(response);
+      encodedBudgetExceeded();
+    }
   }
 
   if (response.body === null) {
@@ -217,6 +221,11 @@ export async function readGeometryResponse(
     offset += chunk.byteLength;
   }
   return joined.buffer;
+}
+
+async function cancelResponseBody(response: Response): Promise<void> {
+  if (response.body === null) return;
+  await response.body.cancel().catch(() => undefined);
 }
 
 function assertCurrent(coordinator: ResourceCoordinator, attempt: GeometryLoadAttempt): void {

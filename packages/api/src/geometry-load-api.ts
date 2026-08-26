@@ -106,6 +106,7 @@ export function rejectPendingGeometryLoads(state: EngineState, message: string):
   const error = new GeometryLoadError("LUME_ASSET_ABORTED", "lifecycle", message);
   for (const pending of state.geometryLoads.values()) {
     pending.removeAbortListener();
+    rollbackGeometryLoadResource(state, pending as GeometryLoadReservation, false);
     pending.reject(error);
   }
   state.geometryLoads.clear();
@@ -208,6 +209,13 @@ function requireGeometryLoadReady(state: EngineState): void {
 function resolveGeometrySource(source: string | URL): string {
   if (typeof source !== "string" && !(source instanceof URL)) {
     throw new TypeError("Geometry source must be a string or URL.");
+  }
+  if (typeof source === "string" && source.trim().length === 0) {
+    throw new GeometryLoadError(
+      "LUME_ASSET_FORMAT",
+      "request",
+      "Geometry source must be a non-empty URL.",
+    );
   }
   try {
     return new URL(source, document.baseURI).href;

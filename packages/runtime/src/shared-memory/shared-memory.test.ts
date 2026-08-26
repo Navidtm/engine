@@ -301,7 +301,7 @@ describe("shared runtime memory", () => {
       }
     });
     expect(received).toEqual([StructuralOpcode.Spawn, 3, StructuralOpcode.AddCamera, 3]);
-    expect(Atomics.load(views.header, SharedHeader.DroppedCommands)).toBe(1);
+    expect(Atomics.load(views.header, SharedHeader.StructuralCommandOverflows)).toBe(1);
     expect(Atomics.load(views.header, SharedHeader.CommandPending)).toBe(0);
   });
 

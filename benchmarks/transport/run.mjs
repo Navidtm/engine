@@ -143,7 +143,7 @@ function benchmarkStructuralRing(commands) {
     publishMs,
     drainMs: performance.now() - drainStarted,
     drained,
-    droppedCommands: 0,
+    structuralCommandOverflows: 0,
     allocations: 0,
     checksum,
   };

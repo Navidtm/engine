@@ -83,8 +83,8 @@ command record. Publishing the tail is the release point; consuming the head is
 the acquire point. Commands are applied in FIFO order before transform ranges so
 a newly created entity exists before its component data arrives.
 
-If the ring is full, the write fails explicitly and increments
-`droppedCommands`. The worker drains older shared structural and transform
+If the ring is full, the shared write fails explicitly and increments
+`structuralCommandOverflows`. The worker drains older shared structural and transform
 publications before applying the attempted command; all later structural and
 transform authoring then uses the ordered message stream. Initialization batches
 remain message based because they can exceed the runtime ring before the worker
@@ -109,7 +109,8 @@ queue depth:
 - `dirtyRanges`: transform ranges applied by the worker;
 - `bytesUploaded`: bytes copied into WebAssembly staging;
 - `queueDepth`: pending transform plus structural records;
-- `droppedCommands`: structural-ring overflow attempts;
+- `structuralCommandOverflows`: structural-ring overflow attempts preserved by fallback;
+- `droppedCommands`: deprecated compatibility counter that remains zero;
 - `droppedTransforms`: transform dirty-ring overflow attempts.
 
 These values make transport regressions observable without a profiler and are

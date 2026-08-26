@@ -37,7 +37,7 @@ export const enum SharedHeader {
   CommandHead = 9,
   CommandTail = 10,
   CommandPending = 11,
-  DroppedCommands = 12,
+  StructuralCommandOverflows = 12,
   SharedWrites = 13,
   Reserved = 14,
   CommandCapacity = 15,

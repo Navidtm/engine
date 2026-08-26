@@ -183,7 +183,7 @@ async function benchmarkStructuralRing(commands: number) {
     transport: "structural-spsc-ring",
     commands,
     updateMs: performance.now() - started,
-    droppedCommands: 0,
+    structuralCommandOverflows: 0,
     droppedTransforms: 0,
     estimatedAllocations: 0,
   };

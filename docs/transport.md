@@ -47,7 +47,8 @@ adding messages to the normal shared-memory path.
 - `dirtyRanges`: cumulative ranges applied;
 - `bytesUploaded`: cumulative SAB-to-WASM staging bytes;
 - `queueDepth`: current transform plus structural records;
-- `droppedCommands`: structural ring overflow attempts handled by fallback;
+- `structuralCommandOverflows`: structural ring overflow attempts handled by fallback;
+- `droppedCommands`: deprecated compatibility counter that remains zero;
 - `droppedTransforms`: transform dirty-ring overflow attempts handled by fallback.
 
 ## Benchmark results

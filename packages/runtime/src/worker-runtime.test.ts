@@ -481,6 +481,8 @@ describe("worker runtime resource ownership", () => {
     );
     expect(initial?.value.timings.cpuStages.sampleCount).toBe(0);
     expect(initial?.value.transport.droppedTransforms).toBe(3);
+    expect(initial?.value.transport.droppedCommands).toBe(0);
+    expect(initial?.value.transport.structuralCommandOverflows).toBe(0);
 
     callbacks[0]?.(16);
     expect(core.update).toHaveBeenLastCalledWith(true);

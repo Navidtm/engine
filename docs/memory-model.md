@@ -189,7 +189,7 @@ generation because no external handle crossed the ownership boundary.
 The transform queue is bounded by `transport.transformCapacity`; dirty-bit
 coalescing means it cannot exceed one pending entry per slot. The structural
 queue is separately bounded by `transport.structuralCommandCapacity`.
-Structural overflow increments `droppedCommands`. Before applying the attempted
+Structural overflow increments `structuralCommandOverflows`. Before applying the attempted
 command from `postMessage`, the worker drains older shared structural commands
 and transform publications. The attempted command and all later structural and
 transform authoring then use that FIFO message stream, so operations cannot
