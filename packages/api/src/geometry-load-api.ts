@@ -74,8 +74,6 @@ export function handleGeometryLoadMessage(
   if (message.protocolVersion !== RUNTIME_PROTOCOL_VERSION || message.handle !== pending.raw) {
     return new Error("Geometry load response violated protocol correlation.");
   }
-  state.geometryLoads.delete(message.requestId);
-  pending.removeAbortListener();
   const reservation = pending as GeometryLoadReservation;
   if (message.type === "geometry-ready") {
     try {
@@ -83,9 +81,13 @@ export function handleGeometryLoadMessage(
     } catch (error) {
       return error instanceof Error ? error : new Error(String(error));
     }
+    state.geometryLoads.delete(message.requestId);
+    pending.removeAbortListener();
     pending.resolve(pending.handle);
     return undefined;
   }
+  state.geometryLoads.delete(message.requestId);
+  pending.removeAbortListener();
   rollbackGeometryLoadResource(state, reservation, true);
   pending.reject(
     new GeometryLoadError(message.error.code, message.error.stage, message.error.message),

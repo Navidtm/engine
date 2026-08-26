@@ -5,7 +5,10 @@ import {
 } from "@lume/runtime";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { handleWorkerMessage } from "./engine/lifecycle.js";
+import type { EngineState } from "./engine/state.js";
 import { createEngine, GeometryLoadError, type GeometryLoadLimits } from "./index.js";
+import { createResourceState } from "./resource-lifecycle.js";
 
 const LIMITS: GeometryLoadLimits = {
   decode: {
@@ -204,6 +207,53 @@ describe("public geometry loading", () => {
       }),
     ).toThrow("maxTemporaryBytes");
     expect(workerFactory).not.toHaveBeenCalled();
+  });
+
+  it("rejects the triggering promise when ready-handle publication fails", () => {
+    const reject = vi.fn();
+    const onError = vi.fn();
+    const postMessage = vi.fn();
+    const handle = Object.freeze({ kind: "geometry" as const });
+    const state = {
+      status: "ready",
+      runningIntent: false,
+      lifecycleEpoch: 0,
+      config: { onError },
+      worker: { postMessage },
+      resources: createResourceState(4, 1),
+      geometryLoads: new Map([
+        [
+          17,
+          {
+            handle,
+            raw: 1,
+            resolve: vi.fn(),
+            reject,
+            removeAbortListener: vi.fn(),
+          },
+        ],
+      ]),
+      statsRequests: new Map(),
+      resolveInit: undefined,
+      rejectInit: undefined,
+    } as unknown as EngineState;
+
+    handleWorkerMessage(state, {
+      type: "geometry-ready",
+      protocolVersion: RUNTIME_PROTOCOL_VERSION,
+      requestId: 17,
+      handle: 1,
+      bounds: { min: [0, 0, 0], max: [1, 1, 0] },
+    });
+
+    expect(state.status).toBe("failed");
+    expect(onError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: "Geometry load reservation is stale or no longer pending.",
+      }),
+    );
+    expect(reject).toHaveBeenCalledOnce();
+    expect(postMessage).toHaveBeenCalledWith({ type: "dispose" });
   });
 });
 
