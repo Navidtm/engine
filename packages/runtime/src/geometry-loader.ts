@@ -35,7 +35,6 @@ export function createGeometryLoader(dependencies: GeometryLoaderDependencies): 
   let disposed = false;
 
   const postFailure = (message: LoadMessage | AbortMessage, error: unknown): void => {
-    if (disposed) return;
     dependencies.postMessage({
       type: "geometry-failed",
       protocolVersion: RUNTIME_PROTOCOL_VERSION,
