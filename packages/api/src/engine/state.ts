@@ -60,4 +60,5 @@ export interface PendingGeometryLoad {
   readonly resolve: (handle: GeometryHandle) => void;
   readonly reject: (error: Error) => void;
   readonly removeAbortListener: () => void;
+  abortRequested: boolean;
 }

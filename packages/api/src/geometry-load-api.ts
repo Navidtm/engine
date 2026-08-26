@@ -29,9 +29,13 @@ export class GeometryLoadError extends Error {
     readonly code: GeometryLoadErrorPayload["code"],
     readonly stage: GeometryLoadErrorPayload["stage"],
     message: string,
+    options: { readonly aborted?: boolean } = {},
   ) {
     super(message);
-    this.name = code === "LUME_ASSET_ABORTED" ? "AbortError" : "GeometryLoadError";
+    this.name =
+      options.aborted === true && code === "LUME_ASSET_ABORTED"
+        ? "AbortError"
+        : "GeometryLoadError";
   }
 }
 
@@ -90,7 +94,9 @@ export function handleGeometryLoadMessage(
   pending.removeAbortListener();
   rollbackGeometryLoadResource(state, reservation, true);
   pending.reject(
-    new GeometryLoadError(message.error.code, message.error.stage, message.error.message),
+    new GeometryLoadError(message.error.code, message.error.stage, message.error.message, {
+      aborted: pending.abortRequested && message.error.code === "LUME_ASSET_ABORTED",
+    }),
   );
   return undefined;
 }
@@ -125,10 +131,12 @@ function beginGeometryLoad(
     resolve: resolvePromise,
     reject: rejectPromise,
     removeAbortListener: () => removeAbortListener(),
+    abortRequested: false,
   };
   if (signal !== undefined) {
     const onAbort = (): void => {
       if (state.geometryLoads.get(requestId) !== pending) return;
+      pending.abortRequested = true;
       try {
         post(state, abortMessage(requestId, reservation.raw));
       } catch (error) {
@@ -243,5 +251,7 @@ function normalizeRequestError(error: unknown): Error {
 }
 
 function abortedLoadError(): GeometryLoadError {
-  return new GeometryLoadError("LUME_ASSET_ABORTED", "lifecycle", "Geometry load was aborted.");
+  return new GeometryLoadError("LUME_ASSET_ABORTED", "lifecycle", "Geometry load was aborted.", {
+    aborted: true,
+  });
 }

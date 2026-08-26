@@ -193,11 +193,14 @@ transaction by request and complete handle, and installs the opaque public
 handle only after renderer residency succeeds.
 
 Failures reject with `GeometryLoadError`, whose stable `code` and `stage`
-identify format, budget, capacity, fetch, decode, upload, request, and lifecycle
-boundaries. Cancellation uses the same class with `name === "AbortError"` and
-waits for the worker's correlated cleanup result before releasing the slot.
-Engine failure and disposal reject every pending promise; late or duplicate
-results cannot publish a handle.
+categorize the failure and identify the boundary. Stable stages are `request`,
+`fetch`, `container`, `json`, `schema`, `geometry`, `budget`, `upload`,
+`recovery`, and `lifecycle`. Cancellation requested through `AbortSignal` uses
+the same class with `name === "AbortError"` and waits for the worker's correlated
+cleanup result before releasing the slot. Engine failure and disposal reject
+every pending promise with `name === "GeometryLoadError"`; late or duplicate
+results cannot publish a handle. When `geometryLimits` are absent, loading is
+disabled and rejects with `LUME_ASSET_BUDGET_EXCEEDED` at stage `budget`.
 
 The `geometry-loading` browser example exercises a deterministic constrained
 GLB through fetch, worker decode, renderer upload, mesh creation, and pull-based

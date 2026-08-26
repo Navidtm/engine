@@ -123,5 +123,18 @@ engine.dispose();
 
 The promise resolves only after worker fetch/decode and GPU upload have
 completed. `GeometryLoadError.code` and `.stage` are stable diagnostics;
-cancellation reports the same typed error with `name === "AbortError"`.
+cancellation requested through `AbortSignal` reports the same typed error with
+`name === "AbortError"`. Engine lifecycle failures, including disposal and
+worker communication failure, retain `name === "GeometryLoadError"` even when
+their code is `LUME_ASSET_ABORTED`, so they are not mistaken for user intent.
+Omitting `EngineConfig.geometryLimits` disables external loading and rejects
+with `LUME_ASSET_BUDGET_EXCEEDED` at the `budget` stage.
+
+Stable error codes are `LUME_ASSET_ABORTED`, `LUME_ASSET_NETWORK`,
+`LUME_ASSET_FORMAT`, `LUME_ASSET_UNSUPPORTED`,
+`LUME_ASSET_CAPACITY_EXHAUSTED`, `LUME_ASSET_BUDGET_EXCEEDED`, and
+`LUME_ASSET_GPU_UPLOAD`. Stable stages are `request`, `fetch`, `container`,
+`json`, `schema`, `geometry`, `budget`, `upload`, `recovery`, and `lifecycle`.
+Codes categorize the failure while stages locate it; they are independent
+diagnostic fields rather than a one-to-one mapping.
 Destroying a loaded handle uses the normal deferred resource lifecycle.

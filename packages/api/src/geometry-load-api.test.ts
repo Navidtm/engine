@@ -154,7 +154,7 @@ describe("public geometry loading", () => {
 
     engine.dispose();
     await expect(loading).rejects.toMatchObject({
-      name: "AbortError",
+      name: "GeometryLoadError",
       code: "LUME_ASSET_ABORTED",
       stage: "lifecycle",
     });
@@ -171,6 +171,11 @@ describe("public geometry loading", () => {
     await expect(unconfigured.load.geometry("before-init.glb")).rejects.toBeInstanceOf(
       GeometryLoadError,
     );
+    await expect(unconfigured.load.geometry("before-init.glb")).rejects.toMatchObject({
+      name: "GeometryLoadError",
+      code: "LUME_ASSET_ABORTED",
+      stage: "lifecycle",
+    });
     await initialize(unconfiguredHarness, unconfigured, undefined);
     await expect(unconfigured.load.geometry("disabled.glb")).rejects.toMatchObject({
       code: "LUME_ASSET_BUDGET_EXCEEDED",
@@ -180,12 +185,21 @@ describe("public geometry loading", () => {
     const onError = vi.fn();
     const harness = createWorkerHarness();
     const engine = await initializedEngine(harness, LIMITS, 4, onError);
+    const lifecycleFailure = engine.load.geometry("worker-lifecycle.glb");
+    const lifecycleRequest = requiredLoadMessage(harness.posted);
+    harness.receive(failedMessage(lifecycleRequest, "LUME_ASSET_ABORTED", "lifecycle"));
+    await expect(lifecycleFailure).rejects.toMatchObject({
+      name: "GeometryLoadError",
+      code: "LUME_ASSET_ABORTED",
+      stage: "lifecycle",
+    });
+
     const loading = engine.load.geometry("corrupt.glb");
     const request = requiredLoadMessage(harness.posted);
     harness.receive({ ...readyMessage(request), handle: request.handle + 1 });
 
     await expect(loading).rejects.toMatchObject({
-      name: "AbortError",
+      name: "GeometryLoadError",
       code: "LUME_ASSET_ABORTED",
     });
     expect(engine.status).toBe("failed");
@@ -230,6 +244,7 @@ describe("public geometry loading", () => {
             resolve: vi.fn(),
             reject,
             removeAbortListener: vi.fn(),
+            abortRequested: false,
           },
         ],
       ]),
