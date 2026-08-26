@@ -9,6 +9,7 @@ const TRIANGLE_GLB =
 interface GeometryExampleResult {
   readonly status: "ready" | "error";
   readonly successfulLoads: number;
+  readonly retainedDecodedBytes: number;
   readonly message: string;
 }
 
@@ -63,7 +64,12 @@ async function run(): Promise<GeometryExampleResult> {
     statusElement.textContent = "GLB decoded in Worker and published atomically";
     statusElement.dataset.state = "ready";
     statsElement.textContent = message;
-    return { status: "ready", successfulLoads: stats.assets.successfulLoads, message };
+    return {
+      status: "ready",
+      successfulLoads: stats.assets.successfulLoads,
+      retainedDecodedBytes: stats.assets.retainedDecodedBytes,
+      message,
+    };
   } catch (error) {
     const message =
       error instanceof GeometryLoadError
@@ -73,7 +79,7 @@ async function run(): Promise<GeometryExampleResult> {
           : String(error);
     statusElement.textContent = message;
     statusElement.dataset.state = "error";
-    return { status: "error", successfulLoads: 0, message };
+    return { status: "error", successfulLoads: 0, retainedDecodedBytes: 0, message };
   }
 }
 

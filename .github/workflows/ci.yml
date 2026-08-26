@@ -69,5 +69,6 @@ jobs:
       - run: pnpm build:wasm
       - run: pnpm -r --filter './packages/**' build
       - run: pnpm -r --filter './examples/**' build
+      - run: pnpm test:browser:geometry:built
       - run: pnpm -r --filter './benchmarks/**' build
       - run: pnpm test:packaging

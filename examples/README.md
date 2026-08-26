@@ -16,4 +16,7 @@ cross-origin-isolation headers required for the shared-memory transport.
 | Camera controls    | `pnpm --filter @lume/example-camera dev`             | The engine camera's position, yaw quaternion, field of view, and clipping setup. |
 | Geometry loading   | `pnpm --filter @lume/example-geometry-loading dev`   | Public GLB loading, worker decode, typed errors, and asset accounting.           |
 
+Run `pnpm test:browser:geometry` from the workspace root for the automated
+Chrome/WebGPU smoke test of the production geometry-loading build.
+
 For a complete production setup, serve over HTTPS with `Cross-Origin-Opener-Policy: same-origin` and `Cross-Origin-Embedder-Policy: require-corp`; otherwise Lume transparently uses its worker-message fallback.

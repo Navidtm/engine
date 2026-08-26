@@ -268,8 +268,9 @@ transactional under deterministic state-machine tests.
 - Reject pending promises on engine failure/disposal.
 - Document normal loading, abort, error handling, mesh creation, and disposal.
 
-Exit gate: browser integration proves decode executes in the worker and a loaded
-handle follows the existing mesh/resource lifecycle.
+Exit gate: the CI Chrome smoke test builds and serves the browser example, then
+requires one successful worker load, non-zero retained decoded bytes, and ready
+publication through the existing mesh/resource lifecycle.
 
 ### Phase 5: Measurement and completion
 

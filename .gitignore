@@ -1,6 +1,8 @@
 node_modules/
 target/
 dist/
+playwright-report/
+test-results/
 .DS_Store
 .pnpm-store
 examples/triangle/public/lume_core.wasm

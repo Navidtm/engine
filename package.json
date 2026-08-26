@@ -24,11 +24,14 @@
     "typecheck": "pnpm -r --filter './packages/**' build && pnpm -r typecheck",
     "test": "pnpm test:rust && pnpm test:ts",
     "test:packaging": "node scripts/test-packaged-consumer.mjs",
+    "test:browser:geometry": "pnpm prepare:examples && pnpm --filter @lume/example-geometry-loading build && pnpm test:browser:geometry:built",
+    "test:browser:geometry:built": "playwright test geometry-loading.spec.ts",
     "test:rust": "cargo test --workspace",
     "test:ts": "pnpm -r --filter './packages/**' test"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.62.1",
     "@types/node": "^26.2.0",
     "@webgpu/types": "catalog:",
     "eslint": "^10.8.0",
