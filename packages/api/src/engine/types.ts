@@ -63,7 +63,7 @@ export interface EngineComponentCapacityOptions {
 
 /** Perspective parameters that can change without recreating the engine camera. */
 export interface CameraPerspectiveOptions {
-  /** Vertical field of view in radians; it must be positive and finite. */
+  /** Vertical field of view in radians; it must be finite and at least `0.0001`. */
   readonly verticalFov?: number;
   /** Positive distance to the near clipping plane. */
   readonly near?: number;

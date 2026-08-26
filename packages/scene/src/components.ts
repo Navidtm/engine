@@ -14,6 +14,7 @@ const ZERO = [0, 0, 0] as const satisfies Vec3;
 const ONE = [1, 1, 1] as const satisfies Vec3;
 const IDENTITY_ROTATION = [0, 0, 0, 1] as const satisfies Quat;
 const WHITE = [1, 1, 1, 1] as const satisfies Color;
+const MIN_VERTICAL_FOV_RADIANS = 0.000_1;
 
 /** Optional fields for a local transform. Defaults are origin, identity rotation, and unit scale. */
 export interface TransformOptions {
@@ -76,7 +77,7 @@ export function basicMaterialDescriptor(
 
 /** Perspective camera options expressed in radians and world units. */
 export interface CameraOptions {
-  /** Vertical FOV in radians; defaults to `PI / 3`. */
+  /** Vertical FOV in radians, from `0.0001` (inclusive) to `PI`; defaults to `PI / 3`. */
   readonly verticalFov?: number;
   /** Positive near clipping plane; defaults to `0.1`. */
   readonly near?: number;
@@ -92,9 +93,11 @@ export function validateCameraPerspective(value: {
 }): void {
   if (
     !Number.isFinite(value.verticalFov) ||
-    !(value.verticalFov > 0 && value.verticalFov < Math.PI)
+    !(value.verticalFov >= MIN_VERTICAL_FOV_RADIANS && value.verticalFov < Math.PI)
   ) {
-    throw new RangeError("verticalFov must be a finite number between 0 and PI radians");
+    throw new RangeError(
+      "verticalFov must be a finite number from 0.0001 (inclusive) to PI radians",
+    );
   }
   if (!Number.isFinite(value.near) || value.near <= 0) {
     throw new RangeError("camera near must be a positive finite number");

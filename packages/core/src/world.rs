@@ -6,6 +6,9 @@ use crate::math::{Quat, Vec3};
 use crate::resource::MaterialHandle;
 use crate::systems::{update_cameras, update_transforms_with};
 
+const MIN_VERTICAL_FOV_RADIANS: f32 = 0.000_1;
+const MIN_CAMERA_ASPECT: f32 = 0.000_001;
+
 /// Independent fixed capacities for entities and each component store.
 #[derive(Clone, Copy, Debug)]
 pub struct WorldCapacity {
@@ -347,7 +350,7 @@ impl World {
 
     /// Updates every camera's finite positive viewport aspect ratio in place.
     pub fn set_camera_aspect(&mut self, aspect: f32) -> bool {
-        if !aspect.is_finite() || aspect <= 0.0 {
+        if !aspect.is_finite() || aspect < MIN_CAMERA_ASPECT {
             return false;
         }
         for camera in self.cameras.values_mut() {
@@ -437,14 +440,14 @@ fn is_finite_vec3(value: &Vec3) -> bool {
 
 fn is_valid_camera(camera: &Camera) -> bool {
     camera.vertical_fov_radians.is_finite()
-        && camera.vertical_fov_radians > 0.0
+        && camera.vertical_fov_radians >= MIN_VERTICAL_FOV_RADIANS
         && camera.vertical_fov_radians < core::f32::consts::PI
         && camera.near.is_finite()
         && camera.near > 0.0
         && camera.far.is_finite()
         && camera.far > camera.near
         && camera.aspect.is_finite()
-        && camera.aspect > 0.0
+        && camera.aspect >= MIN_CAMERA_ASPECT
 }
 
 fn bump_revision(revision: &mut u32) {
@@ -536,6 +539,20 @@ mod tests {
             entity,
             Camera {
                 vertical_fov_radians: core::f32::consts::PI,
+                ..Camera::default()
+            }
+        ));
+        assert!(!world.add_camera(
+            entity,
+            Camera {
+                vertical_fov_radians: 1.0e-44,
+                ..Camera::default()
+            }
+        ));
+        assert!(!world.add_camera(
+            entity,
+            Camera {
+                aspect: 1.0e-40,
                 ..Camera::default()
             }
         ));
