@@ -162,6 +162,35 @@ describe("public geometry loading", () => {
     expect(engine.status).toBe("disposed");
   });
 
+  it("settles pending loads when a fatal worker error fails the engine", async () => {
+    const harness = createWorkerHarness();
+    const engine = await initializedEngine(harness, LIMITS);
+    const loading = engine.load.geometry("pending-at-failure.glb");
+    const request = requiredLoadMessage(harness.posted);
+
+    harness.receive({ type: "error", message: "WASM invariant failed" });
+
+    await expect(loading).rejects.toMatchObject({
+      name: "GeometryLoadError",
+      code: "LUME_ASSET_ABORTED",
+      stage: "lifecycle",
+      message: "Engine failed before geometry loading completed.",
+    });
+    expect(engine.status).toBe("failed");
+    expect(harness.posted.at(-1)).toEqual({ type: "dispose" });
+
+    const messageCount = harness.posted.length;
+    await expect(engine.load.geometry("after-failure.glb")).rejects.toMatchObject({
+      name: "GeometryLoadError",
+      code: "LUME_ASSET_ABORTED",
+      stage: "lifecycle",
+      message: "Cannot load geometry while engine status is 'failed'.",
+    });
+    expect(harness.posted).toHaveLength(messageCount);
+    harness.receive(readyMessage(request));
+    expect(engine.status).toBe("failed");
+  });
+
   it("rejects invalid lifecycle, absent budgets, and corrupt response correlation", async () => {
     const unconfiguredHarness = createWorkerHarness();
     const unconfigured = createEngine(testCanvas(), {
