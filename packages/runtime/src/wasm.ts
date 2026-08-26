@@ -490,13 +490,14 @@ export async function createWasmCore(
     previousStagedIndex = -2;
     stagingEpoch = stagingEpoch === 0xffff_ffff ? 1 : stagingEpoch + 1;
     drainSharedTransforms(sharedViews, transformScratch, stageTransform);
-    if (
-      stagedTransformCount > 0 &&
-      exports.lume_engine_apply_transform_ranges(handle, stagedRangeCount) !== stagedTransformCount
-    ) {
-      throw new Error("WASM rejected one or more shared transform updates.");
+    let appliedTransformCount = 0;
+    if (stagedTransformCount > 0) {
+      appliedTransformCount = exports.lume_engine_apply_transform_ranges(handle, stagedRangeCount);
+      if (appliedTransformCount > stagedTransformCount) {
+        throw new Error("WASM reported more shared transform updates than were staged.");
+      }
     }
-    lastSharedTransformUpdates = stagedTransformCount;
+    lastSharedTransformUpdates = appliedTransformCount;
     totalDirtyRanges += stagedRangeCount;
   };
 

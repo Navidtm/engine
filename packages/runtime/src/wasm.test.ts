@@ -82,7 +82,7 @@ describe("WASM loading diagnostics", () => {
 });
 
 describe("WASM memory views", () => {
-  it("refreshes staging and returned frame views after exports grow linear memory", async () => {
+  it("refreshes memory views and accepts stale transform updates skipped by WASM", async () => {
     const memory = new WebAssembly.Memory({ initial: 1, maximum: 3 });
     const applied: Array<{
       readonly rangeCount: number;
@@ -123,7 +123,7 @@ describe("WASM memory views", () => {
             rangeStart: new Uint32Array(memory.buffer, 112, 2)[0] ?? 0,
             rangeLength: new Uint32Array(memory.buffer, 120, 2)[0] ?? 0,
           });
-          return 1;
+          return 0;
         },
       },
       {
@@ -172,6 +172,7 @@ describe("WASM memory views", () => {
         rangeLength: 1,
       },
     ]);
+    expect(core.stats().sharedTransformUpdates).toBe(0);
     expect(core.update().instanceData.buffer).toBe(memory.buffer);
   });
 });
