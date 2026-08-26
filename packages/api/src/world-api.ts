@@ -79,9 +79,14 @@ function componentCommand(
       return {
         type: "add-transform",
         entity: packedEntity,
-        position: component.position,
-        rotation: component.rotation,
-        scale: component.scale,
+        position: [component.position[0], component.position[1], component.position[2]],
+        rotation: [
+          component.rotation[0],
+          component.rotation[1],
+          component.rotation[2],
+          component.rotation[3],
+        ],
+        scale: [component.scale[0], component.scale[1], component.scale[2]],
       };
     case "camera":
       return {
@@ -103,7 +108,7 @@ function componentCommand(
       return {
         type: "add-bounds",
         entity: packedEntity,
-        center: component.center,
+        center: [component.center[0], component.center[1], component.center[2]],
         radius: component.radius,
       };
   }

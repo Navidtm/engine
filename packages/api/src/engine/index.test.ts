@@ -426,6 +426,62 @@ describe("high-level engine API", () => {
     expect(() => engine.world.destroyEntity(cube.id)).toThrow("Entity handle is stale");
   });
 
+  it("captures advanced component tuples when pre-init commands are authored", async () => {
+    let onMessage: ((event: MessageEvent<WorkerToMainMessage>) => void) | undefined;
+    const posted: MainToWorkerMessage[] = [];
+    const worker = {
+      addEventListener(type: string, listener: EventListener) {
+        if (type === "message") {
+          onMessage = listener as (event: MessageEvent<WorkerToMainMessage>) => void;
+        }
+      },
+      postMessage(message: MainToWorkerMessage) {
+        posted.push(message);
+      },
+      terminate: vi.fn(),
+    } as unknown as Worker;
+    const canvas = {
+      getBoundingClientRect: () => ({ width: 1, height: 1 }),
+      transferControlToOffscreen: () => ({}) as OffscreenCanvas,
+    } as HTMLCanvasElement;
+    vi.stubGlobal("window", { devicePixelRatio: 1 });
+    vi.stubGlobal("crossOriginIsolated", false);
+    const engine = createEngine(canvas, { autoResize: false, workerFactory: () => worker });
+    const entity = engine.world.createEntity();
+    const position: [number, number, number] = [1, 2, 3];
+    const rotation: [number, number, number, number] = [0, 0, 0, 1];
+    const scale: [number, number, number] = [1, 1, 1];
+    const center: [number, number, number] = [4, 5, 6];
+    engine.world.add(entity, { kind: "transform", position, rotation, scale });
+    engine.world.add(entity, { kind: "bounds", center, radius: 2 });
+
+    position[0] = 999;
+    rotation[3] = Number.NaN;
+    scale[1] = 999;
+    center[2] = 999;
+
+    const initialization = engine.init();
+    onMessage?.({ data: { type: "ready" } } as MessageEvent<WorkerToMainMessage>);
+    await initialization;
+    const batch = posted.find(
+      (message): message is Extract<MainToWorkerMessage, { type: "batch" }> =>
+        message.type === "batch",
+    );
+    expect(batch?.value).toContainEqual({
+      type: "add-transform",
+      entity: entity.index,
+      position: [1, 2, 3],
+      rotation: [0, 0, 0, 1],
+      scale: [1, 1, 1],
+    });
+    expect(batch?.value).toContainEqual({
+      type: "add-bounds",
+      entity: entity.index,
+      center: [4, 5, 6],
+      radius: 2,
+    });
+  });
+
   it("uses the package-owned WASM artifact by default", async () => {
     const posted: MainToWorkerMessage[] = [];
     const worker = {
