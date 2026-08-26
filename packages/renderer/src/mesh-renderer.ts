@@ -264,6 +264,8 @@ interface RendererState {
     cameras: number;
     indirect: number;
   };
+  registryVersion: number;
+  preparedRegistryVersion: number;
   runCount: number;
   visibilitySampleRequested: boolean;
   visibilityReadbackPending: boolean;
@@ -507,6 +509,8 @@ export async function createMeshRenderer(
         cameras: 0,
         indirect: 0,
       },
+      registryVersion: 0,
+      preparedRegistryVersion: 0,
       runCount: 0,
       visibilitySampleRequested: false,
       visibilityReadbackPending: false,
@@ -544,17 +548,23 @@ export async function createMeshRenderer(
       registerGeometry(handle, builtin) {
         const source = builtinGeometrySource(builtin);
         state.meshes.register(handle, source);
+        bumpRegistryVersion(state);
       },
       registerExternalGeometry(handle, descriptor) {
         state.meshes.register(handle, descriptor);
+        bumpRegistryVersion(state);
       },
       removeGeometry(handle) {
         if (!state.meshes.remove(handle)) throw new Error(`Unknown geometry handle: ${handle}`);
-        state.runCount = 0;
+        bumpRegistryVersion(state);
       },
-      registerBasicMaterial: (handle) => state.materials.register(handle),
+      registerBasicMaterial(handle) {
+        state.materials.register(handle);
+        bumpRegistryVersion(state);
+      },
       removeBasicMaterial(handle) {
         if (!state.materials.remove(handle)) throw new Error(`Unknown material handle: ${handle}`);
+        bumpRegistryVersion(state);
       },
       execute(frame, profileStages = false) {
         if (state.disposed) return;
@@ -667,6 +677,7 @@ function uploadFrame(context: RendererFrameContext): void {
   state.uploadBytesByDomain.visibility = 0;
   state.uploadBytesByDomain.cameras = 0;
   state.uploadBytesByDomain.indirect = 0;
+  const registryDirty = state.preparedRegistryVersion !== state.registryVersion;
   uploadDirtyRanges(
     state,
     state.instanceBuffer,
@@ -709,10 +720,10 @@ function uploadFrame(context: RendererFrameContext): void {
   );
   if (
     state.visibilityMode === "cpu" &&
-    (frame.visibleSlotsDirty || frame.resourceDirtyRangeCount > 0)
+    (frame.visibleSlotsDirty || frame.resourceDirtyRangeCount > 0 || registryDirty)
   ) {
     prepareCpuRuns(state, frame);
-    if (frame.instanceCount > 0) {
+    if (frame.instanceCount > 0 && frame.visibleSlotsDirty) {
       const byteLength = frame.instanceCount * VISIBLE_SLOT_BYTES;
       state.device.queue.writeBuffer(
         state.visibleSlotBuffer,
@@ -726,12 +737,13 @@ function uploadFrame(context: RendererFrameContext): void {
   }
   if (state.visibilityMode === "gpu") {
     let visibilityParametersDirty = false;
-    if (frame.candidateSlotsDirty) {
+    const runsDirty = frame.candidateSlotsDirty || registryDirty;
+    if (runsDirty) {
       prepareGpuRuns(state, frame);
       state.visibilityParameters[0] = frame.candidateCount;
       state.visibilityParameters[1] = state.runCount;
       visibilityParametersDirty = true;
-      if (frame.candidateCount > 0) {
+      if (frame.candidateCount > 0 && frame.candidateSlotsDirty) {
         const candidateBytes = frame.candidateCount * VISIBLE_SLOT_BYTES;
         state.device.queue.writeBuffer(
           state.candidateSlotBuffer,
@@ -861,6 +873,7 @@ function prepareGpuRuns(state: RendererState, frame: RenderFrame): void {
     frame.candidateMaterials,
     true,
   );
+  state.preparedRegistryVersion = state.registryVersion;
 }
 
 function prepareCpuRuns(state: RendererState, frame: RenderFrame): void {
@@ -872,6 +885,12 @@ function prepareCpuRuns(state: RendererState, frame: RenderFrame): void {
     frame.materials,
     false,
   );
+  state.preparedRegistryVersion = state.registryVersion;
+}
+
+function bumpRegistryVersion(state: RendererState): void {
+  state.registryVersion =
+    state.registryVersion === Number.MAX_SAFE_INTEGER ? 1 : state.registryVersion + 1;
 }
 
 function prepareRuns(

@@ -319,6 +319,83 @@ describe("mesh renderer initialization ownership", () => {
     expect(renderPass.drawIndexed).not.toHaveBeenCalled();
   });
 
+  it("rebuilds static CPU runs when material residency changes", async () => {
+    vi.stubGlobal("GPUBufferUsage", {
+      MAP_READ: 1,
+      COPY_SRC: 2,
+      COPY_DST: 4,
+      UNIFORM: 8,
+      STORAGE: 16,
+      INDIRECT: 32,
+      VERTEX: 64,
+      INDEX: 128,
+    });
+    const renderPass = {
+      setPipeline: vi.fn(),
+      setBindGroup: vi.fn(),
+      setVertexBuffer: vi.fn(),
+      setIndexBuffer: vi.fn(),
+      drawIndexed: vi.fn(),
+      end: vi.fn(),
+    };
+    const device = {
+      features: new Set<GPUFeatureName>(),
+      limits: { maxStorageBufferBindingSize: 1_000_000, maxBufferSize: 1_000_000 },
+      queue: { writeBuffer: vi.fn(), submit: vi.fn() },
+      createBuffer: vi.fn((descriptor: GPUBufferDescriptor) => {
+        const size = Number(descriptor.size);
+        return {
+          size,
+          getMappedRange: vi.fn(() => new ArrayBuffer(size)),
+          unmap: vi.fn(),
+          destroy: vi.fn(),
+        };
+      }),
+      createBindGroup: vi.fn(() => ({})),
+      createCommandEncoder: vi.fn(() => ({
+        beginRenderPass: vi.fn(() => renderPass),
+        finish: vi.fn(() => ({})),
+      })),
+      destroy: vi.fn(),
+      lost: new Promise<GPUDeviceLostInfo>(() => undefined),
+    } as unknown as GPUDevice;
+    const pipeline = { getBindGroupLayout: vi.fn(() => ({})) } as unknown as GPURenderPipeline;
+    mocks.requestAdapter.mockResolvedValueOnce({ features: new Set() });
+    mocks.requestDevice.mockResolvedValueOnce(device);
+    mocks.getMeshPipeline.mockResolvedValueOnce(pipeline);
+    mocks.createVisibilityPipelines.mockResolvedValueOnce({
+      bindGroupLayout: {},
+      reset: {},
+      cull: {},
+    });
+
+    const renderer = await createMeshRenderer(
+      {} as OffscreenCanvas,
+      { width: 1, height: 1, devicePixelRatio: 1 },
+      2,
+      { visibilityMode: "cpu" },
+    );
+    renderer.registerGeometry(1, "triangle");
+    const frame = createRenderFrame(2);
+    frame.instanceCount = 1;
+    frame.visibleSlotsDirty = true;
+    frame.geometries[0] = 1;
+    frame.pipelines[0] = 1;
+    frame.materials[0] = 1;
+    renderer.execute(frame);
+    expect(renderPass.drawIndexed).not.toHaveBeenCalled();
+
+    frame.visibleSlotsDirty = false;
+    renderer.registerBasicMaterial(1);
+    renderer.execute(frame);
+    expect(renderPass.drawIndexed).toHaveBeenCalledOnce();
+
+    renderPass.drawIndexed.mockClear();
+    renderer.removeBasicMaterial(1);
+    renderer.execute(frame);
+    expect(renderPass.drawIndexed).not.toHaveBeenCalled();
+  });
+
   it("rebuilds prepared CPU draw runs when resource keys change", async () => {
     vi.stubGlobal("GPUBufferUsage", {
       MAP_READ: 1,
