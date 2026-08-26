@@ -54,7 +54,7 @@ pub extern "C" fn lume_engine_create(
     let transforms = usize::try_from(transform_capacity.max(1))
         .unwrap_or(4_096)
         .min(entities);
-    let resources = usize::try_from(resource_capacity.max(1)).unwrap_or(4_096);
+    let resources = normalized_resource_capacity(resource_capacity);
     let mesh_renderers = usize::try_from(mesh_renderer_capacity)
         .unwrap_or(entities)
         .min(entities);
@@ -88,6 +88,12 @@ pub extern "C" fn lume_engine_create(
         transform_range_counts: vec![0; transforms].into_boxed_slice(),
     }))
     .cast()
+}
+
+fn normalized_resource_capacity(resource_capacity: u32) -> usize {
+    usize::try_from(resource_capacity.max(1))
+        .unwrap_or(4_096)
+        .min(MAX_ENTITY_CAPACITY)
 }
 
 /// # Safety
@@ -734,6 +740,12 @@ fn with_engine_mut_value<T>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn resource_capacity_is_clamped_before_allocating_registry_storage() {
+        assert_eq!(normalized_resource_capacity(0), 1);
+        assert_eq!(normalized_resource_capacity(u32::MAX), MAX_ENTITY_CAPACITY);
+    }
 
     #[test]
     fn abi_can_create_update_and_destroy_a_world() {
