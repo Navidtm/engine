@@ -162,6 +162,48 @@ describe("worker geometry loading transaction", () => {
     );
   });
 
+  it("aborts at the decode yield before decoder or renderer publication", async () => {
+    const coordinator = createResourceCoordinator(4, 4, LIMITS);
+    const target = renderer();
+    const posted: WorkerToMainMessage[] = [];
+    const decode = vi.fn((bytes: ArrayBuffer) => decodedGeometry(bytes.byteLength));
+    const loader = createGeometryLoader({
+      coordinator,
+      limits: LIMITS,
+      fetch: vi.fn(async () => response()),
+      acquireRenderer: vi.fn(async () => target),
+      postMessage: (message) => posted.push(message),
+      decode,
+    });
+
+    loader.load(loadMessage(9, 1, "https://assets.test/decode-abort.glb"));
+    for (let turn = 0; turn < 20; turn += 1) {
+      if (coordinator.assetStats().temporaryReservedBytes === 288) break;
+      await Promise.resolve();
+    }
+    expect(coordinator.assetStats()).toMatchObject({
+      pendingLoads: 1,
+      temporaryReservedBytes: 288,
+    });
+
+    loader.abort(abortMessage(9, 1));
+
+    await vi.waitFor(() => expect(posted).toHaveLength(1));
+    expect(posted[0]).toMatchObject({
+      type: "geometry-failed",
+      requestId: 9,
+      handle: 1,
+      error: { code: "LUME_ASSET_ABORTED", stage: "lifecycle" },
+    });
+    expect(decode).not.toHaveBeenCalled();
+    expect(target.registerExternalGeometry).not.toHaveBeenCalled();
+    expect(coordinator.assetStats()).toMatchObject({
+      pendingLoads: 0,
+      abortedLoads: 1,
+      temporaryReservedBytes: 0,
+    });
+  });
+
   it("waits across renderer recovery and publishes to the replacement only", async () => {
     let resolveRenderer: ((value: MeshRenderer) => void) | undefined;
     const rendererResult = new Promise<MeshRenderer>((resolve) => {
