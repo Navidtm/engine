@@ -79,7 +79,7 @@ counts with CPU/GPU/CPU/GPU ordering and correctness hashes. Render-graph
 resource lifetime analysis, occlusion culling, public multi-camera presentation,
 textures, lighting, material variants, and asset streaming remain pending.
 
-## Milestone 7 — asset pipeline foundation (implementation in progress)
+## Milestone 7 — asset pipeline foundation (implemented)
 
 Milestone 7 introduces worker-owned loading of one validated static geometry
 from a constrained GLB 2.0 profile. The public target is
@@ -105,9 +105,12 @@ renderer publication/rollback, typed failures, and external descriptor replay
 across device recovery. Phase 4 adds the public `engine.load.geometry()` facade,
 optional cancellation, typed errors, atomic ready-handle publication, terminal
 lifecycle rejection, and a browser integration example that verifies worker
-decode and the existing mesh/resource lifecycle. Controlled measurements remain
-pending. Textures/KTX2, materials, multi-primitive assets, hierarchy, streaming,
-caching, compression, and an offline optimizer remain outside Milestone 7.
+decode and the existing mesh/resource lifecycle. Phase 5 commits deterministic
+small/medium/large browser measurements, cold-path timing and peak-memory
+diagnostics, exact CPU/GPU accounting validation, cleanup checks, and a heavier
+multi-feature asset showcase. Textures/KTX2, imported materials,
+multi-primitive assets, hierarchy, streaming, caching, compression, and an
+offline optimizer remain outside Milestone 7.
 
 ## Known future bottlenecks
 
@@ -119,9 +122,9 @@ caching, compression, and an offline optimizer remain outside Milestone 7.
    hide first use. Material manifests will support asynchronous prewarming.
 4. **Uniform alignment and fragmentation:** one buffer per material will not
    scale. Phase 2 uses aligned arenas and dynamic offsets.
-5. **Device loss beyond built-ins:** built-in geometry/material descriptors are
-   replayed automatically; future streamed/external assets need equivalent
-   replay descriptors before they can share transparent recovery.
+5. **Device loss beyond current descriptors:** built-in and loaded external
+   geometry descriptors replay automatically; future textures, streamed chunks,
+   and imported materials need equivalent descriptors before sharing recovery.
 6. **Generation exhaustion:** ADR 010 preserves compact 20/12 identities and
    retires a slot after 4,096 allocations. Stale handles cannot alias, but
    extreme lifetime churn can reduce reusable capacity.

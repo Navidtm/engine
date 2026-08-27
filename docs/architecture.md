@@ -76,6 +76,13 @@ decoded bytes, replay descriptors, and GPU residency remain worker-owned. These
 Milestone 7 boundaries are governed by
 [ADR 011](../.agents/decisions/011-glb-geometry-ingestion.md) and
 [ADR 012](../.agents/decisions/012-async-geometry-loading.md).
+Phase 5 adds cold-path load clocks and peak reservation accounting to the
+existing pull-based diagnostics. Its committed small/medium/large browser
+matrix validates temporary, retained CPU, and resident GPU byte ownership,
+zero cleanup residue, and no asset-related steady-state messages or uploads.
+The measurements do not move asset work into the frame loop or select universal
+production budgets; applications continue to configure limits for their own
+content.
 
 ## Runtime flow
 

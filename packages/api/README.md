@@ -73,9 +73,10 @@ machine-readable entity-capacity error.
 ## External geometry loading
 
 External loading is opt-in and requires application-specific byte and count
-budgets; Lume intentionally supplies no defaults before controlled Phase 5
-measurements. The accepted input is the constrained static GLB 2.0 profile
-documented by Milestone 7.
+budgets. Milestone 7 measurements validate the accounting model but deliberately
+do not select universal defaults: applications must size limits for their own
+content. The accepted input is the constrained static GLB 2.0 profile documented
+by Milestone 7.
 
 ```ts
 import { createEngine, GeometryLoadError } from "@lume/api";
@@ -138,3 +139,7 @@ Stable error codes are `LUME_ASSET_ABORTED`, `LUME_ASSET_NETWORK`,
 Codes categorize the failure while stages locate it; they are independent
 diagnostic fields rather than a one-to-one mapping.
 Destroying a loaded handle uses the normal deferred resource lifecycle.
+Pull-based `engine.getStats()` asset diagnostics include current and peak
+temporary reservations, retained decoded and resident GPU bytes, and the latest
+successful load's fetch/read, decode, renderer-wait, upload, and total timings.
+These timings instrument only the cold loading transaction.

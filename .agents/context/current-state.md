@@ -1,6 +1,6 @@
 # Current Project State
 
-Last verified: 2026-08-25 on master after Milestone 6 and Milestone 7 Phase 1
+Last verified: 2026-08-27 on master after Milestone 7 completion
 
 This document records the implementation that exists in the repository. It is
 an evidence-based snapshot, not a description of intended future architecture.
@@ -10,7 +10,10 @@ an evidence-based snapshot, not a description of intended future architecture.
 The engine has completed its runtime-foundation, transport-hardening, and
 renderer-scalability work. ADR 007 persistent storage, ADR 008 epoch-gated
 reuse, and ADR 009 active/generational slot state, compute visibility, and
-indirect drawing are implemented and measured.
+indirect drawing are implemented and measured. The geometry-only Asset Pipeline
+Foundation is also complete: constrained GLB decode, bounded worker loading,
+external GPU residency/replay, public loading, controlled evidence, and browser
+examples are implemented.
 
 Transport Hardening is complete. All Phase 4 mechanisms are implemented,
 tested, documented, and covered by a committed Node benchmark result. Controlled
@@ -86,19 +89,20 @@ Implemented:
   material data.
 
 Current content support is deliberately small: worker-coordinated built-in
-triangle and box resources plus color-only basic-material resources. Mesh
-replacement/removal updates tracked usage edges transactionally, and retirement
-waits for existing mesh users before logical destruction.
+triangle and box resources, constrained external static GLB geometry, and
+color-only basic-material resources. Mesh replacement/removal updates tracked
+usage edges transactionally, and retirement waits for existing mesh users before
+logical destruction.
 
-### Asset Decoding Foundation
+### Asset Pipeline Foundation
 
-Implemented for Milestone 7 Phase 1:
+Implemented for Milestone 7:
 
 - A standalone `@lume/assets` package with no API, runtime, ECS, renderer, DOM
   canvas, or WebGPU dependency.
 - Required immutable per-request limits for encoded bytes, decoded bytes,
   vertices, and indices; no unmeasured production defaults.
-- Stable typed asset error codes/stages for the future cross-worker contract.
+- Stable typed asset error codes/stages across the public/worker contract.
 - Strict GLB 2.0 header/chunk, UTF-8/JSON, accepted-profile, accessor,
   alignment, bounds, overflow, finite-value, position-bound, index-range, and
   budget validation.
@@ -106,11 +110,21 @@ Implemented for Milestone 7 Phase 1:
   widened `uint32` triangle-list indices with exact owned-array byte accounting.
 - Deterministic generated fixtures and regression tests covering valid
   16/32-bit inputs and malformed/unsupported/budget boundaries.
-
-Not yet implemented: worker fetch/abort orchestration, Resource Coordinator
-loading states, external renderer geometry residency/replay, the public
-`engine.load.geometry()` facade, browser integration, and controlled benchmark
-results.
+- Worker-owned bounded fetch/read/decode/upload transactions with attempt epochs,
+  cancellation, rollback, typed failures, and aggregate byte admission.
+- Resource Coordinator loading/ready/retirement states, replayable decoded
+  descriptors, usage edges, and exact temporary/retained/resident accounting.
+- Transactional renderer registration/removal and unchanged-handle replay across
+  recoverable device loss.
+- Public `engine.load.geometry()` promise correlation, optional `AbortSignal`,
+  atomic ready-handle publication, terminal lifecycle rejection, and normal
+  deferred destruction.
+- Pull-based asset statistics with peak temporary reservations and cold-path
+  fetch/read, decode, renderer-wait, upload, and total timing diagnostics.
+- Deterministic small/medium/large controlled browser measurements committed at
+  `benchmarks/results/asset-pipeline-latest.json`.
+- Focused geometry-loading and heavier asset-showcase browser examples plus
+  production-build Chrome/WebGPU smoke coverage.
 
 ### Rust/WASM Core and ECS
 
@@ -395,7 +409,7 @@ scope and non-goals are in [`docs/milestone-6.md`](../../docs/milestone-6.md).
 | 3. Performance Infrastructure | Completed     | Implemented                                       |
 | 4. Transport Hardening        | Completed     | Implemented                                       |
 | 6. Renderer Scalability       | Completed     | ADR 007/008/009 implemented, tested, and measured |
-| 6. Asset Pipeline             | In progress   | Phase 1 decoder implemented; Phases 2-5 pending   |
+| 6. Asset Pipeline             | Completed     | Milestone 7 implemented, tested, and measured     |
 | 7. Advanced Graphics          | Planned       | Not implemented                                   |
 | 8. Developer Ecosystem        | Planned       | Not implemented                                   |
 
@@ -403,7 +417,7 @@ scope and non-goals are in [`docs/milestone-6.md`](../../docs/milestone-6.md).
 
 - Textures, samplers, texture streaming, and texture compression.
 - PBR materials, lighting, shadows, reflections, and post-processing.
-- Worker-integrated glTF loading and a production asset pipeline.
+- General glTF scenes, multi-primitive loading, textures, and asset streaming.
 - Animation, skinning, morph targets, and skeletal systems.
 - Physics, networking, gameplay systems, editor, or scene authoring.
 - Occlusion culling, hierarchical active masks, and GPU-authoritative scenes.
@@ -430,15 +444,12 @@ renderer-scalability milestone.
 
 ## Current Priority
 
-Runtime transport and renderer-scalability semantics should now be treated as
-stable unless browser evidence finds a correctness or material performance
-problem. Milestone 7 implementation is in progress. Phase 1 now provides the
-pure constrained-GLB decoder, typed errors, immutable decode limits,
-deterministic fixtures, accounting, and validation coverage. The next step is
-Phase 2 renderer registration of external decoded descriptors with
-transactional creation, destruction, generation validation, and device-loss
-replay. Worker loading and `engine.load.geometry()` remain later phases. ADR
-011, ADR 012, and `docs/milestone-7.md` define the scope and gates.
-Textures/KTX2, materials, hierarchy, compression, streaming, caching, and an
-offline optimizer remain future work. All asset work must preserve the existing
-ECS -> RenderWorld -> renderer ownership boundary.
+Runtime transport, renderer-scalability, and Milestone 7 geometry-loading
+semantics should now be treated as stable unless browser evidence finds a
+correctness or material performance problem. ADR 011, ADR 012, and
+`docs/milestone-7.md` define the completed constrained-geometry scope and gates.
+The next architecture design step is texture/sampler ingestion with KTX2,
+GPU-format selection, color-space and mip policy, material dependencies,
+CPU/GPU budgets, and replay. General materials, hierarchy, compression,
+streaming, caching, and an offline optimizer remain future work. All asset work
+must preserve the existing ECS -> RenderWorld -> renderer ownership boundary.

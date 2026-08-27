@@ -10,7 +10,7 @@ This milestone distinguishes:
 - **Measured evidence:** committed results describe one controlled workload and
   environment, not a general performance claim.
 
-Milestone 7 currently has accepted design and implementation in progress.
+Milestone 7 is implemented, measured, documented, and complete.
 
 ## Implementation progress
 
@@ -20,10 +20,10 @@ Milestone 7 currently has accepted design and implementation in progress.
 | 2     | Implemented | Renderer external geometry registration, lifecycle, and replay    |
 | 3     | Implemented | Worker transaction, budgets, cancellation, and recovery replay    |
 | 4     | Implemented | Public `engine.load.geometry()` API and browser integration       |
-| 5     | Pending     | Controlled measurements, final documentation, and completion gate |
+| 5     | Implemented | Controlled measurements, final documentation, and completion gate |
 
-Phases 1 through 4 provide the complete public loading path. Controlled
-measurement and the milestone completion gate remain Phase 5.
+All five phases provide the complete public loading path, controlled evidence,
+and completion gate.
 
 ## Objective
 
@@ -58,8 +58,7 @@ Application URL
   `engine.load.geometry()`, worker-owned loading, optional abort, and atomic
   ready-handle publication.
 
-These decisions are implemented through Phase 4; measurement-gated completion
-remains pending.
+These decisions and their measurement gates are implemented.
 
 ## Implemented starting point
 
@@ -118,7 +117,7 @@ Its accepted profile and rejection rules are fixed by ADR 011.
 
 ### Runtime orchestration — Phase 3 implemented
 
-Protocol version 13 adds correlated load, abort, ready, and typed-failure
+Protocol version 15 includes correlated load, abort, ready, and typed-failure
 records. Fetch, bounded response reading, byte admission, parse, validation,
 index widening, decoded ownership, abort, and cleanup run in the worker. Large
 bytes never cross the structural SPSC ring or return to the main thread.
@@ -180,8 +179,10 @@ measurements.
 
 Pull-based asset statistics are included in the existing worker stats response;
 they add no frame-time polling or allocation. Diagnostics include pending loads,
-successes, failures, aborted loads, fetched encoded bytes, temporary
-reservations, retained decoded CPU bytes, and resident GPU geometry bytes.
+successes, failures, aborted loads, fetched encoded bytes, current and peak
+temporary reservations, retained decoded CPU bytes, resident GPU geometry
+bytes, and the latest fetch/read, decode, renderer-wait, upload, and total load
+timings. Timing clocks execute only on the cold loading path.
 
 ### Public loading — Phase 4 implemented
 
@@ -206,6 +207,13 @@ The `geometry-loading` browser example exercises a deterministic constrained
 GLB through fetch, worker decode, renderer upload, mesh creation, and pull-based
 asset statistics. Its result proves the worker transaction completed rather
 than substituting a built-in geometry.
+
+The `asset-showcase` example adds a committed 4.1 MiB generated GLB with 90,601
+vertices and 540,000 indices. It combines shared external geometry, built-in
+geometry, multiple materials, explicit bounds, GPU visibility and indirect
+drawing, batched live transforms, camera controls, lifecycle churn, and asset,
+transport, visibility, and timing diagnostics. The asset can be regenerated
+deterministically with `pnpm generate:showcase-asset`.
 
 ## Explicit non-goals
 
@@ -272,7 +280,7 @@ Exit gate: the CI Chrome smoke test builds and serves the browser example, then
 requires one successful worker load, non-zero retained decoded bytes, and ready
 publication through the existing mesh/resource lifecycle.
 
-### Phase 5: Measurement and completion
+### Phase 5: Measurement and completion — implemented
 
 - Commit raw benchmark fixtures, environment, runner, and results.
 - Validate peak and retained CPU/GPU memory against accounting.
@@ -332,9 +340,37 @@ with the exact limit.
 No claim that GLB, worker decoding, index widening, or retained replay data is
 fast is accepted without these measurements.
 
+### Committed controlled result
+
+The raw report is committed at
+[`benchmarks/results/asset-pipeline-latest.json`](../benchmarks/results/asset-pipeline-latest.json).
+It was captured from clean commit `7d85df952472b00909554e79777d455eeae7ee23`
+on an Apple M4 with 16 GiB RAM, Darwin 25.6.0, Node 24.19.0, and Chrome
+152.0.7977.64. Headless Chrome selected SwiftShader, so the CPU-side timings and
+accounting validate the production path, while upload timings must not be
+generalized to hardware GPU performance.
+
+| Fixture    |  Vertices |   Indices | Index | Decode p50 | Promise p50 | Worker total p50 | Peak temporary | Retained/GPU |
+| ---------- | --------: | --------: | ----- | ---------: | ----------: | ---------------: | -------------: | -----------: |
+| small-u16  |     1,024 |     5,766 | u16   |   0.245 ms |    2.410 ms |         2.345 ms |       84,460 B |     47,640 B |
+| small-u32  |     1,024 |     5,766 | u32   |   0.090 ms |    2.590 ms |         2.240 ms |       96,704 B |     47,640 B |
+| medium-u16 |    50,176 |   298,374 | u16   |   1.230 ms |    8.743 ms |         8.428 ms |    4,199,416 B |  2,397,720 B |
+| medium-u32 |   100,172 |   300,000 | u32   |   1.665 ms |   10.645 ms |        10.330 ms |    7,209,720 B |  3,604,128 B |
+| large-u32  | 1,001,000 | 3,000,000 | u32   |  17.670 ms |   60.670 ms |        60.290 ms |   72,049,480 B | 36,024,000 B |
+
+For every case, measured peak temporary bytes exactly equal
+`max(2 * encodedBytes, encodedBytes + decodedBytes)`. Retained decoded and
+resident GPU accounting equal the decoded owned-array bytes, both return to
+zero after handle destruction, and settled frames add zero asset-related
+messages, buffer uploads, or buffer writes. The five reported frame allocations
+count only the renderer's mandatory WebGPU frame objects and do not change after
+asset load. Abort/failure cleanup and device-loss replay are covered by
+deterministic runtime and renderer tests rather than inferred from this timing
+run.
+
 ## Completion criteria
 
-Milestone 7 is complete only when:
+Milestone 7 completion was accepted because:
 
 - ADR 011 and ADR 012 are implemented rather than merely accepted;
 - the complete correctness matrix passes;

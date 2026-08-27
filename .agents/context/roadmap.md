@@ -281,7 +281,7 @@ same-frame count/hash equivalence diagnostics in benchmarks.
 
 ## Status
 
-Milestone 7 implementation in progress; Phase 1 complete
+Milestone 7 complete
 
 ## Objective
 
@@ -307,8 +307,14 @@ Implemented Phase 1: the standalone `@lume/assets` package defines immutable
 per-request decode limits and typed asset errors, validates/decodes the accepted
 GLB profile into interleaved position/normal values plus widened `uint32`
 indices, accounts owned bytes, and covers deterministic malformed boundaries.
-Worker orchestration, renderer residency, public loading, and measurements are
-still pending.
+Phase 2 adds transactional external renderer residency/removal and
+unchanged-handle device-loss replay. Phase 3 adds bounded worker fetch/decode,
+Resource Coordinator loading states, immutable CPU/GPU budgets, cancellation,
+rollback, and replay. Phase 4 exposes `engine.load.geometry()` with atomic ready
+publication, typed failure, abort, and lifecycle semantics. Phase 5 commits the
+controlled small/medium/large measurement matrix, validates peak/retained/GPU
+accounting and steady-state inactivity, and adds a heavy multi-feature browser
+showcase.
 
 Implementation and completion gates are in
 [`docs/milestone-7.md`](../../docs/milestone-7.md).
@@ -455,18 +461,18 @@ before:
 
 Current development focus:
 
-Milestone 7: Asset Pipeline Foundation
+Post-Milestone 7 texture/sampler architecture design
 
 Primary questions:
 
-- Can a constrained GLB decoder reject malformed/unbounded input before
-  publishing resource state?
-- Can worker-owned fetch/decode/upload remain atomic across abort, failure,
-  disposal, slot reuse, and device loss?
-- What configured encoded, decoded CPU, and GPU byte budgets fit measured web
-  product geometry workloads?
-- Does `engine.load.geometry()` remain simple without introducing scene-graph or
-  pending-handle semantics?
+- Which KTX2/Basis GPU formats and fallback policy should target each WebGPU
+  adapter capability set?
+- How should color space, mip residency, sampler ownership, and material
+  dependencies be represented without coupling renderer and ECS?
+- What retained CPU and resident GPU budgets, replay descriptors, and retirement
+  edges are required for textures?
+- Which representative product-texture fixtures and devices form the controlled
+  acceptance matrix?
 
 ---
 

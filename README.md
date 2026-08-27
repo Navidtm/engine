@@ -5,10 +5,10 @@ product experiences. Phase 1 deliberately keeps the surface area small: a
 data-oriented Rust core compiled to WebAssembly, a worker-owned WebGPU renderer,
 and a functional TypeScript API.
 
-The repository currently contains six completed foundation milestones. The
-geometry-only Asset Pipeline Foundation is in progress: its constrained-GLB
-decoder, worker transaction, GPU residency, replay, and public loading API are
-implemented; controlled measurements and the completion gate remain pending:
+The repository currently contains seven completed foundation milestones. The
+geometry-only Asset Pipeline Foundation includes a constrained-GLB decoder,
+worker transaction, GPU residency and replay, public loading API, controlled
+measurements, and a multi-feature browser showcase:
 
 - a generational-entity, sparse-set ECS in Rust;
 - allocation-free math primitives and reusable frame memory;
@@ -24,7 +24,7 @@ implemented; controlled measurements and the completion gate remain pending:
 - a renderer-independent, budgeted GLB 2.0 static-geometry decoder;
 - worker-owned external geometry loading with atomic ready-handle publication;
   and
-- a high-level functional TypeScript API plus seven focused Vite examples.
+- a high-level functional TypeScript API plus eight focused Vite examples.
 
 See [the architecture notes](docs/architecture.md) and
 [the implementation roadmap](docs/roadmap.md) before extending the runtime.
@@ -38,6 +38,7 @@ See [the architecture notes](docs/architecture.md) and
 - `examples/lifecycle` — handle destruction, generation changes, and safe slot recycling.
 - `examples/camera` — the engine-owned camera's position, rotation, and perspective controls.
 - `examples/geometry-loading` — public GLB loading, worker decode, and asset accounting.
+- `examples/asset-showcase` — a 4.1 MiB generated GLB combined with shared geometry, GPU visibility, batched transforms, camera controls, lifecycle churn, and live diagnostics.
 
 The [examples guide](examples/README.md) includes an execution command and learning goal for each sample.
 
@@ -84,6 +85,9 @@ comparison harnesses live under `benchmarks/renderer` and
 hardware, resolution, and configuration before numbers are compared.
 
 The main-thread/worker transport comparison lives under `benchmarks/transport`.
+The constrained-GLB production loading matrix runs with
+`pnpm benchmark:assets` and writes
+`benchmarks/results/asset-pipeline-latest.json`.
 See [benchmarking.md](docs/benchmarking.md) for the complete measurement policy.
 
 `pnpm build:wasm` builds the raw WebAssembly artifact into the `@lume/runtime`

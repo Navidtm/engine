@@ -1,0 +1,318 @@
+{
+  "schemaVersion": 1,
+  "benchmark": "milestone-7-asset-pipeline",
+  "generatedAt": "2026-08-27T09:37:33.777Z",
+  "commit": "7d85df952472b00909554e79777d455eeae7ee23",
+  "dirty": false,
+  "environment": {
+    "os": {
+      "platform": "darwin",
+      "release": "25.6.0"
+    },
+    "hardware": {
+      "cpu": "Apple M4",
+      "logicalCores": 10,
+      "totalMemoryBytes": 17179869184
+    },
+    "node": {
+      "version": "v24.19.0",
+      "v8": "13.6.233.17-node.51"
+    },
+    "browser": "152.0.7977.64",
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/152.0.0.0 Safari/537.36",
+    "gpu": {
+      "vendor": "google",
+      "architecture": "swiftshader",
+      "device": "",
+      "description": ""
+    },
+    "crossOriginIsolated": true
+  },
+  "methodology": {
+    "resolution": [
+      320,
+      180
+    ],
+    "directDecodeWarmups": 3,
+    "fixtureGeneration": "scripts/generate-grid-glb.mjs",
+    "notes": [
+      "Direct decoder samples run on the browser main thread only to isolate constrained-profile validation and decode cost.",
+      "Promise latency covers worker fetch/read, decode, resource admission, and transactional WebGPU upload.",
+      "Worker timing diagnostics are cold-path clocks published only through pull-based statistics.",
+      "The large case uses UNSIGNED_INT because its vertex count exceeds the UNSIGNED_SHORT addressable range.",
+      "Steady-state message delta subtracts the single get-stats request itself."
+    ]
+  },
+  "scenarios": [
+    {
+      "fixture": {
+        "name": "small-u16",
+        "class": "small",
+        "url": "/generated/small-u16.glb",
+        "vertexCount": 1024,
+        "indexCount": 5766,
+        "indexComponentType": 5123,
+        "encodedBytes": 36820,
+        "decodedBytes": 47640,
+        "decodeSamples": 5,
+        "loadSamples": 3
+      },
+      "directDecodeMs": [
+        0.3100000023841858,
+        0.5099999904632568,
+        0.24500000476837158,
+        0.08500000834465027,
+        0.09000000357627869
+      ],
+      "promiseLatencyMs": [
+        3.8799999952316284,
+        2.4099999964237213,
+        1.8799999952316284
+      ],
+      "workerTimings": [
+        {
+          "fetchReadMs": 1.4849999845027924,
+          "decodeMs": 0.8250000178813934,
+          "rendererWaitMs": 0.009999990463256836,
+          "uploadMs": 0.08500000834465027,
+          "totalMs": 2.4749999940395355
+        },
+        {
+          "fetchReadMs": 1.75,
+          "decodeMs": 0.5149999856948853,
+          "rendererWaitMs": 0,
+          "uploadMs": 0.04500001668930054,
+          "totalMs": 2.344999998807907
+        },
+        {
+          "fetchReadMs": 1.429999977350235,
+          "decodeMs": 0.2199999988079071,
+          "rendererWaitMs": 0,
+          "uploadMs": 0.07499998807907104,
+          "totalMs": 1.7699999809265137
+        }
+      ],
+      "accounting": {
+        "peakTemporaryReservedBytes": 84460,
+        "retainedDecodedBytes": 47640,
+        "residentGpuBytes": 47640,
+        "cleanupRetainedDecodedBytes": 0,
+        "cleanupResidentGpuBytes": 0
+      },
+      "steadyState": {
+        "allocationsPerFrame": 5,
+        "assetRelatedMessageDelta": 0,
+        "bufferUploadBytes": 0,
+        "bufferWriteCount": 0
+      }
+    },
+    {
+      "fixture": {
+        "name": "small-u32",
+        "class": "small",
+        "url": "/generated/small-u32.glb",
+        "vertexCount": 1024,
+        "indexCount": 5766,
+        "indexComponentType": 5125,
+        "encodedBytes": 48352,
+        "decodedBytes": 47640,
+        "decodeSamples": 5,
+        "loadSamples": 3
+      },
+      "directDecodeMs": [
+        0.09999999403953552,
+        0.09000000357627869,
+        0.3500000238418579,
+        0.08499997854232788,
+        0.09000000357627869
+      ],
+      "promiseLatencyMs": [
+        2.5900000035762787,
+        3.2000000178813934,
+        2.050000011920929
+      ],
+      "workerTimings": [
+        {
+          "fetchReadMs": 1.149999976158142,
+          "decodeMs": 0.8999999761581421,
+          "rendererWaitMs": 0.015000015497207642,
+          "uploadMs": 0.09999999403953552,
+          "totalMs": 2.2399999797344208
+        },
+        {
+          "fetchReadMs": 1.9099999964237213,
+          "decodeMs": 1.0250000059604645,
+          "rendererWaitMs": 0.009999990463256836,
+          "uploadMs": 0.06999999284744263,
+          "totalMs": 3.084999978542328
+        },
+        {
+          "fetchReadMs": 1.6299999952316284,
+          "decodeMs": 0.19999998807907104,
+          "rendererWaitMs": 0,
+          "uploadMs": 0.06999999284744263,
+          "totalMs": 1.9449999928474426
+        }
+      ],
+      "accounting": {
+        "peakTemporaryReservedBytes": 96704,
+        "retainedDecodedBytes": 47640,
+        "residentGpuBytes": 47640,
+        "cleanupRetainedDecodedBytes": 0,
+        "cleanupResidentGpuBytes": 0
+      },
+      "steadyState": {
+        "allocationsPerFrame": 5,
+        "assetRelatedMessageDelta": 0,
+        "bufferUploadBytes": 0,
+        "bufferWriteCount": 0
+      }
+    },
+    {
+      "fixture": {
+        "name": "medium-u16",
+        "class": "medium",
+        "url": "/generated/medium-u16.glb",
+        "vertexCount": 50176,
+        "indexCount": 298374,
+        "indexComponentType": 5123,
+        "encodedBytes": 1801696,
+        "decodedBytes": 2397720,
+        "decodeSamples": 3,
+        "loadSamples": 2
+      },
+      "directDecodeMs": [
+        1.225000023841858,
+        1.2349999845027924,
+        1.229999989271164
+      ],
+      "promiseLatencyMs": [
+        8.425000011920929,
+        9.060000002384186
+      ],
+      "workerTimings": [
+        {
+          "fetchReadMs": 2.935000002384186,
+          "decodeMs": 4.435000002384186,
+          "rendererWaitMs": 0.03999999165534973,
+          "uploadMs": 0.39000001549720764,
+          "totalMs": 7.905000001192093
+        },
+        {
+          "fetchReadMs": 3.8900000154972076,
+          "decodeMs": 4.699999988079071,
+          "rendererWaitMs": 0.004999995231628418,
+          "uploadMs": 0.29500001668930054,
+          "totalMs": 8.950000017881393
+        }
+      ],
+      "accounting": {
+        "peakTemporaryReservedBytes": 4199416,
+        "retainedDecodedBytes": 2397720,
+        "residentGpuBytes": 2397720,
+        "cleanupRetainedDecodedBytes": 0,
+        "cleanupResidentGpuBytes": 0
+      },
+      "steadyState": {
+        "allocationsPerFrame": 5,
+        "assetRelatedMessageDelta": 0,
+        "bufferUploadBytes": 0,
+        "bufferWriteCount": 0
+      }
+    },
+    {
+      "fixture": {
+        "name": "medium-u32",
+        "class": "medium",
+        "url": "/generated/medium-u32.glb",
+        "vertexCount": 100172,
+        "indexCount": 300000,
+        "indexComponentType": 5125,
+        "encodedBytes": 3604860,
+        "decodedBytes": 3604128,
+        "decodeSamples": 3,
+        "loadSamples": 2
+      },
+      "directDecodeMs": [
+        1.6650000214576721,
+        1.7100000083446503,
+        1.6649999916553497
+      ],
+      "promiseLatencyMs": [
+        10.430000007152557,
+        10.860000014305115
+      ],
+      "workerTimings": [
+        {
+          "fetchReadMs": 4.155000001192093,
+          "decodeMs": 5.084999978542328,
+          "rendererWaitMs": 0.025000005960464478,
+          "uploadMs": 0.4399999976158142,
+          "totalMs": 9.974999994039536
+        },
+        {
+          "fetchReadMs": 5.169999986886978,
+          "decodeMs": 5.174999982118607,
+          "rendererWaitMs": 0.005000025033950806,
+          "uploadMs": 0.2549999952316284,
+          "totalMs": 10.685000002384186
+        }
+      ],
+      "accounting": {
+        "peakTemporaryReservedBytes": 7209720,
+        "retainedDecodedBytes": 3604128,
+        "residentGpuBytes": 3604128,
+        "cleanupRetainedDecodedBytes": 0,
+        "cleanupResidentGpuBytes": 0
+      },
+      "steadyState": {
+        "allocationsPerFrame": 5,
+        "assetRelatedMessageDelta": 0,
+        "bufferUploadBytes": 0,
+        "bufferWriteCount": 0
+      }
+    },
+    {
+      "fixture": {
+        "name": "large-u32",
+        "class": "large",
+        "url": "/generated/large-u32.glb",
+        "vertexCount": 1001000,
+        "indexCount": 3000000,
+        "indexComponentType": 5125,
+        "encodedBytes": 36024740,
+        "decodedBytes": 36024000,
+        "decodeSamples": 1,
+        "loadSamples": 1
+      },
+      "directDecodeMs": [
+        17.6700000166893
+      ],
+      "promiseLatencyMs": [
+        60.66999998688698
+      ],
+      "workerTimings": [
+        {
+          "fetchReadMs": 30.46500000357628,
+          "decodeMs": 20.814999997615814,
+          "rendererWaitMs": 0.02000001072883606,
+          "uploadMs": 7.995000004768372,
+          "totalMs": 60.28999999165535
+        }
+      ],
+      "accounting": {
+        "peakTemporaryReservedBytes": 72049480,
+        "retainedDecodedBytes": 36024000,
+        "residentGpuBytes": 36024000,
+        "cleanupRetainedDecodedBytes": 0,
+        "cleanupResidentGpuBytes": 0
+      },
+      "steadyState": {
+        "allocationsPerFrame": 5,
+        "assetRelatedMessageDelta": 0,
+        "bufferUploadBytes": 0,
+        "bufferWriteCount": 0
+      }
+    }
+  ]
+}

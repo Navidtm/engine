@@ -19,5 +19,7 @@ const limits = defineGeometryDecodeLimits({
 const geometry = decodeGlbGeometry(glbArrayBuffer, limits);
 ```
 
-The values above are illustrative, not engine defaults. Production defaults
-remain gated on the committed Milestone 7 fixture measurements.
+The values above are illustrative, not engine defaults. The committed Milestone
+7 fixtures validate accounting across roughly 1k through 1M vertices, but one
+device-specific matrix cannot define universal production budgets. Applications
+must configure limits from their own asset inventory and deployment targets.

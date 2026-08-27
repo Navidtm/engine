@@ -173,6 +173,37 @@ probe after full GC. On the committed Node v24.19.0 run, the median fell from
 bytes to 3,496 bytes. The reusable value is valid only until the decoder's next
 call; the worker consumes it synchronously before advancing the ring.
 
+## Asset pipeline suite
+
+Run the constrained-GLB decoder and production worker/GPU loading matrix with:
+
+```sh
+pnpm benchmark:assets
+```
+
+The runner builds the benchmark, deterministically generates small, medium, and
+large GLBs for both supported index widths where addressable, serves them with
+cross-origin isolation, and launches Chrome. Direct decode samples isolate the
+pure decoder. Public-load samples cover worker fetch/read, validation/decode,
+resource admission, transactional buffer upload, and ready-handle publication.
+Each fixture runs in a fresh engine whose byte budgets match that fixture, so
+the measured reservation high-water mark is meaningful rather than inherited
+from a larger case.
+
+The raw clean-tree result is committed at
+[`asset-pipeline-latest.json`](../benchmarks/results/asset-pipeline-latest.json).
+It includes environment and adapter metadata, raw samples, worker stage clocks,
+configured fixture sizes, peak temporary bytes, retained decoded bytes,
+resident GPU bytes, cleanup values, and settled-frame allocation, message, and
+upload counters. The committed Chrome 152 run used SwiftShader on an Apple M4;
+therefore its upload timings are path validation rather than hardware-GPU
+throughput evidence. Memory accounting and zero steady-state asset activity are
+deterministic assertions in the runner.
+
+`benchmarks/assets/dist/generated` is ephemeral. The deterministic generator is
+`scripts/generate-grid-glb.mjs`, and the runner removes generated benchmark
+fixtures after capture.
+
 ## Interpreting results
 
 Native timings isolate ECS and extraction architecture. Browser timings include
