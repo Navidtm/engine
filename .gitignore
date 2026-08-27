@@ -4,7 +4,7 @@ dist/
 playwright-report/
 test-results/
 .DS_Store
-.pnpm-store
+.pnpm-store/
 examples/triangle/public/lume_core.wasm
 examples/cube/public/lume_core.wasm
 examples/instancing/public/lume_core.wasm
