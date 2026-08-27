@@ -237,6 +237,49 @@ TypeScript:
 
 Maintain clean commits and focused changes.
 
+# Automatic Issue Tracking
+
+When an AI agent discovers a new actionable problem in this repository, it must
+create a GitHub issue in `Navidtm/engine` automatically. Do not wait for a separate
+request from the user.
+
+Actionable problems include, but are not limited to:
+
+- bugs and incorrect behavior
+- performance regressions or scalability bottlenecks
+- memory, ownership, lifetime, or synchronization risks
+- architectural violations or structural enhancements
+- missing validation, tests, benchmarks, or documentation
+- security, dependency, build, packaging, CI, or tooling problems
+- developer-experience and public-API improvements
+
+Before creating an issue:
+
+1. Search open and closed GitHub issues for the same root cause.
+2. Do not create a duplicate; add relevant evidence to the existing issue instead.
+3. Confirm the problem is actionable and provide concrete repository evidence.
+4. Never include credentials, tokens, private URLs, or other sensitive data.
+
+Every automatically created issue must:
+
+- follow the structure in `.github/ISSUE_TEMPLATE/project-issue.yml`
+- explain the problem, impact, evidence, scope, acceptance criteria, and validation
+- include repository file paths and line references when available
+- include a benchmark baseline and measurement plan for performance claims
+- have at least one classification label such as `bug`, `enhancement`,
+  `performance`, `design`, `documentation`, `testing`, `ci`, `tooling`, `security`,
+  or `dependencies`
+- have exactly one severity label: `sev/critical`, `sev/high`, `sev/medium`, or
+  `sev/low`
+- remove the `triage` label once classification and severity are known
+
+Use `gh issue create` and `gh issue edit` for issue management. If GitHub access or
+authentication is unavailable, do not silently skip the issue: prepare the exact
+issue body, report the blocker to the user, and publish it as soon as access is
+restored.
+
+After creating or updating an issue, include its GitHub link in the final response.
+
 # Required Mindset
 
 Do not optimize for:

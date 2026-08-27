@@ -1,0 +1,115 @@
+name: Project issue
+description: Report an actionable engine bug, enhancement, performance problem, or project risk.
+title: "[TYPE] "
+labels:
+  - triage
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Provide concrete evidence and define a verifiable outcome. Performance claims require a baseline and an equivalent before/after measurement.
+
+  - type: dropdown
+    id: classification
+    attributes:
+      label: Classification
+      description: Select the primary kind of work. Maintainers will apply the matching GitHub label.
+      options:
+        - Bug
+        - Enhancement
+        - Performance
+        - Architecture or design
+        - Documentation
+        - Testing
+        - CI, build, or tooling
+        - Security
+        - Dependencies
+    validations:
+      required: true
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      description: Select the impact if the issue remains unresolved.
+      options:
+        - Critical — corruption, memory safety, architectural break, or release blocker
+        - High — major correctness, scalability, performance, or milestone blocker
+        - Medium — maintainability, reliability, or future scalability concern
+        - Low — bounded quality or developer-experience improvement
+    validations:
+      required: true
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: State the problem and why it matters.
+      placeholder: Describe the current behavior, the desired behavior, and the affected subsystem.
+    validations:
+      required: true
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: Include file paths, line references, reproduction steps, measurements, logs, or specifications.
+      placeholder: |
+        - packages/example/src/file.ts:10-20
+        - Reproduction or benchmark result
+        - Relevant ADR, specification, or invariant
+    validations:
+      required: true
+
+  - type: textarea
+    id: impact
+    attributes:
+      label: Impact
+      description: Explain correctness, performance, memory, architecture, security, or developer impact.
+    validations:
+      required: true
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope and constraints
+      description: Define what belongs in the fix and the boundaries that must remain intact.
+      placeholder: Include affected layers, ownership constraints, non-goals, and compatibility requirements.
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Provide observable, verifiable completion conditions.
+      placeholder: |
+        - [ ] Required behavior is implemented
+        - [ ] Failure and lifecycle paths are covered
+        - [ ] Architecture and allocation constraints are preserved
+    validations:
+      required: true
+
+  - type: textarea
+    id: validation
+    attributes:
+      label: Validation plan
+      description: List tests, benchmarks, browser/hardware coverage, and documentation updates required to close the issue.
+      placeholder: |
+        - Unit and integration tests
+        - Equivalent before/after benchmark
+        - Format, lint, typecheck, Clippy, and packaging checks
+    validations:
+      required: true
+
+  - type: input
+    id: related
+    attributes:
+      label: Related issues or milestones
+      description: Link related issues, ADRs, milestones, or pull requests when applicable.
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional context
+      description: Add alternatives, tradeoffs, screenshots, or environment details if useful.
