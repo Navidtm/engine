@@ -354,8 +354,10 @@ describe("worker resource coordinator", () => {
       abortedLoads: 0,
       fetchedEncodedBytes: 64,
       temporaryReservedBytes: 0,
+      peakTemporaryReservedBytes: 1_024,
       retainedDecodedBytes: descriptor.bytes.decodedBytes,
       residentGpuBytes: descriptor.bytes.decodedBytes,
+      latestLoadTimings: null,
     });
   });
 

@@ -2,7 +2,7 @@ import { AssetError, type DecodedGeometry } from "@lume/assets";
 import type { MeshRenderer } from "@lume/renderer";
 
 import { defineRuntimeGeometryLimits, type RuntimeGeometryLimits } from "./geometry-limits.js";
-import type { GeometryAssetStats, RuntimeCommand } from "./protocol.js";
+import type { GeometryAssetStats, GeometryLoadTimings, RuntimeCommand } from "./protocol.js";
 import type { WasmCore } from "./wasm.js";
 
 const INDEX_MASK = 0x000f_ffff;
@@ -57,6 +57,7 @@ export interface ResourceCoordinator {
   abortGeometryLoad(requestId: number): boolean;
   abortAllGeometryLoads(): void;
   rollbackGeometryLoad(attempt: GeometryLoadAttempt, aborted: boolean): void;
+  recordGeometryLoadTimings(timings: GeometryLoadTimings): void;
   assetStats(): GeometryAssetStats;
   /** Recreates all live renderer-owned resources after device loss. */
   rebuildRenderer(renderer: MeshRenderer): void;
@@ -94,8 +95,10 @@ export function createResourceCoordinator(
   let abortedLoads = 0;
   let fetchedEncodedBytes = 0;
   let temporaryReservedBytes = 0;
+  let peakTemporaryReservedBytes = 0;
   let retainedDecodedBytes = 0;
   let residentGpuBytes = 0;
+  let latestLoadTimings: GeometryLoadTimings | null = null;
   let disposed = false;
 
   const finalizeGeometryRecord = (handle: number, renderer: MeshRenderer): void => {
@@ -163,6 +166,7 @@ export function createResourceCoordinator(
       );
     }
     temporaryReservedBytes = withoutAttempt + nextBytes;
+    peakTemporaryReservedBytes = Math.max(peakTemporaryReservedBytes, temporaryReservedBytes);
     attempt.temporaryBytes = nextBytes;
   };
 
@@ -452,6 +456,9 @@ export function createResourceCoordinator(
       geometry.generation[index] =
         generation < GENERATION_MASK ? generation + 1 : GENERATION_MASK + 1;
     },
+    recordGeometryLoadTimings(timings) {
+      latestLoadTimings = { ...timings };
+    },
     assetStats() {
       return {
         pendingLoads,
@@ -460,8 +467,10 @@ export function createResourceCoordinator(
         abortedLoads,
         fetchedEncodedBytes,
         temporaryReservedBytes,
+        peakTemporaryReservedBytes,
         retainedDecodedBytes,
         residentGpuBytes,
+        latestLoadTimings,
       };
     },
     rebuildRenderer(renderer) {
@@ -528,8 +537,10 @@ export function createResourceCoordinator(
       geometryAttempts.fill(undefined);
       geometryRequests.clear();
       temporaryReservedBytes = 0;
+      peakTemporaryReservedBytes = 0;
       retainedDecodedBytes = 0;
       residentGpuBytes = 0;
+      latestLoadTimings = null;
     },
   };
 }

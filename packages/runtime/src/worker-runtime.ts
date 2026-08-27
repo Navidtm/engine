@@ -534,8 +534,10 @@ export function createWorkerRuntime(host: WorkerHost): (message: MainToWorkerMes
                 abortedLoads: 0,
                 fetchedEncodedBytes: 0,
                 temporaryReservedBytes: 0,
+                peakTemporaryReservedBytes: 0,
                 retainedDecodedBytes: 0,
                 residentGpuBytes: 0,
+                latestLoadTimings: null,
               },
               render: {
                 drawCalls: rendererStats?.drawCalls ?? 0,

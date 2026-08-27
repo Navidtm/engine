@@ -5,6 +5,7 @@ export type {
   FrameCpuStageTimings,
   GeometryAssetStats,
   GeometryLoadErrorPayload,
+  GeometryLoadTimings,
   MainToWorkerMessage,
   RuntimeCommand,
   RuntimeInit,

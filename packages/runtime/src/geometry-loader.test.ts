@@ -108,6 +108,13 @@ describe("worker geometry loading transaction", () => {
       successfulLoads: 1,
       failedLoads: 1,
       temporaryReservedBytes: 0,
+      latestLoadTimings: {
+        fetchReadMs: expect.any(Number),
+        decodeMs: expect.any(Number),
+        rendererWaitMs: expect.any(Number),
+        uploadMs: expect.any(Number),
+        totalMs: expect.any(Number),
+      },
     });
   });
 

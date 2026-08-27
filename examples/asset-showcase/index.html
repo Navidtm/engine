@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="A production-shaped Lume showcase using worker GLB loading, GPU visibility, shared resources, transforms, lifecycle controls, and pull diagnostics."
+    />
+    <title>Lume — Asset pipeline showcase</title>
+  </head>
+  <body>
+    <canvas id="viewport"></canvas>
+    <main class="panel">
+      <p class="eyebrow">Milestone 7 · Asset Pipeline</p>
+      <h1>Heavy GLB showcase</h1>
+      <p id="status" data-state="loading">Loading the 4.3 MB wave grid in the worker…</p>
+      <dl class="metrics">
+        <div>
+          <dt>Asset</dt>
+          <dd id="asset-metric">—</dd>
+        </div>
+        <div>
+          <dt>Worker load</dt>
+          <dd id="load-metric">—</dd>
+        </div>
+        <div>
+          <dt>Renderer</dt>
+          <dd id="render-metric">—</dd>
+        </div>
+        <div>
+          <dt>Transport</dt>
+          <dd id="transport-metric">—</dd>
+        </div>
+      </dl>
+      <section class="controls" aria-label="Engine controls">
+        <button id="lifecycle" type="button">Pause</button>
+        <button id="recycle" type="button">Recycle cube</button>
+        <label>
+          Camera X
+          <input id="camera-x" type="range" min="-3" max="3" value="0" step="0.1" />
+        </label>
+        <label>
+          Field of view
+          <input id="camera-fov" type="range" min="35" max="85" value="55" step="1" />
+        </label>
+      </section>
+      <p class="note">
+        GPU visibility · shared geometry/materials · live transforms · lifecycle reuse
+      </p>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

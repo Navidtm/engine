@@ -8,6 +8,7 @@ packages:
   - "benchmarks/renderer"
   - "benchmarks/comparison"
   - "benchmarks/transport"
+  - "benchmarks/assets"
 
 allowBuilds:
   esbuild: true

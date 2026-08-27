@@ -18,6 +18,8 @@
     "benchmark:render-world": "node benchmarks/renderer/run-extraction-comparison.mjs",
     "benchmark:transport": "pnpm --filter @lume/runtime build && tsdown packages/api/src/benchmark-internals.ts --no-config --format esm --platform node --target es2022 --out-dir benchmarks/transport/node_modules/.lume-api-benchmark --clean && node --expose-gc benchmarks/transport/run.mjs",
     "benchmark:entity-generation": "tsdown packages/runtime/src/benchmark-internals.ts --no-config --format esm --platform node --target es2022 --out-dir benchmarks/.runtime-dist --clean && node --expose-gc benchmarks/entity-generation/run.mjs",
+    "benchmark:assets": "pnpm prepare:examples && pnpm --filter @lume/benchmark-assets build && node benchmarks/assets/run.mjs",
+    "generate:showcase-asset": "node scripts/generate-grid-glb.mjs",
     "format": "prettier --write . && cargo fmt --all",
     "format:check": "prettier --check . && cargo fmt --all -- --check",
     "lint": "eslint . && cargo clippy --workspace --all-targets -- -D warnings",
@@ -26,6 +28,8 @@
     "test:packaging": "node scripts/test-packaged-consumer.mjs",
     "test:browser:geometry": "pnpm prepare:examples && pnpm --filter @lume/example-geometry-loading build && pnpm test:browser:geometry:built",
     "test:browser:geometry:built": "playwright test geometry-loading.spec.ts",
+    "test:browser:showcase": "pnpm prepare:examples && pnpm generate:showcase-asset && pnpm --filter @lume/example-asset-showcase build && pnpm test:browser:showcase:built",
+    "test:browser:showcase:built": "playwright test --config playwright.showcase.config.ts",
     "test:rust": "cargo test --workspace",
     "test:ts": "pnpm -r --filter './packages/**' test"
   },

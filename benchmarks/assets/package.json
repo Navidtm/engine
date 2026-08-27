@@ -1,0 +1,21 @@
+{
+  "name": "@lume/benchmark-assets",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite",
+    "preview": "vite preview --host 127.0.0.1",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@lume/api": "workspace:*",
+    "@lume/assets": "workspace:*"
+  },
+  "devDependencies": {
+    "@webgpu/types": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:"
+  }
+}

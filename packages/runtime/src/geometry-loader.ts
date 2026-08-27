@@ -119,8 +119,10 @@ async function executeLoad(
   decode: typeof decodeGlbGeometry,
   isDisposed: () => boolean,
 ): Promise<void> {
+  const startedAt = performance.now();
   let stage: "fetch" | "decode" | "upload" | "recovery" = "fetch";
   try {
+    const fetchStartedAt = performance.now();
     const response = await dependencies.fetch(source, { signal: attempt.signal });
     assertCurrent(dependencies.coordinator, attempt);
     if (!response.ok) {
@@ -136,20 +138,34 @@ async function executeLoad(
       limits.decode.maxEncodedBytes,
       attempt.signal,
     );
+    const fetchReadMs = performance.now() - fetchStartedAt;
     assertCurrent(dependencies.coordinator, attempt);
     dependencies.coordinator.prepareGeometryDecode(attempt, encoded.byteLength);
 
     stage = "decode";
     await yieldColdPath(attempt.signal);
     assertCurrent(dependencies.coordinator, attempt);
+    const decodeStartedAt = performance.now();
     const descriptor = decode(encoded, limits.decode);
+    const decodeMs = performance.now() - decodeStartedAt;
     assertCurrent(dependencies.coordinator, attempt);
 
     stage = "recovery";
+    const rendererWaitStartedAt = performance.now();
     const renderer = await dependencies.acquireRenderer(attempt.signal);
+    const rendererWaitMs = performance.now() - rendererWaitStartedAt;
     assertCurrent(dependencies.coordinator, attempt);
     stage = "upload";
+    const uploadStartedAt = performance.now();
     dependencies.coordinator.commitGeometryLoad(attempt, descriptor, renderer);
+    const uploadMs = performance.now() - uploadStartedAt;
+    dependencies.coordinator.recordGeometryLoadTimings({
+      fetchReadMs,
+      decodeMs,
+      rendererWaitMs,
+      uploadMs,
+      totalMs: performance.now() - startedAt,
+    });
     if (isDisposed()) return;
     dependencies.postMessage({
       type: "geometry-ready",

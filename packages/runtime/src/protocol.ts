@@ -4,7 +4,7 @@ import type { RendererOptions, SurfaceSize } from "@lume/renderer";
 import type { RuntimeGeometryLimits } from "./geometry-limits.js";
 
 /** Version checked before a main thread and worker exchange runtime messages. */
-export const RUNTIME_PROTOCOL_VERSION = 14;
+export const RUNTIME_PROTOCOL_VERSION = 15;
 
 /** Transfer-safe typed failure returned for one correlated geometry request. */
 export interface GeometryLoadErrorPayload {
@@ -12,6 +12,20 @@ export interface GeometryLoadErrorPayload {
   readonly stage: AssetErrorStage;
   readonly message: string;
   readonly cause?: string;
+}
+
+/** Cold-path timing breakdown for one successful external geometry transaction. */
+export interface GeometryLoadTimings {
+  /** Worker fetch plus bounded response-read time. */
+  readonly fetchReadMs: number;
+  /** Synchronous GLB validation and decode time. */
+  readonly decodeMs: number;
+  /** Time parked for a renderer, normally zero outside device recovery. */
+  readonly rendererWaitMs: number;
+  /** Resource admission and transactional GPU upload time. */
+  readonly uploadMs: number;
+  /** Complete worker transaction time from fetch start through ready commit. */
+  readonly totalMs: number;
 }
 
 /** Pull-only worker asset accounting; ordinary frames do not sample these fields. */
@@ -22,8 +36,12 @@ export interface GeometryAssetStats {
   readonly abortedLoads: number;
   readonly fetchedEncodedBytes: number;
   readonly temporaryReservedBytes: number;
+  /** High-water mark of aggregate temporary download/decode reservations. */
+  readonly peakTemporaryReservedBytes: number;
   readonly retainedDecodedBytes: number;
   readonly residentGpuBytes: number;
+  /** Most recently completed successful worker transaction, or null before one succeeds. */
+  readonly latestLoadTimings: GeometryLoadTimings | null;
 }
 
 /** CPU milliseconds attributed to one pull-sampled worker frame. */
