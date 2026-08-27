@@ -112,6 +112,55 @@ multi-feature asset showcase. Textures/KTX2, imported materials,
 multi-primitive assets, hierarchy, streaming, caching, compression, and an
 offline optimizer remain outside Milestone 7.
 
+## Milestone 8 — texture and sampler foundation (proposed; next design milestone)
+
+Milestone 8 will add bounded, replayable texture and sampler resources. Design
+must be accepted before implementation: constrained KTX2 input, Basis/GPU-format
+capability selection, color space, mip residency, sampler normalization,
+worker-owned transcode/upload, cancellation, retirement, budgets, diagnostics,
+and device-loss replay all require explicit contracts and deterministic
+fixtures.
+
+The milestone deliberately excludes PBR, imported glTF materials, general
+PNG/JPEG production loading, runtime mip generation, streaming, caching,
+multi-mesh composition, and scene hierarchy. Its completion evidence must cover
+validation, lifecycle failure boundaries, memory cleanup, and controlled
+browser transcode/upload measurements on hardware and CI fallback paths.
+
+## Milestone 9 — material and lighting foundation (blocked on Milestone 8)
+
+Milestone 9 will compose texture/sampler handles into a bounded material system,
+replace one-buffer-per-material scaling, define stable pipeline keys and
+prewarming, and introduce only the minimal physically based surface and lighting
+model needed for product visualization. Material graphs, arbitrary shaders,
+clustered lighting, shadows, reflections, post-processing, general glTF material
+extensions, and scene loading remain outside this milestone.
+
+## Milestone 10 — asset preparation and composition (blocked on Milestones 8–9)
+
+Milestone 10 will make representative creative-tool exports usable through an
+offline preparation path. It will apply node transforms, normalize and optimize
+geometry, process textures, emit deterministic manifests, and compose multiple
+geometry/material resources through flat recipes and ECS entities. It must not
+introduce an Object3D-style runtime hierarchy or perform expensive creative-tool
+processing in the browser.
+
+The exit workload is a real textured multi-mesh product prepared offline,
+loaded atomically, destroyed cleanly, and replayed after device loss with
+committed load and memory evidence.
+
+## Milestone 11 — streaming and cache policy (blocked on measured Milestone 10)
+
+Streaming begins only after complete assets have deterministic identity,
+dependencies, residency budgets, and representative measurements. The design
+must define request deduplication, priority, cancellation, dependency-aware
+eviction/pinning, partial readiness, persistent-cache versioning, and rollback
+before production implementation starts.
+
+Developer documentation, examples, profiling/debug tooling, and framework
+integrations continue alongside stable public APIs. They do not determine engine
+ownership or lifecycle semantics.
+
 ## Known future bottlenecks
 
 1. **SAB-to-WASM staging:** one copy remains necessary to preserve canonical
@@ -121,7 +170,8 @@ offline optimizer remain outside Milestone 7.
 3. **Pipeline compilation stalls:** the cache prevents duplicates but cannot
    hide first use. Material manifests will support asynchronous prewarming.
 4. **Uniform alignment and fragmentation:** one buffer per material will not
-   scale. Phase 2 uses aligned arenas and dynamic offsets.
+   scale. Milestone 9 must select and measure a bounded parameter-storage
+   strategy such as aligned arenas and dynamic offsets.
 5. **Device loss beyond current descriptors:** built-in and loaded external
    geometry descriptors replay automatically; future textures, streamed chunks,
    and imported materials need equivalent descriptors before sharing recovery.

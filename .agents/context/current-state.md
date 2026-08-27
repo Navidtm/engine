@@ -15,7 +15,7 @@ Foundation is also complete: constrained GLB decode, bounded worker loading,
 external GPU residency/replay, public loading, controlled evidence, and browser
 examples are implemented.
 
-Transport Hardening is complete. All Phase 4 mechanisms are implemented,
+Transport Hardening is complete. All Milestone 5 mechanisms are implemented,
 tested, documented, and covered by a committed Node benchmark result. Controlled
 browser validation remains an acceptance activity, not a transport architecture
 gap.
@@ -402,16 +402,19 @@ scope and non-goals are in [`docs/milestone-6.md`](../../docs/milestone-6.md).
 
 ## Roadmap Comparison
 
-| Roadmap phase                 | Roadmap label | Actual repository state                           |
+| Roadmap milestone             | Roadmap label | Actual repository state                           |
 | ----------------------------- | ------------- | ------------------------------------------------- |
 | 1. Runtime Foundation         | Completed     | Implemented                                       |
-| 2. Render Architecture        | Completed     | Implemented                                       |
-| 3. Performance Infrastructure | Completed     | Implemented                                       |
-| 4. Transport Hardening        | Completed     | Implemented                                       |
+| 2. ECS-Driven Mesh Rendering  | Completed     | Implemented                                       |
+| 3. Visibility/Frame           | Completed     | Implemented                                       |
+| 4. High-Throughput Transport  | Completed     | Implemented                                       |
+| 5. Transport Hardening        | Completed     | Implemented, tested, and measured                 |
 | 6. Renderer Scalability       | Completed     | ADR 007/008/009 implemented, tested, and measured |
-| 6. Asset Pipeline             | Completed     | Milestone 7 implemented, tested, and measured     |
-| 7. Advanced Graphics          | Planned       | Not implemented                                   |
-| 8. Developer Ecosystem        | Planned       | Not implemented                                   |
+| 7. Asset Pipeline Foundation  | Completed     | Milestone 7 implemented, tested, and measured     |
+| 8. Texture/Sampler Foundation | Proposed      | Design gates are next; no implementation exists   |
+| 9. Material/Lighting          | Blocked       | Requires completed texture/sampler foundation     |
+| 10. Asset Composition         | Blocked       | Requires completed texture and material resources |
+| 11. Streaming/Cache           | Blocked       | Requires measured complete-asset workloads        |
 
 ## Intentionally Not Implemented
 
@@ -423,8 +426,8 @@ scope and non-goals are in [`docs/milestone-6.md`](../../docs/milestone-6.md).
 - Occlusion culling, hierarchical active masks, and GPU-authoritative scenes.
 - Public multi-camera presentation; only the first camera is rendered.
 
-These omissions match the roadmap and the scope constraints of the completed
-renderer-scalability milestone.
+These omissions match the dependency order and explicit non-goals in the
+roadmap.
 
 ## Remaining Runtime and Rendering Bottlenecks
 
@@ -448,8 +451,11 @@ Runtime transport, renderer-scalability, and Milestone 7 geometry-loading
 semantics should now be treated as stable unless browser evidence finds a
 correctness or material performance problem. ADR 011, ADR 012, and
 `docs/milestone-7.md` define the completed constrained-geometry scope and gates.
-The next architecture design step is texture/sampler ingestion with KTX2,
-GPU-format selection, color-space and mip policy, material dependencies,
-CPU/GPU budgets, and replay. General materials, hierarchy, compression,
-streaming, caching, and an offline optimizer remain future work. All asset work
-must preserve the existing ECS -> RenderWorld -> renderer ownership boundary.
+The active planning step is Milestone 8 texture/sampler design. Before production
+code, create `docs/milestone-8.md`, accept ADRs for format/capability selection
+and async texture/sampler lifecycle, define deterministic KTX2/Basis fixtures,
+and commit a controlled hardware/browser measurement method. Milestone 9
+materials, Milestone 10 offline asset composition, and Milestone 11
+streaming/cache remain dependency-blocked. All asset work must preserve the
+existing ECS -> RenderWorld -> renderer ownership boundary and must not mirror
+glTF nodes as a runtime object graph.

@@ -193,6 +193,18 @@ Use for:
 - milestone review
 - architectural validation
 
+## Toolchain
+
+Use the focused toolchain skills when repository work touches their domain:
+
+- `pnpm` for workspace dependency, lockfile, and CI install behavior;
+- `vite` for application builds, development servers, and asset delivery;
+- `vitest` for TypeScript unit and integration tests; and
+- `tsdown` for package bundling and declaration output.
+
+These skills complement the engine-domain skills; they do not replace the
+architecture or performance review requirements.
+
 # Before Coding
 
 Do not immediately write code.
@@ -362,6 +374,18 @@ Validate:
 - benchmarks
 - documentation
 - risks
+
+# Roadmap Rules
+
+When changing milestone order, status, scope, or current priority, read:
+
+```
+.agents/workflows/roadmap-update.md
+```
+
+Keep `.agents/context/roadmap.md`, `.agents/context/current-state.md`,
+`docs/roadmap.md`, detailed milestone documents, ADRs, and GitHub tracking
+consistent according to that workflow.
 
 # Code Review Rules
 
